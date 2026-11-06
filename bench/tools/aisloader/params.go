@@ -115,7 +115,7 @@ type (
 		readLen        int64  // read range length (bytes, 0 = full object)
 		readOff        int64  // read range offset (bytes)
 		readOffRandom  bool   // random read range offset per GET (-readoff=random)
-		evictBatchSize int    // batch size for list and evict operations
+		evictBatchSize int    // batch size for deleting objects PUT by the run on cleanup
 		getBatchSize   int    // use GetBatch API instead of GetObject (ML workloads)
 		latest         bool   // check metadata and GET latest version from remote bucket
 		cached         bool   // list only cached objects from remote bucket
@@ -179,7 +179,7 @@ type (
 
 	// Miscellaneous (cleanup, dry-run, et al.)
 	miscParams struct {
-		cleanUp    BoolExt // destroy/empty bucket on termination
+		cleanUp    BoolExt // remove run-created objects/bucket on termination
 		stoppable  bool    // allow termination via Ctrl-C
 		dryRun     bool    // print config and exit without running
 		traceHTTP  bool    // trace HTTP request latencies
@@ -289,7 +289,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&p.cached, "cached", false, "list in-cluster objects - only those objects from a remote bucket that are present (\"cached\")")
 	f.BoolVar(&p.listDirs, "list-dirs", false, "list virtual subdirectories (remote buckets only)")
 	f.BoolVar(&p.useNBI, "nbi", false, "list via native bucket inventory (NBI) snapshot (remote buckets only); the inventory must already exist - aisloader does not create it (see docs/nbi.md)")
-	f.IntVar(&p.evictBatchSize, "evict-batchsize", 1000, "batch size to list and evict the _next_ batch of remote objects")
+	f.IntVar(&p.evictBatchSize, "evict-batchsize", 1000, "batch size for deleting objects PUT by this run on cleanup ('-cleanup=true')")
 	f.BoolVar(&p.continueOnErr, "cont-on-err", false, "GetBatch: ignore missing files and/or objects - include them under \"__404__/\" prefix and keep going")
 
 	// ============ Multipart ============
@@ -326,7 +326,7 @@ func addCmdLine(f *flag.FlagSet, p *params) {
 	f.BoolVar(&p.jsonFormat, "json", false, "when true, print output in JSON format")
 
 	// ============ Miscellaneous ============
-	BoolExtVar(f, &p.cleanUp, "cleanup", "when true, remove bucket upon benchmark termination (must be specified for AIStore buckets)")
+	BoolExtVar(f, &p.cleanUp, "cleanup", "when true, delete objects PUT by this run and destroy the bucket only if this run created it; required with '-bucket'")
 	f.StringVar(&p.configPath, "config", "", "load runtime settings from a YAML file; explicit CLI flags take precedence")
 	f.BoolVar(&p.stoppable, "stoppable", false, "when true, stop upon CTRL-C")
 	f.BoolVar(&p.dryRun, "dry-run", false, "when true, show the configuration and parameters that aisloader will use for benchmark")
@@ -372,19 +372,11 @@ func initParams(p *params) (err error) {
 			return errors.New("direct S3 access via '-s3endpoint': option '-cleanup' is not supported yet")
 		}
 		if !p.cleanUp.IsSet && !isDirectS3() {
-			fmt.Println("\nNote: `-cleanup` is a required option. Beware! When -cleanup=true the bucket will be destroyed upon completion of the benchmark.")
+			fmt.Println("\nNote: `-cleanup` is a required option. Beware! When -cleanup=true, the bucket or objects created by this run will be deleted!")
 			fmt.Println("      Specify `--cleanup=false` on the command line or `cleanup: false` in the config file.")
 			os.Exit(1)
 		}
 	}
-
-	if p.seed == 0 {
-		p.seed = mono.NanoTime()
-	}
-	rnd = rand.New(cos.NewRandSource(uint64(p.seed)))
-	// separate stream with a different seed: '-readoff=random' must not alter the (seeded) sequence
-	// of selected objects, nor repeat its draws (that would tie each object to a narrow range of offsets)
-	readOffRnd = rand.New(cos.NewRandSource(uint64(p.seed) + 1))
 
 	//
 	// parse sizes
@@ -435,6 +427,14 @@ func initParams(p *params) (err error) {
 	if err := p.validate(); err != nil {
 		return err
 	}
+
+	if p.seed == 0 {
+		p.seed = mono.NanoTime()
+	}
+	rnd = rand.New(cos.NewRandSource(uint64(p.seed)))
+	// separate stream with a different seed: '-readoff=random' must not alter the (seeded) sequence
+	// of selected objects, nor repeat its draws (that would tie each object to a narrow range of offsets)
+	readOffRnd = rand.New(cos.NewRandSource(uint64(p.seed) + 1))
 
 	if p.bPropsStr != "" {
 		var bprops cmn.Bprops
@@ -556,6 +556,28 @@ func (p *params) noWorkload() bool {
 	return p.duration.Val == 0 && p.putSizeUpperBound == 0 && p.numEpochs == 0 && !p.stoppable
 }
 
+// flags that can make PUT object names repeat across runs
+func (p *params) repeatableNameFlags() (flags []string) {
+	if p.putPct == 0 {
+		return nil
+	}
+	// counter-based names
+	if !p.randomObjName {
+		flags = append(flags, "-randomname=false")
+	}
+	if p.loaderCnt > 0 {
+		flags = append(flags, "-loadernum")
+	}
+	if p.loaderIDHashLen > 0 {
+		flags = append(flags, "-loaderidhashlen")
+	}
+	// seeded random names repeat when re-run with the same seed
+	if p.seed != 0 {
+		flags = append(flags, "-seed")
+	}
+	return flags
+}
+
 func _parseSize(valueStr, name string, defaultVal int64) (int64, error) {
 	if valueStr == "" {
 		return defaultVal, nil
@@ -588,6 +610,11 @@ func (p *params) validate() error {
 	}
 	if p.updateExistingPct < 0 || p.updateExistingPct > 100 {
 		return fmt.Errorf("invalid %d percentage of GET requests that are followed by a PUT \"update\"", p.updateExistingPct)
+	}
+	if p.cleanUp.Val {
+		if p.evictBatchSize <= 0 {
+			return fmt.Errorf("invalid option: evict-batchsize %d (must be > 0 with '-cleanup=true')", p.evictBatchSize)
+		}
 	}
 
 	if cargs.IdleConnsPerHost < 0 {

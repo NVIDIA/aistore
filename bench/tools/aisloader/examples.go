@@ -12,7 +12,7 @@ package aisloader
 // 3. Mixed 30% PUT and 70% GET to/from a Cloud bucket. PUT will generate random object names and is limited by 10GB total size:
 //    aisloader -bucket=gs://nvgs -duration 0s -numworkers=3 -minsize=1MB -maxsize=1MB -pctput=30 -totalputsize=10G -cleanup=false
 // 4. PUT 2000 objects with names matching hex({0..2000}{loaderid}) template:
-//    aisloader -bucket=ais://abc -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -cleanup=false
+//    aisloader -bucket=ais://abc -numworkers=3 -pctput=100 -minsize=1K -maxsize=1K -loaderid=11 -loadernum=20 -maxputs=2000 -cleanup=false
 // ====================
 // 5. Use random object names and loaderID for reporting stats
 //    aisloader -loaderid=10

@@ -40,15 +40,12 @@ func TestAISLoaderETL(t *testing.T) {
 
 	if !t.Run("Echo", func(t *testing.T) {
 		// ETL initialization runs before the workload timer starts.
-		report := runner.run(t, "etl-echo", duration, etlTimeout, runner.created,
+		report := runner.run(t, "etl-echo", duration, etlTimeout, false,
 			"-subdir="+prefix,
 			"-pctput=0",
 			"-etl="+tetl.Echo,
 		)
 		assertOperation(t, "ETL GET", report.Get)
-		if runner.created {
-			runner.assertBucketDestroyed(t)
-		}
 		runner.assertETLDeleted(t, etlName)
 	}) {
 		t.FailNow()

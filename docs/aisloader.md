@@ -121,7 +121,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -bucket | `string` | Bucket name or bucket URI. If empty, aisloader generates a new random bucket name | `""` |
 | -cached | `bool` | List in-cluster objects - only those objects from a remote bucket that are present ("cached") | `false` |
 | -cksum-type | `string` | Checksum type to use for PUT object requests | `xxhash` |
-| -cleanup | `bool` | When true, remove bucket upon benchmark termination (must be specified for AIStore buckets) | `n/a` (required) |
+| -cleanup | `bool` | When true, delete objects PUT by this run and destroy the bucket only if this run created it. Required with `-bucket` | `false` |
 | -config | `string` | Load runtime settings from a [YAML file](#yaml-configuration); explicit CLI flags take precedence | `""` |
 | -cont-on-err | `bool` | GetBatch: ignore missing files and/or objects - include them under `__404__/` prefix and keep going | `false` |
 | -dry-run | `bool` | Show the entire set of parameters that aisloader will use when actually running | `false` |
@@ -129,7 +129,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -epochs | `int` | Number of "epochs" to run whereby each epoch entails full pass through the entire listed bucket | `0` |
 | -etl | `string` | Built-in ETL, one of: `transformer-echo`, `tar2tf`, `transformer-md5`, or `parquet-parser`. Each object that aisloader GETs undergoes the selected transformation | `""` |
 | -etl-spec | `string` | Custom ETL runtime specification (pathname) | `""` |
-| -evict-batchsize | `int` | Batch size to list and evict the next batch of remote objects | `1000` |
+| -evict-batchsize | `int` | Batch size for deleting objects PUT by this run on cleanup (`-cleanup=true`) | `1000` |
 | -filelist | `string` | Local or locally accessible text file containing object names (for subsequent reading) | `""` |
 | -filelist-obj | `string` | object URI of a list of object names to read, one per line (fetched through AIS) | `""` |
 | -get-batchsize | `int` | Use GetBatch API (ML endpoint) instead of GetObject | `0` |
@@ -273,7 +273,7 @@ For the most recently updated command-line options and examples, please run `ais
 | -latest | `bool` | When true, check in-cluster metadata and possibly GET the latest object version from the associated remote bucket | `false` |
 | -cached | `bool` | List in-cluster objects - only those objects from a remote bucket that are present ("cached") | `false` |
 | -nbi | `bool` | List via [native bucket inventory](/docs/nbi.md) (NBI) snapshot. Remote buckets only; the inventory must already exist - aisloader does **not** create it | `false` |
-| -evict-batchsize | `int` | Batch size to list and evict the next batch of remote objects | `1000` |
+| -evict-batchsize | `int` | Batch size for deleting objects PUT by this run on cleanup (`-cleanup=true`) | `1000` |
 | -cont-on-err | `bool` | GetBatch: ignore missing files and/or objects - include them under `__404__/` prefix and keep going | `false` |
 
 #### Multipart Upload Settings (`multipartParams`)
@@ -324,7 +324,7 @@ For the most recently updated command-line options and examples, please run `ais
 
 | Command-line option | Type | Description | Default |
 | --- | --- | --- | --- |
-| -cleanup | `bool` | When true, remove bucket upon benchmark termination (must be specified for AIStore buckets) | `n/a` (required) |
+| -cleanup | `bool` | When true, delete objects PUT by this run and destroy the bucket only if this run created it. Required with `-bucket` | `false` |
 | -config | `string` | Load runtime settings from a [YAML file](#yaml-configuration); explicit CLI flags take precedence | `""` |
 | -dry-run | `bool` | Show the entire set of parameters that aisloader will use when actually running | `false` |
 | -trace-http | `bool` | Trace HTTP latencies (see [HTTP tracing](#http-tracing)) | `false` |
@@ -432,18 +432,20 @@ To read a different segment on each GET, use `-readoff=random`. For each GET, th
 
 ### Cleanup
 
-**NOTE**: `-cleanup` is a mandatory option defining whether to destroy bucket upon completion of the benchmark.
+**NOTE**: `-cleanup` defines whether to delete objects PUT by the run upon completion of the benchmark. The bucket is destroyed only if the run created it.
 
-The option must be specified in the command line.
+The option is required whenever `-bucket` is specified, either on the command line or in the [config file](#yaml-configuration).
 
 Example:
 
 ```console
 $ aisloader -bucket=ais://abc -pctput=100 -totalputsize=16348 -cleanup=false
-$ aisloader -bucket=ais://abc -duration 1h -pctput=0 -cleanup=true
+$ aisloader -bucket=ais://abc -duration 1h -pctput=30 -cleanup=true
 ```
 
-The first line in this example above fills the bucket "abc" with 16MiB of random data. The second - uses existing data to test read performance for 1 hour, and then removes all data.
+The first line in this example above fills the bucket "abc" with 16MiB of random data. The latter uses existing data to test mixed read/write performance for 1 hour, and then removes the objects it wrote.
+
+Objects the run did not PUT are preserved. When the benchmark bucket already exists and the workload has PUTs, `-cleanup=true` is incompatible with options that make object names repeat across runs: `-randomname=false`, `-loadernum`, `-loaderidhashlen`, or a non-zero `-seed`. PUT "updates" (`-pctupdate`) overwrite existing objects but are not deleted on cleanup.
 
 To destroy a bucket, use `ais bucket rm <BUCKET>`. Alternatively, to empty a bucket, use `ais object rm <BUCKET> --all`.
 
@@ -731,7 +733,7 @@ For the most recently updated command-line options and examples, please run `ais
     01:52:54 Clean up done
     ```
 
-**2**. Time-based 100% PUT into ais bucket. Upon exit the bucket is destroyed:
+**2**. Time-based 100% PUT into ais bucket:
 
     ```console
     $ aisloader -bucket=nvais -duration 10s -cleanup=true -numworkers=3 -minsize=1K -maxsize=1K -pctput=100 -provider=ais
@@ -743,7 +745,7 @@ For the most recently updated command-line options and examples, please run `ais
     $ aisloader -bucket=aws://nvaws -duration 1h -numworkers=30 -pctput=0 -cleanup=false
     ```
 
-**4**. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size. Cleanup enabled - upon completion all generated objects and the bucket itself will be deleted:
+**4**. Mixed 30%/70% PUT and GET of variable-size objects to/from a Cloud bucket. PUT will generate random object names and is limited by the 10GB total size:
 
     ```console
     $ aisloader -bucket=s3://nvaws -duration 0s -cleanup=true -numworkers=3 -minsize=1024 -maxsize=1MB -pctput=30 -totalputsize=10G
@@ -764,7 +766,7 @@ For the most recently updated command-line options and examples, please run `ais
 **7**. PUT 2000 objects named as `aisloader/hex({0..2000}{loaderid})`:
 
     ```console
-    $ aisloader -bucket=nvais -duration 10s -numworkers=3 -loaderid=11 -loadernum=20 -maxputs=2000 -objNamePrefix="aisloader" -cleanup=false
+    $ aisloader -bucket=nvais -numworkers=3 -pctput=100 -minsize=1K -maxsize=1K -loaderid=11 -loadernum=20 -maxputs=2000 -subdir=aisloader -cleanup=false
     ```
 
 **8**. Use random object names and loaderID to report statistics:

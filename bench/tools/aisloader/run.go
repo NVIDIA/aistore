@@ -107,6 +107,7 @@ var (
 	accumulatedStats sts
 	objnameGetter    namegetter.Basic
 	objSizes         map[string]int64
+	putNames         []string // successful PUTs to delete upon cleanup (nil when not tracking)
 	statsPrintHeader = "%-10s%-6s%-22s\t%-22s\t%-36s\t%-22s\t%-10s\n"
 	statsdC          *statsd.Client
 
@@ -179,6 +180,9 @@ func Start(version, buildtime string) (err error) {
 		return err
 	}
 
+	// capture naming flags before initialization assigns the default seed
+	repeatFlags := runParams.repeatableNameFlags()
+
 	// validate and finish initialization
 	if err = initParams(runParams); err != nil {
 		return err
@@ -239,6 +243,14 @@ func Start(version, buildtime string) (err error) {
 	var created bool
 	if err := setupBucket(runParams, &created); err != nil {
 		return err
+	}
+	// a bucket created by this run is destroyed as a whole - no need to track names
+	if runParams.cleanUp.Val && !created {
+		if len(repeatFlags) > 0 {
+			return fmt.Errorf("'-cleanup=true' with existing bucket %s is incompatible with %s: PUT object names can repeat across runs",
+				runParams.bck.Cname(""), strings.Join(repeatFlags, ", "))
+		}
+		putNames = []string{}
 	}
 
 	if isDirectS3() {
@@ -316,11 +328,11 @@ func Start(version, buildtime string) (err error) {
 	}
 
 	if runParams.cleanUp.Val {
-		v := "destroyed"
-		if !runParams.bck.IsAIS() {
-			v = "emptied"
+		if created {
+			fmt.Printf("Cleanup is enabled: bucket %s created by this run will be destroyed upon termination.\n", runParams.bck.String())
+		} else {
+			fmt.Printf("Cleanup is enabled: only objects PUT by this run will be deleted from %s upon termination.\n", runParams.bck.String())
 		}
-		fmt.Printf("BEWARE: cleanup is enabled, bucket %s will be %s upon termination!\n", runParams.bck.String(), v)
 		time.Sleep(time.Second)
 	}
 
@@ -486,7 +498,7 @@ Done:
 	err = errors.Join(err, output.closeAndUpload(runParams.bp))
 
 	if runParams.cleanUp.Val {
-		cleanup()
+		cleanup(created)
 	}
 
 	fmt.Printf("\nActual run duration: %v\n", time.Since(tsStart))
@@ -611,8 +623,9 @@ func setupBucket(runParams *params, created *bool) error {
 			if err != nil {
 				return fmt.Errorf("failed to create %s: %v", runParams.bck.String(), err)
 			}
+		} else {
+			*created = true
 		}
-		*created = true
 	}
 	if runParams.bPropsStr == "" {
 		return nil
@@ -680,31 +693,30 @@ func sendStatsdStats(s *sts) {
 	s.statsd.SendAll(statsdC)
 }
 
-func cleanup() {
+func cleanup(bucketCreatedByRun bool) {
 	stopping.Store(true)
 	time.Sleep(time.Second)
 	fmt.Println(now() + " Cleaning up...")
-	if objnameGetter != nil {
-		// `objnameGetter` has been actually assigned to/initialized.
+	if bucketCreatedByRun {
+		api.DestroyBucket(runParams.bp, runParams.bck)
+	} else if len(putNames) > 0 {
+		// existing bucket: delete only the objects PUT by this run
 		var (
 			w       = runParams.numWorkers
-			objsLen = objnameGetter.Len()
+			objs    = putNames
+			objsLen = len(objs)
 			n       = objsLen / w
 			wg      = &sync.WaitGroup{}
 		)
 		for i := range w {
 			wg.Add(1)
-			go cleanupObjs(objnameGetter.Names()[i*n:(i+1)*n], wg)
+			go cleanupObjs(objs[i*n:(i+1)*n], wg)
 		}
 		if objsLen%w != 0 {
 			wg.Add(1)
-			go cleanupObjs(objnameGetter.Names()[n*w:], wg)
+			go cleanupObjs(objs[n*w:], wg)
 		}
 		wg.Wait()
-	}
-
-	if runParams.bck.IsAIS() {
-		api.DestroyBucket(runParams.bp, runParams.bck)
 	}
 	fmt.Println(now() + " Done")
 }
@@ -717,33 +729,29 @@ func cleanupObjs(objs []string, wg *sync.WaitGroup) {
 		return
 	}
 
-	// Only delete objects if it's not an AIS bucket (because otherwise we just go ahead
-	// and remove the bucket itself)
-	if runParams.bck.IsRemote() {
-		b := min(t, runParams.evictBatchSize)
-		n := t / b
-		for i := range n {
-			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs[i*b : (i+1)*b]}}
-			xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, evdMsg)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "delete multi-obj err:", err)
-			}
-			args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects}
-			if _, err = api.WaitForXactionIC(runParams.bp, &args); err != nil {
-				fmt.Fprintln(os.Stderr, "wait for xaction err:", err)
-			}
+	b := min(t, runParams.evictBatchSize)
+	n := t / b
+	for i := range n {
+		evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs[i*b : (i+1)*b]}}
+		xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, evdMsg)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "delete multi-obj err:", err)
 		}
+		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects}
+		if _, err = api.WaitForXactionIC(runParams.bp, &args); err != nil {
+			fmt.Fprintln(os.Stderr, "wait for xaction err:", err)
+		}
+	}
 
-		if t%b != 0 {
-			evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs[n*b:]}}
-			xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, evdMsg)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "delete err:", err)
-			}
-			args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects}
-			if _, err = api.WaitForXactionIC(runParams.bp, &args); err != nil {
-				fmt.Fprintln(os.Stderr, "wait for xaction err:", err)
-			}
+	if t%b != 0 {
+		evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: objs[n*b:]}}
+		xid, err := api.DeleteMultiObj(runParams.bp, runParams.bck, evdMsg)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "delete err:", err)
+		}
+		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects}
+		if _, err = api.WaitForXactionIC(runParams.bp, &args); err != nil {
+			fmt.Fprintln(os.Stderr, "wait for xaction err:", err)
 		}
 	}
 

@@ -131,15 +131,107 @@ func TestAISLoaderWorkloads(t *testing.T) {
 		t.FailNow()
 	}
 
-	t.Run("GetBatch And Cleanup", func(t *testing.T) {
-		report := runner.run(t, "get-batch", shorter, time.Minute, runner.created,
+	t.Run("GetBatch", func(t *testing.T) {
+		report := runner.run(t, "get-batch", shorter, time.Minute, false,
 			"-subdir="+runner.rootPrefix,
 			"-pctput=0",
 			"-get-batchsize=32",
 		)
 		assertOperation(t, "GetBatch", report.GetBatch)
+	})
+}
+
+func TestAISLoaderCleanup(t *testing.T) {
+	duration := configuredDuration(t)
+
+	t.Run("New Bucket", func(t *testing.T) {
+		runner := newE2ERunner(t, "cleanup-new")
+		if !runner.created {
+			t.Skip("requires a bucket that does not already exist")
+		}
+
+		report := runner.run(t, "cleanup-new", duration, time.Minute, true,
+			"-subdir="+runner.rootPrefix,
+			"-pctput=100",
+			"-maxsize=1KiB",
+			"-minsize=1KiB",
+			"-maxputs=100",
+		)
+		assertOperation(t, "PUT", report.Put)
+		runner.assertBucketDestroyed(t)
+	})
+
+	t.Run("Existing Bucket", func(t *testing.T) {
+		runner := newE2ERunner(t, "cleanup-existing")
 		if runner.created {
-			runner.assertBucketDestroyed(t)
+			tools.CreateBucket(t, runner.proxyURL, runner.bck, nil, false)
+		}
+
+		// pre-existing objects: cleanup must preserve them
+		const seedCount = 100
+		seeded := runner.rootPrefix + "/seeded"
+		_, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
+			Context:   t.Context(),
+			ProxyURL:  runner.proxyURL,
+			Bck:       runner.bck,
+			ObjPath:   seeded,
+			ObjCnt:    seedCount,
+			ObjSize:   cos.KiB,
+			FixedSize: true,
+		})
+		tassert.CheckFatal(t, err)
+
+		// regular and multipart PUTs next to them, with cleanup
+		report := runner.run(t, "cleanup-existing", duration, time.Minute, true,
+			"-subdir="+runner.rootPrefix,
+			"-pctput=100",
+			"-minsize=20MiB",
+			"-maxsize=20MiB",
+			"-maxputs=16",
+			"-multipart-chunks=4",
+			"-pctmultipart=50",
+		)
+		assertOperation(t, "PUT", report.Put)
+		assertOperation(t, "multipart PUT", report.PutMPU)
+
+		// only the seeded objects remain
+		bp := tools.BaseAPIParams(runner.proxyURL)
+		result, err := api.ListObjects(bp, runner.bck, &apc.LsoMsg{Prefix: runner.rootPrefix + "/"}, api.ListArgs{})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(result.Entries) == seedCount, "expected %d seeded objects, got %d", seedCount, len(result.Entries))
+		for _, entry := range result.Entries {
+			tassert.Fatalf(t, strings.HasPrefix(entry.Name, seeded+"/"), "run-created object survived cleanup: %s", entry.Name)
+		}
+	})
+
+	t.Run("Repeatable Names", func(t *testing.T) {
+		runner := newE2ERunner(t, "cleanup-repeatable")
+		if runner.created {
+			tools.CreateBucket(t, runner.proxyURL, runner.bck, nil, false)
+		}
+		args := append(slices.Clone(runner.baseArgs),
+			"-subdir="+runner.rootPrefix,
+			"-duration=10s",
+			"-pctput=100",
+			"-maxputs=100",
+			"-minsize=1KiB",
+			"-maxsize=1KiB",
+			"-cleanup=true",
+		)
+		for _, flags := range [][]string{
+			{"-seed=1"},
+			{"-randomname=false"},
+			{"-loadernum=2"},
+			{"-loaderidhashlen=8"},
+			{"-loadernum=2", "-seed=1"},
+			{"-randomname=false", "-loaderidhashlen=8"},
+		} {
+			t.Run(strings.Join(flags, ","), func(t *testing.T) {
+				cmdArgs := append(slices.Clone(args), flags...)
+				output, err := runner.exec(t, "cleanup-repeatable-existing", time.Minute, cmdArgs...)
+				tassert.Fatalf(t, err != nil && strings.Contains(string(output), "PUT object names can repeat across runs"),
+					"expected cleanup rejection, got err=%v\n%s", err, output)
+			})
 		}
 	})
 }

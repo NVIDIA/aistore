@@ -5,6 +5,7 @@
 package aisloader
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,9 @@ func TestParamsValidate(t *testing.T) {
 			workloadParams: workloadParams{
 				duration: DurationExt{Val: time.Minute},
 				putPct:   50,
+			},
+			readParams: readParams{
+				evictBatchSize: 1000,
 			},
 			sizeCksumParams: sizeCksumParams{
 				minSize:   cos.KiB,
@@ -355,6 +359,21 @@ func TestParamsValidate(t *testing.T) {
 			},
 			wantErr: "'-s3endpoint' and '-randomproxy' are mutually exclusive",
 		},
+		{
+			name: "allow cleanup with updates",
+			mutate: func(p *params) {
+				p.cleanUp = BoolExt{IsSet: true, Val: true}
+				p.updateExistingPct = 10
+			},
+		},
+		{
+			name: "reject cleanup with zero evict batch size",
+			mutate: func(p *params) {
+				p.cleanUp = BoolExt{IsSet: true, Val: true}
+				p.evictBatchSize = 0
+			},
+			wantErr: "invalid option: evict-batchsize 0 (must be > 0 with '-cleanup=true')",
+		},
 	}
 
 	for _, test := range tests {
@@ -378,6 +397,47 @@ func TestParamsValidate(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("validate() error = %v, expected substring %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestRepeatableNameFlags(t *testing.T) {
+	tests := []struct {
+		name            string
+		seed            int64
+		loaderCnt       uint64
+		loaderIDHashLen uint
+		randomObjName   bool
+		want            []string
+	}{
+		{name: "automatic seed", randomObjName: true},
+		{name: "explicit seed", randomObjName: true, seed: 1, want: []string{"-seed"}},
+		{name: "counter names", want: []string{"-randomname=false"}},
+		{name: "loader count", randomObjName: true, loaderCnt: 2, want: []string{"-loadernum"}},
+		{name: "loader hash", randomObjName: true, loaderIDHashLen: 8, want: []string{"-loaderidhashlen"}},
+		{
+			name: "loader count and seed", randomObjName: true, loaderCnt: 2, seed: 1,
+			want: []string{"-loadernum", "-seed"},
+		},
+		{
+			name: "counter names and loader hash", loaderIDHashLen: 8,
+			want: []string{"-randomname=false", "-loaderidhashlen"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			p := &params{
+				workloadParams: workloadParams{putPct: 50, seed: test.seed},
+				namingParams:   namingParams{randomObjName: test.randomObjName},
+				loaderParams:   loaderParams{loaderCnt: test.loaderCnt, loaderIDHashLen: test.loaderIDHashLen},
+			}
+			if got := p.repeatableNameFlags(); !slices.Equal(got, test.want) {
+				t.Fatalf("repeatableNameFlags() = %v, want %v", got, test.want)
+			}
+			p.putPct = 0
+			if got := p.repeatableNameFlags(); len(got) != 0 {
+				t.Fatalf("repeatableNameFlags() without PUTs = %v, want no flags", got)
 			}
 		})
 	}

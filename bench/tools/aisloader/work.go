@@ -184,6 +184,9 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
 			if wo.op != opUpdateExisting {
+				if putNames != nil {
+					putNames = append(putNames, wo.objName)
+				}
 				if !stopping.Load() {
 					addObjName(wo)
 				}
@@ -228,6 +231,9 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 		putPending--
 		intervalStats.statsd.Put.AddPending(putPending)
 		if wo.err == nil {
+			if putNames != nil {
+				putNames = append(putNames, wo.objName)
+			}
 			if !stopping.Load() {
 				addObjName(wo)
 			}
