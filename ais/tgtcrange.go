@@ -49,8 +49,7 @@ type (
 // - non-nil stop: the caller must call it
 func (goi *getOI) coldReader(bp core.Backend, parallel bool) (res core.GetReaderResult, stop context.CancelFunc) {
 	ctx := goi.ctx
-	// latest-version comparison retains the configured whole-object checksum
-	if parallel && goi.lom.Bprops().Chunks.AutoEnabled() && !goi.latestVer && !goi.lom.ValidateColdGet() &&
+	if parallel && goi.lom.Bprops().Chunks.AutoEnabled() && !goi.lom.ValidateColdGet() &&
 		!goi.lom.ECEnabled() && bp.Provider() != apc.OCI && !core.RR.BackingOff(goi.lom.Bprops()) {
 		ctx, stop = context.WithCancel(ctx)
 	}
@@ -124,12 +123,16 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 		return true, r.code, r.err
 	}
 
-	// combine only: no payload reread and no arrival-order bookkeeping
+	// preserve the checksum supplied by the initial GET (same revision as the pin);
+	// otherwise, combine per-chunk CRC32C without rereading the payload
 	var cksum *cos.Cksum
 	if manifest.Size() != r.size || manifest.Count() != int(nchunks) {
 		err = fmt.Errorf("%s: incomplete range fill (%d/%d bytes)", goi.lom.Cname(), manifest.Size(), r.size)
 	} else if r.checksum {
-		cksum, err = manifest.CombineCRC32C()
+		cksum = first.ExpCksum
+		if cos.NoneC(cksum) {
+			cksum, err = manifest.CombineCRC32C()
+		}
 	}
 	if err != nil {
 		manifest.Abort(goi.lom)

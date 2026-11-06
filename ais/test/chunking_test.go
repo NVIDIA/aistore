@@ -154,19 +154,26 @@ func TestRemaisColdGetRanges(t *testing.T) {
 	const chunkSize = 4 * cos.MiB
 	tests := []struct {
 		name, cksum, fault string
+		remoteCksum        string
 		size, chunk        int64
 		parallel           bool
 		validate, noPin    bool
 		latest, refetch    bool
+		validateWarm, sync bool
+		checkLatest        bool
 		code               int
 	}{
-		{name: "crc32c", cksum: cos.ChecksumOneXxh, parallel: true},
+		{name: "crc32c", cksum: cos.ChecksumOneXxh, remoteCksum: cos.ChecksumNone, parallel: true},
+		{name: "remote-checksum", cksum: cos.ChecksumSHA256, parallel: true, checkLatest: true},
+		{name: "remote-sha256", cksum: cos.ChecksumOneXxh, remoteCksum: cos.ChecksumSHA256, parallel: true, checkLatest: true},
 		{name: "none", cksum: cos.ChecksumNone, parallel: true},
 		{name: "long-name", cksum: cos.ChecksumOneXxh, parallel: true},
 		{name: "small", cksum: cos.ChecksumOneXxh, size: 2*chunkSize + 17},
 		{name: "one-chunk", cksum: cos.ChecksumOneXxh, chunk: 64 * cos.MiB},
 		{name: "validate", cksum: cos.ChecksumOneXxh, validate: true},
-		{name: "latest", cksum: cos.ChecksumOneXxh, latest: true},
+		{name: "latest", cksum: cos.ChecksumOneXxh, latest: true, parallel: true},
+		{name: "validate-warm-get", cksum: cos.ChecksumOneXxh, validateWarm: true, parallel: true},
+		{name: "synchronize", cksum: cos.ChecksumOneXxh, sync: true, parallel: true},
 		{name: "no-pin", cksum: cos.ChecksumOneXxh, noPin: true},
 		// remote change mid-fill: the same GET refetches the new revision sequentially
 		{name: "version-change", cksum: cos.ChecksumOneXxh, parallel: true, fault: "overwrite", refetch: true},
@@ -179,15 +186,19 @@ func TestRemaisColdGetRanges(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var (
-				proxyURL  = tools.RandomProxyURL(t)
-				bp        = tools.BaseAPIParams(proxyURL)
-				remoteBP  = tools.BaseAPIParams(tools.RemoteCluster.URL)
-				remoteBck = cmn.Bck{Name: "crange-" + trand.String(8), Provider: apc.AIS}
-				bck       = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}}
-				objName   = "object"
-				size      = tc.size
-				chunk     = tc.chunk
+				proxyURL    = tools.RandomProxyURL(t)
+				bp          = tools.BaseAPIParams(proxyURL)
+				remoteBP    = tools.BaseAPIParams(tools.RemoteCluster.URL)
+				remoteBck   = cmn.Bck{Name: "crange-" + trand.String(8), Provider: apc.AIS}
+				bck         = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}}
+				objName     = "object"
+				size        = tc.size
+				chunk       = tc.chunk
+				remoteCksum = tc.remoteCksum
 			)
+			if remoteCksum == "" {
+				remoteCksum = cos.ChecksumOneXxh
+			}
 			if size == 0 {
 				size = 8*chunkSize + 17
 			}
@@ -204,7 +215,7 @@ func TestRemaisColdGetRanges(t *testing.T) {
 			replacement := bytes.Repeat([]byte{'z'}, len(data))
 			tools.CreateBucket(t, remoteBP.URL, remoteBck, &cmn.BpropsToSet{
 				Versioning: &cmn.VersionConfToSet{Enabled: apc.Ptr(!tc.noPin)},
-				Cksum:      &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumOneXxh)},
+				Cksum:      &cmn.CksumConfToSet{Type: &remoteCksum},
 			}, true /*cleanup*/)
 			put := func(data []byte) error {
 				args := &api.PutArgs{BaseParams: remoteBP, Bck: remoteBck, ObjName: objName,
@@ -220,8 +231,9 @@ func TestRemaisColdGetRanges(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			t.Cleanup(func() { tassert.CheckError(t, api.EvictRemoteBucket(bp, bck, false)) })
 			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{
-				Chunks: &cmn.ChunksConfToSet{ObjSizeLimit: apc.Ptr(cos.SizeIEC(chunkSize)), ChunkSize: apc.Ptr(cos.SizeIEC(chunk))},
-				Cksum:  &cmn.CksumConfToSet{Type: &tc.cksum, ValidateColdGet: &tc.validate, ValidateWarmGet: apc.Ptr(false)},
+				Chunks:     &cmn.ChunksConfToSet{ObjSizeLimit: apc.Ptr(cos.SizeIEC(chunkSize)), ChunkSize: apc.Ptr(cos.SizeIEC(chunk))},
+				Cksum:      &cmn.CksumConfToSet{Type: &tc.cksum, ValidateColdGet: &tc.validate, ValidateWarmGet: apc.Ptr(false)},
+				Versioning: &cmn.VersionConfToSet{ValidateWarmGet: &tc.validateWarm, Sync: &tc.sync},
 			})
 			tassert.CheckFatal(t, err)
 			initMountpaths(t, proxyURL)
@@ -381,9 +393,13 @@ func TestRemaisColdGetRanges(t *testing.T) {
 				if tc.cksum == cos.ChecksumNone {
 					tassert.Fatalf(t, cos.NoneC(op.Cksum), "checksum=none stored %v", op.Cksum)
 				} else {
-					cksum, err := cos.ChecksumBytes(data, cos.ChecksumCRC32C)
+					cksumType := remoteCksum
+					if cksumType == cos.ChecksumNone {
+						cksumType = cos.ChecksumCRC32C
+					}
+					cksum, err := cos.ChecksumBytes(data, cksumType)
 					tassert.CheckFatal(t, err)
-					tassert.Fatalf(t, cksum.Equal(op.Cksum), "incorrect whole-object CRC32C: %v", op.Cksum)
+					tassert.Fatalf(t, cksum.Equal(op.Cksum), "expected whole-object %v, got %v", cksum, op.Cksum)
 				}
 			} else {
 				tassert.Fatalf(t, ranges.Load() == 0, "fallback issued %d range requests", ranges.Load())
@@ -398,7 +414,18 @@ func TestRemaisColdGetRanges(t *testing.T) {
 			_, err = api.GetObject(bp, bck, objName, args)
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, bytes.Equal(out.Bytes(), data), "warm GET returned incorrect bytes")
-			tassert.Fatalf(t, full.Load()+ranges.Load() == before, "warm GET contacted backend")
+			tassert.Fatalf(t, full.Load()+ranges.Load() == before, "warm GET downloaded the object again")
+			if tc.checkLatest {
+				// A latest-version check must recognize the preserved remote checksum.
+				nheads := heads.Load()
+				args.Query = url.Values{apc.QparamLatestVer: []string{"true"}}
+				out.Reset()
+				_, err = api.GetObject(bp, bck, objName, args)
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, bytes.Equal(out.Bytes(), data), "latest GET returned incorrect bytes")
+				tassert.Fatalf(t, heads.Load() > nheads, "latest GET did not check remote metadata")
+				tassert.Fatalf(t, full.Load()+ranges.Load() == before, "latest GET downloaded unchanged content again")
+			}
 			tlog.Logfln("%s: full GETs=%d, ranges=%d, peak=%d", tc.name, full.Load(), ranges.Load(), peak.Load())
 		})
 	}

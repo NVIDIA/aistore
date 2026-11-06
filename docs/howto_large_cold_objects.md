@@ -219,7 +219,6 @@ An object qualifies when all of the following hold:
 * the bucket has auto-chunking enabled, and the object is at or above `chunks.objsize_limit` and the minimum size for parallel cold GET (see [limits](#limits-and-defaults));
 * the object spans at least two chunks of `chunks.chunk_size`;
 * the bucket does not validate cold GETs (`checksum.validate_cold_get`) and is not erasure-coded;
-* neither the request (`--latest`) nor the bucket (`versioning.validate_warm_get`, `versioning.synchronize`) asks to check the latest remote version;
 * the backend reports a usable version for the object. Objects in unversioned remote AIS buckets and GCS objects served with decompressive transcoding use the regular cold GET;
 * the bucket is not an `oc://` bucket; the native OCI backend uses its own multipart reader;
 * the target is not under high load and, for buckets without `rate_limit.backend`, is outside the backoff window after a remote 429 or 503; otherwise the cold GET is sequential;
@@ -229,7 +228,7 @@ Notes:
 
 * parallel range reads aim to improve backend download throughput while preserving regular GET semantics: the object is cached and finalized before serving the client. A faster download can shorten the first reader's wait, but that reader still waits for the entire object;
 * parallelism is bounded by the number of chunks: with the default `chunks.chunk_size` of 1 GiB, a 2 GiB object uses two readers. To use all readers, choose a chunk size of at most the typical object size divided by the per-GET maximum;
-* chunks arrive out of order, so the whole-object checksum is CRC32C, combined from per-chunk checksums, regardless of the bucket's checksum type; with `checksum.type` set to `none`, no checksum is stored.
+* the whole-object checksum is the one supplied by the remote, if any, as with a sequential cold GET; otherwise, chunks arrive out of order, so it is CRC32C, combined from per-chunk checksums, regardless of the bucket's checksum type. With `checksum.type` set to `none`, no checksum is stored.
 
 ## Streaming cold GET
 

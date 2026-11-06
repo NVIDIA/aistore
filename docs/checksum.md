@@ -99,12 +99,11 @@ A regular (single-stream) PUT into a bucket with chunking enabled is written chu
 
 ### Cold GET with parallel range reads
 
-A cold GET that qualifies for parallel range reads always produces CRC32C (or no checksum, with `checksum.type=none`). The cold GET qualifies when all of the following hold:
+A cold GET that qualifies for parallel range reads preserves the remote whole-object checksum when supplied. Otherwise, it combines per-chunk CRC32C in object order, without rereading the data. With `checksum.type=none`, no checksum is stored. The cold GET qualifies when all of the following hold:
 
 - chunking is enabled in the bucket
 - the object is at least the minimum size for parallel cold GET (see [limits](/docs/howto_large_cold_objects.md#limits-and-defaults))
 - `checksum.validate_cold_get` is false
-- the request does not ask for the latest version
 - erasure coding is disabled
 - the backend is not OCI
 
