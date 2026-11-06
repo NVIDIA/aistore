@@ -223,7 +223,7 @@ func (lom *LOM) LoadLatest(latest bool) (oa *cmn.ObjAttrs, deleted bool, err err
 		res := lom.CheckRemoteMD(true /*locked*/, false /*synchronize*/, nil /*origReq*/)
 		if res.Eq {
 			debug.AssertNoErr(res.Err)
-			return nil, false, nil
+			return nil, false, err // no versioning metadata => return load err as is
 		}
 		if err == nil { // undo lom.Load
 			lom.UncacheDel()

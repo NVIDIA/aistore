@@ -66,7 +66,7 @@ type (
 		// RespWriter selects one of two modes:
 		//   - nil: background/cache-only download; no object-data SGL is allocated;
 		//   - non-nil: synchronous streaming; each active worker owns one reusable,
-		//     chunk-sized object-data SGL (one SGL in serial mode).
+		//     chunk-sized object-data SGL.
 		// High memory pressure rejects streaming mode; critical pressure rejects both modes.
 		// Streaming is also rejected when estimated SGL and copy-buffer memory exceeds
 		// the allocator's available headroom above its configured minimum-free reserve.

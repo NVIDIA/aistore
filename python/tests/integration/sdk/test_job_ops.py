@@ -20,7 +20,7 @@ from aistore.sdk.xact_const import (
 )
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
 from tests.integration import REMOTE_SET
-from tests.const import TEST_TIMEOUT, MEDIUM_FILE_SIZE
+from tests.const import TEST_TIMEOUT, MEDIUM_FILE_SIZE, MIB
 
 
 class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
@@ -62,14 +62,14 @@ class TestJobOps(ParallelTestBase):  # pylint: disable=unused-variable
         "Remote bucket is not set",
     )
     def test_job_wait_blob_download(self):
-        obj, _ = self._create_object_with_content()
+        obj, _ = self._create_object_with_content(obj_size=MEDIUM_FILE_SIZE)
 
         evict_job_id = self.bucket.objects(obj_names=[obj.name]).evict()
         result = self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
         self.assertTrue(result.success)
         self.assertFalse(obj.props.present)
 
-        job_id = obj.blob_download()
+        job_id = obj.blob_download(chunk_size=MIB)
         self.assertNotEqual(job_id, "")
         result = self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT)
         self.assertTrue(result.success)

@@ -27,7 +27,7 @@ import (
 
 // nwCases covers every distinct code path in BckJogRunner.Init / TuneNumWorkers:
 //   - NwpNone (-1): Init exits early, no TuneNumWorkers call, CbObj called inline
-//   - NwpDflt (0):  media-type default multiplier applied by _defaultNW
+//   - NwpDflt (0):  media-type default multiplier applied by DefaultNW
 //   - 1:            explicit value below NwpMin (the load-based throttle floor)
 //   - NwpMin (2):   at the throttle floor
 //   - 4:            typical explicit count, pool expected under normal load

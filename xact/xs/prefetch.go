@@ -82,8 +82,8 @@ func (*prfFactory) New(args xreg.Args, bck *meta.Bck) xreg.Renewable {
 }
 
 func (p *prfFactory) Start() (err error) {
-	if p.msg.BlobNumWorkers < xact.NwpNone {
-		return fmt.Errorf("invalid blob-num-workers=%d: expecting (-1..N) range", p.msg.BlobNumWorkers)
+	if err := apc.ValidateBlobWorkers(p.msg.BlobNumWorkers); err != nil {
+		return fmt.Errorf("blob-num-workers: %w", err)
 	}
 	if p.msg.BlobThreshold < 0 {
 		return fmt.Errorf("invalid blob-threshold=%d: expecting a non-negative value", p.msg.BlobThreshold)

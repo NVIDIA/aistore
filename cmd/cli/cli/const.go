@@ -1136,9 +1136,8 @@ var (
 	}
 	blobNumWorkersFlag = cli.IntFlag{
 		Name: "blob-num-workers",
-		Usage: "Preferred number of workers for each blob-download started by prefetch; auto-tuned when not specified;\n" +
-			noWorkers +
-			indent4 + "\tsilently clamped by the server to a permitted range based on the object size and available system resources;\n" +
+		Usage: "Preferred number of workers for each blob-download started by prefetch; auto-tuned when omitted or zero;\n" +
+			indent4 + "\totherwise, at least two; the server may use fewer, based on the object size and available system resources;\n" +
 			indent4 + "\tonly takes effect together with '--blob-threshold'",
 	}
 

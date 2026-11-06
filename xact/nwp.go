@@ -61,7 +61,7 @@ const (
 // - number of available mountpaths
 // - detected storage media type (NVMe, SSD, HDD)
 // - hardcoded multiplier (above)
-func _defaultNW(numMpaths int) int {
+func DefaultNW(numMpaths int) int {
 	switch {
 	case fs.IsRotational() || fs.IsSlow():
 		return numMpaths * nwpMultHDD
@@ -87,7 +87,7 @@ func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 
 	// 1. apply system default
 	if numWorkers == NwpDflt {
-		numWorkers = _defaultNW(numMpaths)
+		numWorkers = DefaultNW(numMpaths)
 	}
 
 	// 2. scheduler latency

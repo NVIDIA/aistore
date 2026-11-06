@@ -78,26 +78,35 @@ func (t *target) getBlob(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *
 		rsphdr = &rsphdr{hdr: w.Header(), lom: lom, s3: dpq.isS3, ctype: true}
 	)
 	xid, _, err := t.blobdlLocked(args, rsphdr)
-	if xs.IsErrBlobDlAdmission(err) {
-		if !blobDownload {
-			// threshold only: it's a GET - fall through to regular GET
+
+	if err != nil {
+		if xs.IsErrBlobDlOneChunk(err) {
+			// a) nothing to parallelize - proceed anyway w/ regular GET (explicit or not)
 			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Infoln("GET", lom.Cname(), "falling back to regular GET:", err)
 			}
 			return false, 0, nil
 		}
-		ecode = http.StatusTooManyRequests
-		err = cmn.NewErrTooManyRequests(err, ecode)
+		if xs.IsErrBlobDlAdmission(err) {
+			if !blobDownload {
+				// b) threshold only: it's a GET - regular GET
+				if cmn.Rom.V(4, cos.ModAIS) {
+					nlog.Infoln("GET", lom.Cname(), "falling back to regular GET:", err)
+				}
+				return false, 0, nil
+			}
+			ecode = http.StatusTooManyRequests
+			err = cmn.NewErrTooManyRequests(err, ecode)
+		}
+		if xid != "" {
+			// streaming w/ bytes on the wire - avoid "superfluous response"
+			nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
+			err = nil
+		}
 	}
-	if err != nil && xid != "" {
-		// The xaction retains this failure; streaming may have already committed
-		// object bytes, so do not write another HTTP response.
-		nlog.Warningln("GET", lom.Cname(), "via blob-download["+xid+"]:", err)
-		err = nil
-	}
+
 	if xid == "" && err == nil {
-		// Blob download was not started (for example, warm or below threshold).
-		// Fall through to regular GET.
+		// c) ditto - regular GET
 		return false, 0, nil
 	}
 	return true, ecode, err

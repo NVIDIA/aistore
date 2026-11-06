@@ -63,7 +63,7 @@ const (
 	dfltChunkSize         = 4 * cos.MiB
 	maxStreamingChunkSize = 64 * cos.MiB // ~625GiB maximum object size; up to 2GiB streaming SGLs
 
-	blobMinBytesPerWorker = 256 * cos.MiB // one blob worker should get at least this much object data
+	blobMinBytesPerWorker = 256 * cos.MiB // size-based worker cap, with a minimum of two
 	blobMaxWorkers        = 32            // absolute max workers for a single blob-download job
 )
 
@@ -102,6 +102,7 @@ type (
 		finalizing  atomic.Bool // CAS gate to execute once
 		wg          sync.WaitGroup
 		pin         *core.ObjPin // remote version to match (see RenewBlobDl)
+		remCksum    *cos.Cksum   // remote checksum, if any, to store as is (see useRemCksum)
 		nextRoff    int64
 		fullSize    int64
 		chunkSize   int64         // not necessarily user-provided values (chunk size & num workers might be adjusted based on resources)
@@ -168,13 +169,18 @@ var (
 	errBlobDlAdmission  = errors.New(apc.ActBlobDl + " admission rejected")
 	errBlobDlChunkLimit = errors.New(apc.ActBlobDl + " exceeds manifest chunk limit")
 	errBlobDlEmpty      = errors.New(apc.ActBlobDl + " zero-size object")
+	errBlobDlOneChunk   = errors.New(apc.ActBlobDl + " single-chunk object")
 )
 
 // IsErrBlobDlAdmission reports whether blob download was rejected before starting.
 func IsErrBlobDlAdmission(err error) bool { return errors.Is(err, errBlobDlAdmission) }
 
+// nothing to parallelize: the object fits in a single chunk
+func IsErrBlobDlOneChunk(err error) bool { return errors.Is(err, errBlobDlOneChunk) }
+
 func isErrBlobDlColdFallback(err error) bool {
-	return IsErrBlobDlAdmission(err) || errors.Is(err, errBlobDlChunkLimit) || errors.Is(err, errBlobDlEmpty)
+	return IsErrBlobDlAdmission(err) || IsErrBlobDlOneChunk(err) ||
+		errors.Is(err, errBlobDlChunkLimit) || errors.Is(err, errBlobDlEmpty)
 }
 
 // Blob Download Flow =================================================================
@@ -211,7 +217,12 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	// - size policy (MinBlobDlGetSize, MinBlobDlPrefetchSize) is applied by the callers that _select_
 	//   blob-downloading (GET, prefetch); explicit requests (x-start, api.BlobDownload) are honored
 	// - zero size cannot be blob-downloaded: prefetch falls back to cold GET; explicit requests fail
+	// - same for a single chunk (see validateChunkCount), except that GET falls back as well
 	lom := params.Lom
+	if err := apc.ValidateBlobWorkers(params.Msg.NumWorkers); err != nil {
+		lom.Unlock(true)
+		return xreg.RenewRes{Err: err}
+	}
 	if oa.Size <= 0 {
 		err := fmt.Errorf("%w: %s", errBlobDlEmpty, lom.Cname())
 		lom.Unlock(true)
@@ -229,6 +240,9 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	// and separately:
 	pre.fullSize = oa.Size
 	pre.pin = core.NewObjPin(lom.Bck().Provider, oa)
+	if !cos.NoneC(oa.Cksum) {
+		pre.remCksum = oa.Cksum
+	}
 
 	if params.Msg.FullSize > 0 && params.Msg.FullSize != pre.fullSize {
 		name := xact.Cname(apc.ActBlobDl, xid) + "/" + lom.Cname()
@@ -299,7 +313,7 @@ func (p *blobFactory) Start() (err error) {
 	// 1. adjust chunk size and apply default
 	r.setChunkSize()
 
-	// 2. reject objects that cannot fit in a manifest
+	// 2. require multiple chunks within the manifest limit
 	if err := r.validateChunkCount(); err != nil {
 		return err
 	}
@@ -351,19 +365,19 @@ func (p *blobFactory) Start() (err error) {
 	if err != nil {
 		return err
 	}
-	r.manifest.InitStreamingChecksum(lom.CksumType())
-
-	if r.numWorkers != xact.NwpNone {
-		r.workers = make([]*blobWorker, r.numWorkers)
-		r.adv.Refresh() // refresh advice one more time before copying to workers
-		for i := range r.workers {
-			r.workers[i] = r.newWorker()
-		}
-		// open channels
-		r.workCh = make(chan *blobWI, r.numWorkers)
-		r.doneCh = make(chan *blobWI, r.numWorkers)
-		r.pending = make(blobPending, r.numWorkers)
+	if !r.useRemCksum(lom) {
+		r.manifest.InitStreamingChecksum(lom.CksumType())
 	}
+
+	r.workers = make([]*blobWorker, r.numWorkers)
+	r.adv.Refresh() // refresh advice one more time before copying to workers
+	for i := range r.workers {
+		r.workers[i] = r.newWorker()
+	}
+	// open channels
+	r.workCh = make(chan *blobWI, r.numWorkers)
+	r.doneCh = make(chan *blobWI, r.numWorkers)
+	r.pending = make(blobPending, r.numWorkers)
 
 	r.setChunkReadTimeout()
 
@@ -424,12 +438,7 @@ func (r *XactBlobDl) Run(wg *sync.WaitGroup) {
 		time.Sleep(r.adv.Sleep)
 	}
 
-	switch r.numWorkers {
-	case xact.NwpNone:
-		err = r.runSerial()
-	default:
-		err = r.runWorkers()
-	}
+	err = r.runWorkers()
 
 	returned = true // ok
 }
@@ -439,7 +448,7 @@ func (r *XactBlobDl) Abort(err error) bool {
 }
 
 func (r *XactBlobDl) estMemCost() (sglCost, bufCost int64) {
-	n := int64(max(1, r.numWorkers))
+	n := int64(r.numWorkers)
 	bufCost = n * memsys.DefaultBufSize
 	if r.args.RespWriter != nil {
 		sglCost = n * r.chunkSize
@@ -450,6 +459,10 @@ func (r *XactBlobDl) estMemCost() (sglCost, bufCost int64) {
 
 func (r *XactBlobDl) validateChunkCount() error {
 	n := cos.DivCeil(r.fullSize, r.chunkSize)
+	if n < 2 {
+		return fmt.Errorf("%w: %s: size %s with chunk size %s", errBlobDlOneChunk, r.Name(),
+			cos.IEC(r.fullSize, 0), cos.IEC(r.chunkSize, 0))
+	}
 	if n <= core.MaxChunkCount {
 		return nil
 	}
@@ -527,7 +540,7 @@ func (r *XactBlobDl) releaseMem() {
 // count extra workers (all but one) as target-wide range readers (see core.RR)
 // - applies to explicitly requested number of workers as well
 // - jobs (no RespWriter): only while in-flight readers are below half the cap
-// - during remote backoff (any number of workers, incl. serial) or when the cap is reached: reject admission
+// - during remote backoff or when the cap is reached: reject admission
 // - (sequential range reads cost more backend requests than a regular cold GET)
 func (r *XactBlobDl) reserveReaders() error {
 	if core.RR.BackingOff(r.args.Lom.Bprops()) {
@@ -599,45 +612,6 @@ func (r *XactBlobDl) setChunkReadTimeout() {
 }
 
 const blwipref = "_wi_"
-
-// runSerial downloads chunks sequentially without using workers.
-func (r *XactBlobDl) runSerial() error {
-	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infof("running serial download: %s, chunk size: %s", r.Name(), cos.IEC(r.chunkSize, 0))
-	}
-	buf, slab := core.T.PageMM().AllocSize(memsys.DefaultBufSize)
-	defer slab.Free(buf)
-
-	var (
-		worker = r.newWorker()
-		// serial case: a single work item and a single SGL for the entire download;
-		// written to RespWriter and freed upon completion
-		wi = r.newWI(r.Name()+blwipref, r.nextRoff)
-	)
-	defer wi.cleanup()
-
-	for r.nextRoff < r.fullSize {
-		if r.IsAborted() {
-			return r.AbortErr()
-		}
-		ecode, err := worker.do(wi, buf)
-		if err != nil {
-			return fmt.Errorf("%s: failed to download chunk at offset %d (code %d): %w", r.Name(), r.nextRoff, ecode, err)
-		}
-		if ecode == http.StatusRequestedRangeNotSatisfiable && r.fullSize > r.nextRoff {
-			return fmt.Errorf("%s: premature eof: expected size %d, have %d", r.Name(), r.fullSize, r.nextRoff)
-		}
-		r.releaseWIMem(wi)
-
-		if err = r.write(wi.sgl, wi.written); err != nil {
-			return err
-		}
-		r.nextRoff += wi.written
-		wi.advance(r.nextRoff)
-	}
-	debug.Assertf(r.nextRoff == r.fullSize, "%d != %d", r.nextRoff, r.fullSize)
-	return nil
-}
 
 // runWorkers downloads chunks concurrently using multiple workers.
 // Main thread coordinates: seeds work, receives completions, handles out-of-order chunks.
@@ -813,8 +787,18 @@ func (r *XactBlobDl) _errStats() {
 	r.bdm.errBlob.inc(tstats)
 }
 
+// unless validating, store the checksum that arrived with the object
+// (compare with goi.coldGet)
+func (r *XactBlobDl) useRemCksum(lom *core.LOM) bool {
+	return r.remCksum != nil && lom.CksumType() != cos.ChecksumNone && !lom.ValidateColdGet()
+}
+
 func (r *XactBlobDl) _fini(lom *core.LOM) (err error) {
-	if lom.CksumType() != cos.ChecksumNone {
+	switch {
+	case lom.CksumType() == cos.ChecksumNone:
+	case r.useRemCksum(lom):
+		lom.SetCksum(r.remCksum)
+	default:
 		var cksum *cos.Cksum
 		if cksum, err = r.manifest.WholeChecksum(); err == nil {
 			lom.SetCksum(cksum)
@@ -936,7 +920,6 @@ func (r *XactBlobDl) cleanup() {
 		for i := range r.workers {
 			debug.AssertCounterEquals(r.Name()+blwipref+strconv.Itoa(i), 0)
 		}
-		debug.AssertCounterEquals(r.Name()+blwipref, 0)
 	})
 }
 
@@ -1174,28 +1157,30 @@ func (wi *blobWI) cleanup() {
 
 // Effective workers = min(tuned, objCap, blobMaxWorkers), where
 //   - tuned  = TuneNumWorkers(requested, mpaths) -- folds in user request, media, system load;
-//   - objCap = ceil(fullSize / blobMinBytesPerWorker) -- one worker per ~256MiB of data.
+//   - objCap = max(2, ceil(fullSize / blobMinBytesPerWorker)) -- one worker per ~256MiB, at least two.
 //
-// `requested == -1` (NwpNone) short-circuits to -1 (serial).
-// Load that leaves no parallel workers is an error (admission rejected): sequential range reads
+// Default request (zero) is the media default but no less than two (e.g., single HDD mountpath);
+// system load may still reduce it.
+// Fewer than two workers is an error (admission rejected): sequential range reads
 // cost more backend requests than a regular cold GET.
 // Examples (auto request, 4 mountpaths):
-//   - 64 MiB, SSD : tuned=16, objCap=1  -> 1   (object too small to fan out)
+//   - 64 MiB, SSD : tuned=16, objCap=2  -> 2   (minimum parallelism)
 //   - 2 GiB, NVMe : tuned=32, objCap=8  -> 8   (object-size cap binds)
 //   - 8 GiB, NVMe : tuned=32, objCap=32 -> 32  (hits hard cap)
 //   - 16 GiB, NVMe: tuned=32, objCap=64 -> 32  (clamped by blobMaxWorkers)
+//   - 1 GiB, HDD, single mountpath: tuned=2, objCap=4 -> 2
 func TuneBlobDlWorkers(xname string, requestedWorkers, numMpaths int, fullSize int64) (int, error) {
-	if requestedWorkers == xact.NwpNone {
-		return xact.NwpNone, nil // explicitly requested
+	if requestedWorkers == xact.NwpDflt {
+		requestedWorkers = max(xact.DefaultNW(numMpaths), apc.MinBlobWorkers)
 	}
 	tunedWorkers, err := xact.TuneNumWorkers(xname, requestedWorkers, numMpaths)
 	if err != nil {
 		return 0, err
 	}
-	if tunedWorkers == xact.NwpNone {
-		return 0, fmt.Errorf("%s: system load leaves no parallel workers", xname)
+	if tunedWorkers < apc.MinBlobWorkers {
+		return 0, fmt.Errorf("%s: requires at least %d workers (tuned %d)", xname, apc.MinBlobWorkers, tunedWorkers)
 	}
 	debug.Assert(fullSize > 0)
-	workerSizeCap := int(cos.DivCeil(fullSize, blobMinBytesPerWorker))   // ceil(object_size / 256MiB)
-	return max(1, min(tunedWorkers, workerSizeCap, blobMaxWorkers)), nil // min(tuned_capacity, object-size cap, hard cap)
+	workerSizeCap := max(apc.MinBlobWorkers, int(cos.DivCeil(fullSize, blobMinBytesPerWorker)))
+	return min(tunedWorkers, workerSizeCap, blobMaxWorkers), nil
 }

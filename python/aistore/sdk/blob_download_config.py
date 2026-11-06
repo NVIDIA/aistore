@@ -20,14 +20,16 @@ class BlobDownloadConfig:
     Attributes:
         chunk_size (str, optional): Chunk size for the blob downloader. It can be specified in IEC
             or SI units, or as raw bytes (e.g., "4mb", "1MiB", "1048576", "128k")
-        num_workers (str, optional): Number of concurrent workers for the blob downloader
+        num_workers (str, optional): Number of concurrent workers for the blob downloader:
+            zero (default) or at least two
         read_timeout (str, optional): Per-attempt timeout for reading a chunk from the backend,
             expressed as a duration string (e.g., "30s", "2m")
         threshold (int, optional): Minimum remote object size in bytes that enables the blob
             downloader. Zero disables blob download; omitting it preserves forced blob download.
 
     Note:
-        Objects smaller than 128 KiB are served via regular GET (no blob-download job).
+        Objects smaller than 128 KiB, or fitting in a single chunk, are served via regular GET
+        (no blob-download job).
 
     Example:
         blob_settings = BlobDownloadConfig(

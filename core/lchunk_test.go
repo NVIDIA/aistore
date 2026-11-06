@@ -745,6 +745,38 @@ var _ = Describe("Ufest Core Functionality", func() {
 			Expect(combined.Value()).To(Equal(cos.ChecksumB2S(data, cos.ChecksumCRC32C)))
 		})
 
+		DescribeTable("should preserve the configured checksum for in-order chunks", func(cksumType string) {
+			props := *lom.Bprops()
+			props.Cksum.Type = cksumType
+			lom.Bck().Props = &props
+			cw = core.ChunkWriter{}
+			cw.Init(lom, manifest)
+			manifest.InitStreamingChecksum(lom.CksumType())
+
+			var data []byte
+			for part := 1; part <= 3; part++ {
+				chunkData := bytes.Repeat([]byte{byte(part)}, part*len(buf)+17)
+				data = append(data, chunkData...)
+				inOrder, stream := manifest.CheckInOrder(part)
+				Expect(inOrder).To(BeTrue())
+				Expect(stream).NotTo(BeNil())
+				_, err := cw.WriteChunk(part, bytes.NewReader(chunkData), int64(len(chunkData)), buf, stream)
+				manifest.StreamWriteDone()
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			whole, err := manifest.WholeChecksum()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(whole.Type()).To(Equal(cksumType))
+			Expect(whole.Value()).To(Equal(cos.ChecksumB2S(data, cksumType)))
+			combined, err := manifest.CombineCRC32C()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(combined.Value()).To(Equal(cos.ChecksumB2S(data, cos.ChecksumCRC32C)))
+		},
+			Entry("xxhash", cos.ChecksumCesXxh),
+			Entry("sha256", cos.ChecksumSHA256),
+		)
+
 		It("should leave chunks without a checksum when the bucket has none (and fsync when configured)", func() {
 			localFQN := mix.MakePathFQN(&noCksumBck, fs.ObjCT, "test-objects/chunk-writer-nocksum.bin")
 			lom := newBasicLom(localFQN, int64(cos.MiB))

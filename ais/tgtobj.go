@@ -731,6 +731,7 @@ func (goi *getOI) get() (ecode int, err error) {
 		cold        bool
 	)
 do: // retry uplock or ec-recovery, the latter only once
+	goi.verchanged = false
 
 	err = goi.lom.Load(true /*cache it*/, true /*locked*/)
 	if err != nil {

@@ -16,6 +16,19 @@ import (
 
 const _bldl = "blob-downloader"
 
+// blob-download workers: zero selects the default; otherwise, at least two
+const (
+	MinBlobWorkers = 2
+	MaxBlobWorkers = 128
+)
+
+func ValidateBlobWorkers(nw int) error {
+	if nw == 0 || (nw >= MinBlobWorkers && nw <= MaxBlobWorkers) {
+		return nil
+	}
+	return fmt.Errorf("invalid number of workers %d: expecting 0 (default) or (%d..%d) range", nw, MinBlobWorkers, MaxBlobWorkers)
+}
+
 type BlobMsg struct {
 	ChunkSize        int64        `json:"chunk-size"`                   // as in: chunk size
 	FullSize         int64        `json:"full-size"`                    // user-specified (full) size of the object to download
@@ -37,8 +50,8 @@ func (msg *BlobMsg) FromHeader(hdr http.Header) error {
 		if err != nil {
 			return fmt.Errorf("%s: failed to parse %s=%s: %w", _bldl, HdrBlobWorkers, valWorkers[0], err)
 		}
-		if nw < -1 || nw > 128 {
-			return fmt.Errorf("%s: invalid %s=%s: expecting (-1..128) range", _bldl, HdrBlobWorkers, valWorkers[0])
+		if err := ValidateBlobWorkers(int(nw)); err != nil {
+			return fmt.Errorf("%s: %s: %w", _bldl, HdrBlobWorkers, err)
 		}
 		msg.NumWorkers = int(nw)
 	}

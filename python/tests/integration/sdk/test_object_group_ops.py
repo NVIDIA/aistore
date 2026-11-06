@@ -15,7 +15,7 @@ from aistore.sdk.provider import Provider
 from aistore.sdk.errors import InvalidBckProvider, AISError, JobInfoNotFound
 from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThreadedServer
 from tests.const import (
-    MEDIUM_FILE_SIZE,
+    BLOB_FILE_SIZE,
     OBJECT_COUNT,
     PREFIX_NAME,
     SUFFIX_NAME,
@@ -49,7 +49,7 @@ class TestObjectGroupOps(ParallelTestBase):
     # Use a slightly larger file size to allow for blob threshold (must be > 1MiB)
     def _create_blob_objects(self):
         self.obj_dict = self._create_objects(
-            suffix=self.suffix, obj_size=MEDIUM_FILE_SIZE
+            suffix=self.suffix, obj_size=BLOB_FILE_SIZE
         )
         return self._get_obj_group()
 
@@ -140,7 +140,7 @@ class TestObjectGroupOps(ParallelTestBase):
         self._evict_objects(obj_group)
         start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
         # Use a threshold that's just low enough for our object size to require blob
-        job_id = obj_group.prefetch(blob_threshold=MEDIUM_FILE_SIZE)
+        job_id = obj_group.prefetch(blob_threshold=BLOB_FILE_SIZE)
         result = self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT_LONG)
         self.assertTrue(result.success)
 
@@ -167,7 +167,7 @@ class TestObjectGroupOps(ParallelTestBase):
         obj_group = self._create_blob_objects()
         self._evict_objects(obj_group)
         start_time = datetime.now(timezone.utc) - timedelta(seconds=1)
-        job_id = obj_group.prefetch(blob_threshold=MEDIUM_FILE_SIZE + 1)
+        job_id = obj_group.prefetch(blob_threshold=BLOB_FILE_SIZE + 1)
         result = self.client.job(job_id=job_id).wait(timeout=TEST_TIMEOUT_LONG)
         self.assertTrue(result.success)
 

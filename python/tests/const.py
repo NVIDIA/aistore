@@ -16,6 +16,8 @@ MBIT = int(MB / 8)
 LARGE_FILE_SIZE = 20 * MIB
 MEDIUM_FILE_SIZE = 2 * MIB
 SMALL_FILE_SIZE = 10 * KIB
+# two chunks at the default blob-download chunk size (4MiB)
+BLOB_FILE_SIZE = 8 * MIB
 
 # ETL
 ETL_NAME = "test-etl-name"

@@ -22,7 +22,9 @@ Blob downloader shares a target-wide budget of extra range readers with [paralle
 
 
 Unlike parallel cold GET into a chunked bucket, which falls back to a single sequential GET - blob downloader does not fall back to sequential range reads on its own.
-When the budget, a backoff, or system load leaves no parallel workers, admission is rejected instead, because a sequential series of range reads costs more backend requests than a regular cold GET. Serial download runs only when explicitly requested with a number of workers of -1.
+When the budget, a backoff, or system load leaves fewer than two workers, admission is rejected instead, because a sequential series of range reads costs more backend requests than a regular cold GET.
+For the same reason, a requested number of workers must be zero (default) or at least two, and the object must be larger than one chunk.
+The default is never less than two workers (e.g., a single HDD mountpath); system load may still reduce it, in which case admission is rejected.
 
 Each range response must match the expected range length (accounting for a shorter final range until EOF). A mismatched length, an ignored range, or a truncated body fails the download before the object gets stored.
 
@@ -42,7 +44,7 @@ write lock, so blob downloader re-checks it once the lock is taken:
 
 For objects above a certain threshold, blob downloader can be transparently used by [prefetch](/docs/bucket.md#prefetch-and-evict) - as a performance-optimized alternative to a regular remote ("cold") GET.
 At critical memory pressure, [prefetch](/docs/bucket.md#prefetch-and-evict) uses regular cold GET instead of starting blob downloader.
-Prefetch also falls back when resource admission rejects blob downloader, the object cannot fit within the manifest chunk limit, or the object's remote size is zero; other start failures are reported.
+Prefetch also falls back when resource admission rejects blob downloader, the object fits in a single chunk or cannot fit within the manifest chunk limit, or the object's remote size is zero; other start failures are reported.
 
 When admission rejects a client GET (resource pressure, insufficient memory budget, range-reader budget, backoff), the outcome depends on the request:
 
@@ -60,10 +62,11 @@ For a deeper dive into the internals and detailed benchmarks, see the [blog post
 The stored object's whole-object checksum follows the same rule for standalone jobs, prefetch, and streaming GET:
 
 - With `checksum.type=none`, no object or chunk checksums are computed.
-- If chunks are written sequentially in object order, each finishing before the next starts, blob downloader uses the bucket's configured `checksum.type` (default: `xxhash`).
+- If the remote object supplies a whole-object checksum and `checksum.validate_cold_get` is false, blob downloader stores that checksum as is.
+- Otherwise, if chunks are written sequentially in object order, each finishing before the next starts, blob downloader uses the bucket's configured `checksum.type` (default: `xxhash`).
 - Otherwise, it uses CRC32C, combining the per-chunk CRC32C checksums computed during download in object order.
 
-Both checksum paths avoid rereading the downloaded chunks.
+These paths avoid rereading the downloaded chunks.
 
 See [Chunked object checksums](/docs/checksum.md#chunked-objects) for more details.
 
@@ -198,9 +201,9 @@ Each interface applies its own minimum object size:
 
 | Interface | Blob downloader is used for | Otherwise |
 |-----------|-----------------------------|-----------|
-| Single-object job (`ais blob-download`, `api.BlobDownload`) | any non-zero size | zero size: error |
-| Prefetch (`--blob-threshold`; zero disables) | objects at or above `max(blob-threshold, 1MiB, chunks.objsize_limit)` when auto-chunking is enabled; otherwise `max(blob-threshold, 1MiB)` | regular cold GET |
-| Streaming GET (`Ais-Blob-Download`, `Ais-Blob-Threshold`) | objects at or above `max(Ais-Blob-Threshold, 128KiB)` | regular GET; no blob-download job |
+| Single-object job (`ais blob-download`, `api.BlobDownload`) | objects larger than one chunk | zero size or a single chunk: error |
+| Prefetch (`--blob-threshold`; zero disables) | objects at or above `max(blob-threshold, 1MiB, chunks.objsize_limit)` when auto-chunking is enabled; otherwise `max(blob-threshold, 1MiB)`; larger than one chunk | regular cold GET |
+| Streaming GET (`Ais-Blob-Download`, `Ais-Blob-Threshold`) | objects at or above `max(Ais-Blob-Threshold, 128KiB)`; larger than one chunk | regular GET; no blob-download job |
 
 Notes:
 

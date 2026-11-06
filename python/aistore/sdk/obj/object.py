@@ -508,8 +508,9 @@ class Object:
         Returns job ID that for the blob download operation.
 
         Args:
-            chunk_size (int): chunk size in bytes
-            num_workers (int): number of concurrent blob-downloading workers (readers)
+            chunk_size (int): chunk size in bytes; the object must be larger than one chunk
+            num_workers (int): number of concurrent blob-downloading workers (readers):
+                zero (default) or at least two
             latest (bool): GET the latest object version from the associated remote bucket
 
         Returns:

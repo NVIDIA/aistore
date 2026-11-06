@@ -2055,9 +2055,8 @@ OPTIONS:
    blob-chunk-size   Preferred chunk size for each blob-download started by prefetch (in IEC or SI units, or "raw" bytes; e.g.: 4mb, 1MiB, 1048576);
                      silently clamped by the server to a permitted range;
                      only takes effect with '--blob-threshold' when bucket auto-chunking is disabled; otherwise, 'chunks.chunk_size' applies
-   blob-num-workers  Preferred number of workers for each blob-download started by prefetch; auto-tuned when not specified;
-                     use (-1) to indicate single-threaded serial execution (ie., no workers);
-                     silently clamped by the server to a permitted range based on the object size and available system resources;
+   blob-num-workers  Preferred number of workers for each blob-download started by prefetch; auto-tuned when omitted or zero;
+                     otherwise, at least two; the server may use fewer, based on the object size and available system resources;
                      only takes effect together with '--blob-threshold'
    blob-threshold    Utilize built-in blob-downloader for remote objects at or above the specified (threshold) size
                      in IEC or SI units, or "raw" bytes (e.g.: 4mb, 1MiB, 1048576, 128k; see '--units')

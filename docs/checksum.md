@@ -58,12 +58,12 @@ A chunked object carries two kinds of checksums:
 - per-chunk: CRC32C, stored with each chunk
 - whole-object: reported by object `HEAD` via `Ais-Checksum-Type` and `Ais-Checksum-Value`
 
-The whole-object checksum is either the bucket's configured `checksum.type` or CRC32C:
+When computed locally, the whole-object checksum is either the bucket's configured `checksum.type` or CRC32C:
 
 - configured type: computed while writing, provided the chunks arrive strictly in order (each chunk written in full before the next one starts)
 - CRC32C: otherwise; combined from the per-chunk CRC32C values in object order, without rereading the data
 
-Both are valid checksums of the same content. Which one a given object gets depends on how it was written.
+Both are valid checksums of the same content. Which one a given object gets depends on how it was written. Blob download can also preserve a remote whole-object checksum, as described below.
 
 ### Multipart upload
 
@@ -92,9 +92,10 @@ A regular (single-stream) PUT into a bucket with chunking enabled is written chu
 
 ### Blob download
 
-- Configured type when chunks arrive in order; otherwise CRC32C.
 - With `checksum.type=none`, no checksums are computed.
-- Blob download does not apply `checksum.validate_cold_get`.
+- If the remote object supplies a whole-object checksum and `checksum.validate_cold_get` is false, that checksum is stored as is.
+- Otherwise, configured type when chunks arrive in order; CRC32C when they overlap or arrive out of order.
+- Blob download does not validate the downloaded payload against the remote whole-object checksum. Setting `checksum.validate_cold_get=true` selects a locally computed checksum.
 
 ### Cold GET with parallel range reads
 

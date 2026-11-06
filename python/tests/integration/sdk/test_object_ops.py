@@ -231,7 +231,8 @@ class TestObjectOps(ParallelTestBase):
 
         for obj_name, content in objects.items():
             obj = self.bucket.object(obj_name)
-            config = BlobDownloadConfig(threshold=case["threshold"])
+            # (more than one chunk: a single-chunk object is served via regular GET)
+            config = BlobDownloadConfig(threshold=case["threshold"], chunk_size="1MiB")
             resp = obj.get_reader(blob_download_config=config).read_all()
             self.assertEqual(content, resp)
             is_chunked = obj.head(props="chunked").chunks is not None
@@ -373,14 +374,14 @@ class TestObjectOps(ParallelTestBase):
         "Remote bucket is not set",
     )
     def test_blob_download(self):
-        obj, _ = self._create_object_with_content()
+        obj, _ = self._create_object_with_content(obj_size=MEDIUM_FILE_SIZE)
 
         evict_job_id = self.bucket.objects(obj_names=[obj.name]).evict()
         result = self.client.job(evict_job_id).wait(timeout=TEST_TIMEOUT)
         self.assertTrue(result.success)
         self.assertFalse(obj.props.present)
 
-        blob_download_job_id = obj.blob_download()
+        blob_download_job_id = obj.blob_download(chunk_size=MIB)
         self.assertNotEqual(blob_download_job_id, "")
         result = self.client.job(job_id=blob_download_job_id).wait(timeout=TEST_TIMEOUT)
         self.assertTrue(result.success)
