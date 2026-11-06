@@ -667,7 +667,7 @@ func (oa *ObjAttrs) CheckEq(rem cos.OAH) error {
 	// 3. checksum
 	if a := rem.Checksum(); !cos.NoneC(a) {
 		b := oa.Cksum
-		if !cos.NoneC(b) {
+		if !cos.NoneC(b) && b.Ty() == a.Ty() {
 			ty := a.Ty()
 			if !a.Equal(b) {
 				return fmt.Errorf("%s checksum %s != %s remote", ty, b, a)
