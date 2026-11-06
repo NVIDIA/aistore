@@ -5,6 +5,8 @@
  */
 package cmn
 
+import "sync/atomic"
+
 // TODO: unify (as a struct of callbacks or similar) if and when adding another one
 var (
 	thisNodeName string
@@ -13,6 +15,11 @@ var (
 	// is called at *runtime* - via Rom.Set() upon auth.intra_cluster.request_auth transition (off<->on);
 	// note that the startup (LoadConfig => GCO.Put) path intentionally does not call this callback
 	onSignVerifyToggle func(enabled bool)
+
+	// sparsely log assorted type codes
+	errLog struct {
+		nbusy atomic.Int64
+	}
 )
 
 func init() {

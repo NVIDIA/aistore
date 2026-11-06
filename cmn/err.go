@@ -1331,7 +1331,19 @@ func (e *ErrHTTP) _jsonError(buf *bytes.Buffer) {
 }
 
 func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
-	if !silent {
+	// to log or not to log (TODO: only ErrBusy so far - consider other type codes)
+	var (
+		suffix string
+		logErr = !silent
+	)
+	if logErr && e.TypeCode == "ErrBusy" {
+		cnt := errLog.nbusy.Add(1)
+		logErr = Rom.V(4, cos.ModAIS) || cos.Sparse(cnt)
+		if logErr && cnt > cos.SparseFirst {
+			suffix = " [busy: " + strconv.FormatInt(cnt, 10) + "]"
+		}
+	}
+	if logErr {
 		s := e.StringEx()
 		if thisNodeName != "" && !strings.Contains(e.Message, thisNodeName) {
 			// node name instead of generic stack:
@@ -1343,8 +1355,9 @@ func (e *ErrHTTP) write(w http.ResponseWriter, r *http.Request, silent bool) {
 				}
 			}
 		}
-		nlog.Errorln(s)
+		nlog.Errorln(s + suffix)
 	}
+
 	hdr := w.Header()
 	hdr.Set(cos.HdrContentType, cos.ContentJSON)
 	hdr.Set(cos.HdrContentTypeOptions, "nosniff")
