@@ -196,6 +196,57 @@ func TestUfestRelocate_ChunkedOne(t *testing.T) {
 	hlom.Unlock(true) // --------------------------------- unlocked
 }
 
+// BeginDD changes the shared mountpath flags after a LOM's HRW bit was set.
+// Resilver must check placement using its avail map, rather than that cached bit.
+func TestResilver_HrwWithChunksVolumeChange(t *testing.T) {
+	const numMpaths = 3
+	bowner, bck := newBownerAndBck("ut-resilver-hrw-snapshot")
+	target := mock.NewTarget(bowner)
+	tmpDir := t.TempDir()
+	mpaths := make([]string, 0, numMpaths)
+	for i := range numMpaths {
+		mpaths = append(mpaths, filepath.Join(tmpDir, fmt.Sprintf("mpath-%d", i)))
+	}
+	initFS(t, mpaths, target.SID())
+	_ = initConfig(t, tmpDir, numMpaths)
+	base := fs.GetAvail()
+
+	extraPath := filepath.Join(tmpDir, "extra")
+	tassert.CheckFatal(t, cos.CreateDir(extraPath))
+	_, err := fs.AddTestMpath(extraPath, target.SID())
+	tassert.CheckFatal(t, err)
+
+	// Select an object whose HRW changes when the extra mountpath is disabled.
+	var objName string
+	var sourceMi *fs.Mountpath
+	for i := range 10000 {
+		name := fmt.Sprintf("object-%d", i)
+		uname := bck.MakeUname(name)
+		mi, _, err := fs.Hrw(uname)
+		tassert.CheckFatal(t, err)
+		if mi.Path == extraPath {
+			objName = name
+			sourceMi, _, err = base.Hrw(uname)
+			tassert.CheckFatal(t, err)
+			break
+		}
+	}
+	tassert.Fatalf(t, sourceMi != nil, "no object mapped to the extra mountpath")
+
+	// One completed chunk isolates the first-chunk placement precondition.
+	lom := createChunkedLOMAt(t, bck, sourceMi, objName, 1, 13*cos.KiB)
+	tassert.Fatalf(t, !lom.IsHRW(), "expected non-HRW placement before BeginDD")
+	avail := fs.GetAvail()
+	rmi, _, _, err := fs.BeginDD(apc.ActMountpathDisable, fs.FlagWaitingDD, extraPath)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, rmi != nil && rmi.IsAnySet(fs.FlagWaitingDD), "expected pending mountpath disable")
+
+	lom.Lock(true)
+	defer lom.Unlock(true)
+	mi, ok := lom.HrwWithChunks(avail)
+	tassert.Fatalf(t, mi != nil && mi.Path == sourceMi.Path && ok, "expected HRW placement after BeginDD")
+}
+
 //
 // Resilver runner
 //

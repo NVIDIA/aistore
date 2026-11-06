@@ -317,9 +317,10 @@ func formatCnum(num int) string {
 }
 
 // check whether completed chunks are properly located
+// - caller checks the object's HRW mountpath using avail first
+// - lom.IsHRW() can be stale after a volume change (e.g., BeginDD)
 func (u *Ufest) IsHRW(avail fs.MPI) (bool, error) {
-	debug.AssertFunc(func() bool { return u.lom.IsHRW() }, "must be already checked by the caller")
-	debug.AssertFunc(func() bool { return u.Completed() }, "ditto (don't call with partial)")
+	debug.AssertFunc(func() bool { return u.Completed() }, "don't call with partial")
 	for i := range u.chunks {
 		c := &u.chunks[i]
 		switch c.num {
