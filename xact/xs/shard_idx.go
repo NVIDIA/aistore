@@ -226,6 +226,11 @@ func (r *xactShardIndex) checkIdx(lom *core.LOM) (core.ShardIndexStatus, error) 
 		if !errors.Is(err, core.ErrShardIdxNotCached) {
 			return idxLoadStatus(err)
 		}
+		// expose cache admission denial to integration tests
+		// needed because core owns cache, xaction cannot force admission
+		if cmn.Rom.TestingEnv() {
+			r.AddErr(err, 4)
+		}
 	}
 	if r.msg.SkipVerify {
 		return core.ShardIndexExisting, nil
@@ -274,8 +279,14 @@ func (r *xactShardIndex) cacheSavedIdx(lom *core.LOM) error {
 		debug.AssertNoErr(err)
 		r.stats.cached.Inc()
 		return nil
-	case errors.Is(err, core.ErrShardIdxNotCached), errors.Is(err, archive.ErrShardIdxStale):
-		return nil // gone, not admitted, changed
+	case errors.Is(err, core.ErrShardIdxNotCached):
+		// expose cache admission denial to integration tests
+		if cmn.Rom.TestingEnv() {
+			return err
+		}
+		return nil
+	case errors.Is(err, archive.ErrShardIdxStale):
+		return nil
 	default:
 		return err // return nil or error
 	}

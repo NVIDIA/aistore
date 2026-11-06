@@ -79,6 +79,8 @@ func TestIndexShardSmoke(t *testing.T) {
 	}
 }
 
+// verify cached reads after successful best-effort admission, not the admission policy
+// if admission is denied, validate a regular archived-file GET instead
 func TestIndexShardCache(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 	var (
@@ -119,7 +121,29 @@ func TestIndexShardCache(t *testing.T) {
 				idxCorruptShardIndex(t, bck, objName)
 			}
 
-			idxRunAndWait(t, baseParams, bck, &apc.IndexShardMsg{Prefix: objName, Cache: true})
+			xid := idxRunAndWait(t, baseParams, bck, &apc.IndexShardMsg{Prefix: objName, Cache: true})
+			snaps, err := api.QueryXactionSnaps(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActIndexShard, Bck: bck})
+			tassert.CheckFatal(t, err)
+			var (
+				denied   bool
+				finished int
+			)
+			for _, tsnaps := range snaps {
+				for _, snap := range tsnaps {
+					if snap.ID != xid {
+						continue
+					}
+					tassert.Fatalf(t, snap.IsFinished() && !snap.AbortedX, "warm-up did not finish: %+v", snap)
+					// match only the admission error (any additional errors must fail the test)
+					if snap.Err == core.ErrShardIdxNotCached.Error() {
+						denied = true
+					} else {
+						tassert.Fatalf(t, snap.Err == "", "warm-up failed: %s", snap.Err)
+					}
+					finished++
+				}
+			}
+			tassert.Fatalf(t, finished > 0, "no completed snapshots for %s", xid)
 			idxPath := idxFindFile(bck, objName)
 			tassert.Fatalf(t, idxPath != "", "index for %q not found", objName)
 			if existing != nil {
@@ -135,17 +159,20 @@ func TestIndexShardCache(t *testing.T) {
 			op, err := api.HeadObjectV2(baseParams, bck, objName, apc.JoinProps(apc.GetPropsSize, apc.GetPropsChecksum), api.HeadArgs{})
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, !idx.IsStale(op.Checksum(), op.Size), "index for %q is stale", objName)
+			if denied {
+				tlog.Logfln("%s: cache admission denied under memory pressure; verifying GET with the persisted index intact", objName)
+			} else {
+				// remove the saved index before the first archived-file GET
+				tassert.CheckFatal(t, os.Remove(idxPath))
 
-			// remove the saved index before the first archived-file GET
-			tassert.CheckFatal(t, os.Remove(idxPath))
-
-			// block sequential scanning while preserving payload and metadata
-			m := ioContext{t: t, proxyURL: proxyURL}
-			srcPath := m.findObjOnDisk(bck, objName)
-			tassert.Fatalf(t, srcPath != "", "TAR object %q not found on disk", objName)
-			badTar := bytes.Clone(shard.Bytes())
-			clear(badTar[:archive.TarBlockSize])
-			tassert.CheckFatal(t, os.WriteFile(srcPath, badTar, cos.PermRWR))
+				// block sequential scanning while preserving payload and metadata
+				m := ioContext{t: t, proxyURL: proxyURL}
+				srcPath := m.findObjOnDisk(bck, objName)
+				tassert.Fatalf(t, srcPath != "", "TAR object %q not found on disk", objName)
+				badTar := bytes.Clone(shard.Bytes())
+				clear(badTar[:archive.TarBlockSize])
+				tassert.CheckFatal(t, os.WriteFile(srcPath, badTar, cos.PermRWR))
+			}
 
 			var got bytes.Buffer
 			_, err = api.GetObject(baseParams, bck, objName, &api.GetArgs{
@@ -153,7 +180,7 @@ func TestIndexShardCache(t *testing.T) {
 				Query:  url.Values{apc.QparamArchpath: []string{"payload.txt"}},
 			})
 			tassert.CheckFatal(t, err)
-			tassert.Fatalf(t, bytes.Equal(got.Bytes(), payload), "cached GET returned unexpected payload: %q", got.Bytes())
+			tassert.Fatalf(t, bytes.Equal(got.Bytes(), payload), "archived-file GET returned unexpected payload: %q", got.Bytes())
 		})
 	}
 }
@@ -1078,7 +1105,7 @@ func idxValidate(t *testing.T, bck cmn.Bck, tarNames []string, nonTarName string
 }
 
 // idxRunAndWait starts an ActIndexShard xaction with the given msg and waits for completion.
-func idxRunAndWait(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, msg *apc.IndexShardMsg) {
+func idxRunAndWait(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, msg *apc.IndexShardMsg) string {
 	t.Helper()
 	xid, err := api.IndexBucketShards(baseParams, bck, msg)
 	tassert.CheckFatal(t, err)
@@ -1089,6 +1116,7 @@ func idxRunAndWait(t *testing.T, baseParams api.BaseParams, bck cmn.Bck, msg *ap
 		Timeout: 2 * time.Minute,
 	})
 	tassert.CheckFatal(t, err)
+	return xid
 }
 
 // idxRunAndWaitCounts starts an ActIndexShard xaction, waits for completion, and returns
