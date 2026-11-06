@@ -52,21 +52,6 @@ const (
 	BlobParentPrefetch = "prefetch"
 )
 
-// two minimum thresholds for external callers (GET, x-prefetch)
-const (
-	MinBlobDlGetSize      = 128 * cos.KiB
-	MinBlobDlPrefetchSize = cos.MiB
-)
-
-// default tunables (can override via apc.BlobMsg)
-const (
-	dfltChunkSize         = 4 * cos.MiB
-	maxStreamingChunkSize = 64 * cos.MiB // ~625GiB maximum object size; up to 2GiB streaming SGLs
-
-	blobMinBytesPerWorker = 256 * cos.MiB // size-based worker cap, with a minimum of two
-	blobMaxWorkers        = 32            // absolute max workers for a single blob-download job
-)
-
 type (
 	// pairs a metric name with its variable-labels map so the hot path can
 	// call .inc()/.add() without re-specifying both at every update site.
@@ -214,7 +199,7 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	})
 
 	// validate size - all paths:
-	// - size policy (MinBlobDlGetSize, MinBlobDlPrefetchSize) is applied by the callers that _select_
+	// - size policy (core.MinBlobDlGetSize, core.MinBlobDlPrefetchSize) is applied by the callers that _select_
 	//   blob-downloading (GET, prefetch); explicit requests (x-start, api.BlobDownload) are honored
 	// - zero size cannot be blob-downloaded: prefetch falls back to cold GET; explicit requests fail
 	// - same for a single chunk (see validateChunkCount), except that GET falls back as well
@@ -254,7 +239,7 @@ func RenewBlobDl(xid string, params *core.BlobParams, oa *cmn.ObjAttrs) xreg.Ren
 	// Store user preference (or default if unspecified)
 	// Actual chunk size will be determined in factory.Start() based on load conditions
 	if pre.chunkSize == 0 {
-		pre.chunkSize = dfltChunkSize
+		pre.chunkSize = core.BlobDlChunkSize
 	}
 
 	rns := xreg.RenewBucketXact(apc.ActBlobDl, lom.Bck(), xreg.Args{UUID: xid, Custom: pre})
@@ -559,6 +544,10 @@ func (r *XactBlobDl) reserveReaders() error {
 		return fmt.Errorf("%w: %s: no range readers available (in-flight %d, limit %d)",
 			errBlobDlAdmission, r.Name(), core.RR.Inflight(), limit)
 	}
+	if n < want && cmn.Rom.V(4, cos.ModXs) {
+		nlog.Infof("%s: reduced num workers %d => %d (range readers in-flight %d, limit %d)",
+			r.Name(), r.numWorkers, n+1, core.RR.Inflight(), limit)
+	}
 	r.numWorkers, r.nreaders = n+1, n
 	return nil
 }
@@ -589,11 +578,11 @@ func (r *XactBlobDl) releaseWIMem(wi *blobWI) {
 func (r *XactBlobDl) setChunkSize() {
 	maxChunkSize := int64(cmn.ChunkSizeMax) // cache-only: no chunk-sized SGL
 	if r.args.RespWriter != nil || cmn.Rom.TestingEnv() {
-		maxChunkSize = maxStreamingChunkSize
+		maxChunkSize = core.BlobDlMaxStreamingChunkSize
 	}
 	switch {
 	case r.chunkSize == 0:
-		r.chunkSize = dfltChunkSize
+		r.chunkSize = core.BlobDlChunkSize
 	case r.chunkSize < cmn.ChunkSizeMin:
 		nlog.Warningln("chunk size", cos.IEC(r.chunkSize, 1), "is below permitted minimum", cos.IEC(cmn.ChunkSizeMin, 0))
 		r.chunkSize = cmn.ChunkSizeMin
@@ -1032,7 +1021,8 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 	ctx, cancel := context.WithTimeout(parentCtx, w.parent.timeout)
 	defer cancel()
 
-	res := core.T.Backend(lom.Bck()).GetObjReader(ctx, lom, wi.roff, chunkSize, w.parent.pin)
+	size := min(chunkSize, w.parent.fullSize-wi.roff) // exact range, incl. the last one
+	res := core.T.Backend(lom.Bck()).GetObjReader(ctx, lom, wi.roff, size, w.parent.pin)
 	if res.Err != nil {
 		core.RR.Throttle(lom.Bprops(), w.parent.config, res.ErrCode, res.Err)
 		if res.R != nil {
@@ -1041,7 +1031,6 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 		return res.ErrCode, res.Err
 	}
 	debug.Assert(res.R != nil)
-	size := min(chunkSize, w.parent.fullSize-wi.roff)
 	if res.Size != size {
 		cos.Close(res.R)
 		return http.StatusBadGateway, fmt.Errorf("%s: range at %d: expected %d bytes, got %d", lom.Cname(), wi.roff, size, res.Size)
@@ -1155,9 +1144,9 @@ func (wi *blobWI) cleanup() {
 	}
 }
 
-// Effective workers = min(tuned, objCap, blobMaxWorkers), where
+// Effective workers = min(tuned, objCap, core.BlobDlMaxWorkers), where
 //   - tuned  = TuneNumWorkers(requested, mpaths) -- folds in user request, media, system load;
-//   - objCap = max(2, ceil(fullSize / blobMinBytesPerWorker)) -- one worker per ~256MiB, at least two.
+//   - objCap = max(2, ceil(fullSize / core.BlobDlMinBytesPerWorker)) -- one worker per ~256MiB, at least two.
 //
 // Default request (zero) is the media default but no less than two (e.g., single HDD mountpath);
 // system load may still reduce it.
@@ -1167,7 +1156,7 @@ func (wi *blobWI) cleanup() {
 //   - 64 MiB, SSD : tuned=16, objCap=2  -> 2   (minimum parallelism)
 //   - 2 GiB, NVMe : tuned=32, objCap=8  -> 8   (object-size cap binds)
 //   - 8 GiB, NVMe : tuned=32, objCap=32 -> 32  (hits hard cap)
-//   - 16 GiB, NVMe: tuned=32, objCap=64 -> 32  (clamped by blobMaxWorkers)
+//   - 16 GiB, NVMe: tuned=32, objCap=64 -> 32  (clamped by core.BlobDlMaxWorkers)
 //   - 1 GiB, HDD, single mountpath: tuned=2, objCap=4 -> 2
 func TuneBlobDlWorkers(xname string, requestedWorkers, numMpaths int, fullSize int64) (int, error) {
 	if requestedWorkers == xact.NwpDflt {
@@ -1181,6 +1170,6 @@ func TuneBlobDlWorkers(xname string, requestedWorkers, numMpaths int, fullSize i
 		return 0, fmt.Errorf("%s: requires at least %d workers (tuned %d)", xname, apc.MinBlobWorkers, tunedWorkers)
 	}
 	debug.Assert(fullSize > 0)
-	workerSizeCap := max(apc.MinBlobWorkers, int(cos.DivCeil(fullSize, blobMinBytesPerWorker)))
-	return min(tunedWorkers, workerSizeCap, blobMaxWorkers), nil
+	workerSizeCap := max(apc.MinBlobWorkers, int(cos.DivCeil(fullSize, core.BlobDlMinBytesPerWorker)))
+	return min(tunedWorkers, workerSizeCap, core.BlobDlMaxWorkers), nil
 }

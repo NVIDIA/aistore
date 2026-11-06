@@ -72,7 +72,7 @@ func (t *target) getBlob(w http.ResponseWriter, r *http.Request, dpq *dpq, lom *
 			RespWriter:    w, // NOTE: make a blocking call
 			Lom:           lom,
 			Msg:           &msg,
-			BlobThreshold: max(threshold, xs.MinBlobDlGetSize),
+			BlobThreshold: max(threshold, core.MinBlobDlGetSize),
 			Parent:        xs.BlobParentGET,
 		}
 		rsphdr = &rsphdr{hdr: w.Header(), lom: lom, s3: dpq.isS3, ctype: true}

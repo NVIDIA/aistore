@@ -88,10 +88,10 @@ func (p *prfFactory) Start() (err error) {
 	if p.msg.BlobThreshold < 0 {
 		return fmt.Errorf("invalid blob-threshold=%d: expecting a non-negative value", p.msg.BlobThreshold)
 	}
-	if p.msg.BlobThreshold > 0 && p.msg.BlobThreshold < MinBlobDlPrefetchSize {
-		a, b := cos.IEC(p.msg.BlobThreshold, 0), cos.IEC(MinBlobDlPrefetchSize, 0)
+	if p.msg.BlobThreshold > 0 && p.msg.BlobThreshold < core.MinBlobDlPrefetchSize {
+		a, b := cos.IEC(p.msg.BlobThreshold, 0), cos.IEC(core.MinBlobDlPrefetchSize, 0)
 		nlog.Warningln("blob-threshold (", a, ") is too small, must be at least", b, "- updating...")
-		p.msg.BlobThreshold = MinBlobDlPrefetchSize
+		p.msg.BlobThreshold = core.MinBlobDlPrefetchSize
 	}
 
 	b := p.Bck

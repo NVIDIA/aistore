@@ -21,6 +21,7 @@ AIS offers several ways to fetch large objects in parallel or ahead of time. Whi
 - [OCI buckets](#oci-buckets)
 - [What does not help](#what-does-not-help)
 - [Why isn't blob download automatic?](#why-isnt-blob-download-automatic)
+- [Limits and defaults](#limits-and-defaults)
 - [References](#references)
 
 ## Summary
@@ -30,7 +31,7 @@ AIS offers several ways to fetch large objects in parallel or ahead of time. Whi
 | [Prefetch](#prefetch-before-the-workload-runs) with `--blob-threshold` | CLI, Go, Python | yes, for objects at or above the threshold | bucket: chunking config wins | datasets known in advance |
 | [Blob-download job](#blob-download-job) | CLI, Go, Python | yes | job: explicit tunables apply | specific large objects |
 | [GET with blob download](#get-with-blob-download) | Go, Python, any HTTP client, boto3 via an event hook | yes | request: client tunables apply | on-demand reads of large cold objects |
-| [Cold GET into a chunked bucket](#cold-get-into-a-chunked-bucket) | any, including unmodified S3 clients | yes, up to four readers per object | bucket: chunking config | on-demand reads of large cold objects, no client changes |
+| [Cold GET into a chunked bucket](#cold-get-into-a-chunked-bucket) | any, including unmodified S3 clients | yes, up to the per-GET reader limit (see [limits](#limits-and-defaults)) | bucket: chunking config | on-demand reads of large cold objects, no client changes |
 | [Streaming cold GET](#streaming-cold-get) | any, including unmodified S3 clients | does not add parallelism | bucket or cluster feature flag | faster first byte, no client changes |
 | [OCI native backend](#oci-buckets) | any, `oc://` buckets only | yes | node environment | data stored in OCI |
 
@@ -70,7 +71,7 @@ The effective threshold and chunk size follow the bucket:
 * with bucket auto-chunking enabled, objects at or above `max(--blob-threshold, chunks.objsize_limit)` use the blob downloader, with `chunks.chunk_size`; `--blob-chunk-size` is ignored (with a warning);
 * with auto-chunking disabled, objects at or above `--blob-threshold` use the blob downloader, and `--blob-chunk-size` applies.
 
-Under critical memory pressure, or when resource admission rejects a blob download, prefetch falls back to a regular cold GET for that object. Background downloads can proceed under high memory pressure. Positive thresholds below 1 MiB are raised to 1 MiB; zero disables blob downloading for prefetch.
+Under critical memory pressure, or when resource admission rejects a blob download, prefetch falls back to a regular cold GET for that object. Background downloads can proceed under high memory pressure. Positive thresholds below the prefetch minimum (see [limits](#limits-and-defaults)) are raised to it; zero disables blob downloading for prefetch.
 
 For details and threshold selection, see [Blob Downloader: prefetch with blob-threshold](/docs/blob_downloader.md#2-prefetch-with-blob-threshold).
 
@@ -92,7 +93,7 @@ A client can ask for blob download as part of a regular GET. The target then:
 
 1. serves the object as usual if it is already in the cluster;
 2. otherwise, checks the object's size in the remote bucket;
-3. below the threshold, or below 128 KiB, performs a regular cold GET;
+3. below the threshold, or below the GET minimum for blob download (see [limits](#limits-and-defaults)), performs a regular cold GET;
 4. at or above it, runs a blob download and streams the object to the client as chunks arrive.
 
 Notes:
@@ -129,7 +130,7 @@ reader = obj.get_reader(
     blob_download_config=BlobDownloadConfig(threshold=256 * 1024 * 1024)
 )
 
-# blob download regardless of size (above 128KiB), with explicit tunables
+# blob download regardless of size (above the GET minimum), with explicit tunables
 reader = obj.get_reader(
     blob_download_config=BlobDownloadConfig(chunk_size="8MiB", num_workers="16", read_timeout="30s")
 )
@@ -144,7 +145,7 @@ Any HTTP client can request blob download with these headers:
 | Header | Value | Meaning |
 |---|---|---|
 | `Ais-Blob-Threshold` | size in bytes | use blob download for cold objects at or above this size |
-| `Ais-Blob-Download` | `true` | use blob download regardless of size (above 128 KiB) |
+| `Ais-Blob-Download` | `true` | use blob download regardless of size (above the GET minimum, see [limits](#limits-and-defaults)) |
 | `Ais-Blob-Chunk` | size, e.g. `8MiB` | chunk size (optional) |
 | `Ais-Blob-Workers` | integer | number of concurrent backend readers (optional) |
 | `Ais-Blob-Read-Timeout` | duration, e.g. `30s` | per-attempt backend read timeout (optional) |
@@ -198,7 +199,7 @@ Changing `chunks` properties also starts rechunk of the objects already in the c
 For an eligible object, the target:
 
 1. issues the usual full-object GET to the backend, and uses it for the first chunk only;
-2. reads the remaining chunks as concurrent range requests, with at most four backend reads per object;
+2. reads the remaining chunks as concurrent range requests, up to the per-GET maximum number of readers (see [limits](#limits-and-defaults));
 3. pins every range read to the remote object version (ETag, generation, or version) returned by the initial GET;
 4. writes the chunks into the cluster, finalizes the object, and serves it through the regular GET path, including range reads and archive extraction.
 
@@ -215,19 +216,19 @@ Locking is the same as for any [cold GET](#concurrent-reads-of-a-cold-object): t
 
 An object qualifies when all of the following hold:
 
-* the bucket has auto-chunking enabled, and the object is at or above `chunks.objsize_limit` and at least 16 MiB;
+* the bucket has auto-chunking enabled, and the object is at or above `chunks.objsize_limit` and the minimum size for parallel cold GET (see [limits](#limits-and-defaults));
 * the object spans at least two chunks of `chunks.chunk_size`;
 * the bucket does not validate cold GETs (`checksum.validate_cold_get`) and is not erasure-coded;
 * neither the request (`--latest`) nor the bucket (`versioning.validate_warm_get`, `versioning.synchronize`) asks to check the latest remote version;
 * the backend reports a usable version for the object. Objects in unversioned remote AIS buckets and GCS objects served with decompressive transcoding use the regular cold GET;
 * the bucket is not an `oc://` bucket; the native OCI backend uses its own multipart reader;
 * the target is not under high load and, for buckets without `rate_limit.backend`, is outside the backoff window after a remote 429 or 503; otherwise the cold GET is sequential;
-* the target has room in its budget for extra range workers across all cold GETs and [blob downloads](/docs/blob_downloader.md). The budget is the number of available mountpaths times two for targets with rotational disks or slow filesystems, or times 16 otherwise. The GET's own worker also reads ranges and runs outside this budget. Near the limit, the cold GET uses fewer workers. At the limit, it is sequential.
+* the target has room in its budget for extra range workers across all cold GETs and [blob downloads](/docs/blob_downloader.md). The budget is the number of available mountpaths times a media-type multiplier (see [limits](#limits-and-defaults)). The GET's own worker also reads ranges and runs outside this budget. Near the limit, the cold GET uses fewer workers. At the limit, it is sequential.
 
 Notes:
 
 * parallel range reads aim to improve backend download throughput while preserving regular GET semantics: the object is cached and finalized before serving the client. A faster download can shorten the first reader's wait, but that reader still waits for the entire object;
-* parallelism is bounded by the number of chunks: with the default `chunks.chunk_size` of 1 GiB, a 2 GiB object uses two readers. To use all four, choose a chunk size of at most a quarter of the typical object size;
+* parallelism is bounded by the number of chunks: with the default `chunks.chunk_size` of 1 GiB, a 2 GiB object uses two readers. To use all readers, choose a chunk size of at most the typical object size divided by the per-GET maximum;
 * chunks arrive out of order, so the whole-object checksum is CRC32C, combined from per-chunk checksums, regardless of the bucket's checksum type; with `checksum.type` set to `none`, no checksum is stored.
 
 ## Streaming cold GET
@@ -296,6 +297,24 @@ The explicit blob GET remains opt-in, because it is not a transparent replacemen
 The automatic path avoids these differences. It downloads and finalizes the object before serving it, falls back to a sequential cold GET under high load, and refetches sequentially when the remote object changes during the download. Its goal is higher backend download throughput; serving the response still waits for the entire object to be cached and finalized.
 
 Streaming during an automatic parallel cold GET, and parallel cold GET for buckets without auto-chunking, are not supported. Future work in this direction will be guided by demand.
+
+## Limits and defaults
+
+Fixed values (current heuristics, not configuration), defined in [core/get_tunables.go](https://github.com/NVIDIA/aistore/blob/main/core/get_tunables.go):
+
+| Value | Applies to | Meaning | Constant |
+|---|---|---|---|
+| 4 | parallel cold GET | maximum readers per GET, including the one reading the first chunk | `ColdRangeMaxWorkers` |
+| 16 MiB | parallel cold GET | minimum object size | `ColdRangeMinSize` |
+| 2 per mountpath for rotational disks or slow filesystems; 16 otherwise | parallel cold GET, blob download | target-wide budget of extra range readers; downloads without a client stream use up to half | `RRMultHDD`, `RRMultNVMe` |
+| 1 per mountpath for rotational disks or slow filesystems; 4 for SSD; 8 for NVMe | multi-object jobs, blob download | default number of workers before load and size limits; blob download uses at least two | `NwpMultHDD`, `NwpMultSSD`, `NwpMultNVMe` |
+| 128 KiB | GET with blob download | smaller objects use a regular GET | `MinBlobDlGetSize` |
+| 1 MiB | prefetch | minimum `--blob-threshold`; smaller positive values are raised to it | `MinBlobDlPrefetchSize` |
+| 4 MiB | blob download | default chunk size, when neither the request nor (for prefetch) the bucket sets it | `BlobDlChunkSize` |
+| 64 MiB | GET with blob download | maximum chunk size | `BlobDlMaxStreamingChunkSize` |
+| 256 MiB, 32 | blob download | size-based worker cap, including explicit requests: one per 256 MiB of object size, rounded up (at least two), and at most 32 | `BlobDlMinBytesPerWorker`, `BlobDlMaxWorkers` |
+
+The requested number of blob-download workers is part of the API: zero (default) or 2 to 128 (`apc.MinBlobWorkers`, `apc.MaxBlobWorkers`).
 
 ## References
 

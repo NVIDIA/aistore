@@ -14,15 +14,9 @@ import (
 )
 
 // target-wide remote range readers: parallel cold GET (ais) and blob download (xact/xs)
-// - cap on extra readers: available mountpaths times a per-media multiplier
+// - cap on extra readers: available mountpaths times a per-media multiplier (see get_tunables)
 // - backoff after remote 429/503; buckets with rate_limit.backend use the configured limiter
 // - TODO: consider per-bucket granularity
-
-// current heuristic; HDD and NVMe are an order of magnitude apart; SSD counts as NVMe
-const (
-	rrMultHDD  = 2  // rotational or slow (FUSE, overlay, AUFS)
-	rrMultNVMe = 16 // NVMe and SSD
-)
 
 type rreaders struct {
 	backoffUntil atomic.Int64 // mono time: no extra range readers until then
@@ -33,9 +27,9 @@ var RR rreaders
 
 // cap on extra range readers
 func (*rreaders) Limit() int32 {
-	mult := int32(rrMultNVMe)
+	mult := int32(RRMultNVMe)
 	if fs.IsRotational() || fs.IsSlow() {
-		mult = rrMultHDD
+		mult = RRMultHDD
 	}
 	return int32(fs.NumAvail()) * mult
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/load"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/cmn/oom"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/sys"
@@ -50,25 +51,18 @@ const (
 	NwpDflt = 0  // resolve at runtime via defaultNW()
 )
 
-// media-type multipliers (workers per mountpath)
-const (
-	nwpMultNVMe = 8
-	nwpMultSSD  = 4
-	nwpMultHDD  = 1
-)
-
 // return the default number of workers based on:
 // - number of available mountpaths
 // - detected storage media type (NVMe, SSD, HDD)
-// - hardcoded multiplier (above)
+// - media-type multiplier (see core/get_tunables)
 func DefaultNW(numMpaths int) int {
 	switch {
 	case fs.IsRotational() || fs.IsSlow():
-		return numMpaths * nwpMultHDD
+		return numMpaths * core.NwpMultHDD
 	case fs.IsNVMe():
-		return numMpaths * nwpMultNVMe
+		return numMpaths * core.NwpMultNVMe
 	default: // SSD
-		return numMpaths * nwpMultSSD
+		return numMpaths * core.NwpMultSSD
 	}
 }
 

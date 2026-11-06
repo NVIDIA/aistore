@@ -20,12 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 )
 
-const (
-	// increase if requested or justified by concurrent-read measurements
-	coldRangeMaxWorkers = 4
-	coldRangeMinSize    = 16 * cos.MiB // amortize setup and additional backend requests
-)
-
 type (
 	coldRangeGet struct {
 		goi       *getOI
@@ -67,7 +61,7 @@ func (goi *getOI) coldReader(bp core.Backend, parallel bool) (res core.GetReader
 // check before allocating workers; false leaves the initial reader untouched
 // - retain goi's write lock through completion, then downgrade for local transmission
 func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, stopFirst context.CancelFunc) (bool, int, error) {
-	if first.Size < coldRangeMinSize || first.Pin == (core.ObjPin{}) {
+	if first.Size < core.ColdRangeMinSize || first.Pin == (core.ObjPin{}) {
 		return false, 0, nil
 	}
 	chunkSize := goi.lom.Bprops().Chunks.ChunkSizeFor(first.Size)
@@ -92,7 +86,7 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 		return false, 0, nil
 	}
 	// the caller reads chunk zero; others are extra, subject to the per-target cap (see core.RR)
-	nextra := core.RR.Reserve(int(min(nchunks, coldRangeMaxWorkers))-1, core.RR.Limit())
+	nextra := core.RR.Reserve(int(min(nchunks, core.ColdRangeMaxWorkers))-1, core.RR.Limit())
 	if nextra == 0 {
 		return false, 0, nil
 	}

@@ -13,7 +13,7 @@ The result is that, beyond a certain object size, blob downloader can deliver **
 
 Blob downloader is also **load‑aware**: it consults AIStore's internal load advisors to avoid overcommitting memory or disks, backing off when the node is under pressure and running at full speed when the system has headroom.
 
-Blob downloader shares a target-wide budget of extra range readers with [parallel cold GET](/docs/storage_svcs.md#parallel-cold-get): available mountpaths times two for rotational disks or slow filesystems, or times 16 otherwise. Every worker except the first counts toward it:
+Blob downloader shares a target-wide budget of extra range readers with [parallel cold GET](/docs/storage_svcs.md#parallel-cold-get): available mountpaths times a media-type multiplier (see [limits](/docs/howto_large_cold_objects.md#limits-and-defaults)). Every worker except the first counts toward it:
 
 - near the limit, blob downloader uses fewer workers; at the limit, admission is rejected;
 - downloads without a client stream (prefetch, `ais blob-download`) get extra workers only while the budget is less than half used, leaving the rest to client GETs;
@@ -131,7 +131,7 @@ OPTIONS:
 
 ### 2. Prefetch with blob-threshold
 
-`prefetch` is AIStore's **multi‑object “warm‑up” job** for remote buckets. A positive threshold below 1MiB is first raised to 1MiB. Prefetch then selects the fetch path as follows:
+`prefetch` is AIStore's **multi‑object “warm‑up” job** for remote buckets. A positive threshold below the prefetch minimum (see [limits](/docs/howto_large_cold_objects.md#limits-and-defaults)) is first raised to it. Prefetch then selects the fetch path as follows:
 
 - With bucket auto-chunking enabled, objects **≥ max(`--blob-threshold`, `chunks.objsize_limit`)** are fetched via blob downloader.
 - With auto-chunking disabled, objects **≥ `--blob-threshold`** are fetched via blob downloader (parallel range‑reads, chunked writes).
@@ -197,17 +197,17 @@ data = reader.read_all()
 
 ### Size limits
 
-Each interface applies its own minimum object size:
+Each interface applies its own minimum object size (for the values, see [limits](/docs/howto_large_cold_objects.md#limits-and-defaults)):
 
 | Interface | Blob downloader is used for | Otherwise |
 |-----------|-----------------------------|-----------|
 | Single-object job (`ais blob-download`, `api.BlobDownload`) | objects larger than one chunk | zero size or a single chunk: error |
-| Prefetch (`--blob-threshold`; zero disables) | objects at or above `max(blob-threshold, 1MiB, chunks.objsize_limit)` when auto-chunking is enabled; otherwise `max(blob-threshold, 1MiB)`; larger than one chunk | regular cold GET |
-| Streaming GET (`Ais-Blob-Download`, `Ais-Blob-Threshold`) | objects at or above `max(Ais-Blob-Threshold, 128KiB)`; larger than one chunk | regular GET; no blob-download job |
+| Prefetch (`--blob-threshold`; zero disables) | objects at or above `max(blob-threshold, prefetch minimum, chunks.objsize_limit)` when auto-chunking is enabled; otherwise `max(blob-threshold, prefetch minimum)`; larger than one chunk | regular cold GET |
+| Streaming GET (`Ais-Blob-Download`, `Ais-Blob-Threshold`) | objects at or above `max(Ais-Blob-Threshold, GET minimum)`; larger than one chunk | regular GET; no blob-download job |
 
 Notes:
 
-- prefetch rejects a negative `--blob-threshold`; positive values below 1MiB are raised to 1MiB (with a warning);
+- prefetch rejects a negative `--blob-threshold`; positive values below the prefetch minimum are raised to it (with a warning);
 - rarely, if the object's remote version shrinks before
   prefetch rechecks it under write-lock, blob downloader may still be engaged (and process it below the threshold);
 - once its regular (non-blob) work is done, prefetch waits up to 32 minutes for pending blob downloads;
