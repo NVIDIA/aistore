@@ -194,7 +194,8 @@ Add an integration test that verifies that prune removes no destination object w
   the out-of-band control migration
 - tcb, tcobjs `_recv`: resolve the zero-atime workaround (`lom.AtimeUnix() == 0`); `coi._dm` already copies
   source attributes, so trace the paths that omit atime before removing the receive-side fallback
-- coi: direct PUT (`cmn.ErrSkip`) does not report actual output bytes; `coi.do` (ais/tgtobj.go) can return only Err/Ecode,
-  leaving `CoiRes.Lsize` zero, which `copier.do` then adds to `OutObjsAdd`. Obtain the actual transformed size
+- coi: direct PUT (`cmn.ErrSkip`) reports zero output bytes when the ETL returns no usable `Ais-Direct-Put-Length`
+  (e.g., Go webserver with an unknown transform size), and over WebSocket, where the ack is a text message
+  (`wsConnCtx.readLoop`) and `coi.do` (ais/tgtobj.go) drops the size returned by `PutWOC`
 - wi_lso (`LsMissing`): any `hlom.Load` error reports `LocIsCopyMissingObj`; distinguish missing from
   unreadable/corrupt metadata. This path does not delete data, but its missing-object status can be misleading

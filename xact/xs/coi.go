@@ -142,7 +142,7 @@ func (tc *copier) do(a *CoiParams, lom *core.LOM, dm *bundle.DM) (err error) {
 		err = res.Err
 	case res.Err == cmn.ErrSkip:
 		// ErrSkip is returned when the object is transmitted through direct put
-		tc.r.OutObjsAdd(1, res.Lsize) // TODO -- FIXME: update stats with actual size
+		tc.r.OutObjsAdd(1, res.Lsize)
 	case cos.IsErrOOS(res.Err):
 		err = res.Err
 		tc.r.Abort(err)

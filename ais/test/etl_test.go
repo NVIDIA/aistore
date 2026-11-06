@@ -809,6 +809,101 @@ func TestETLBucketDryRun(t *testing.T) {
 	checkETLStats(t, xid, m.num, uint64(m.num*int(m.fileSize)), false)
 }
 
+// Transformed objects destined for other targets are delivered by direct put;
+// the sending target counts them with the size reported by the ETL (`Ais-Direct-Put-Length`).
+func TestETLDirectPutStats(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s, MinTargets: 2})
+	tetl.CheckNoRunningETLContainers(t, baseParams)
+
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+
+		bckFrom = cmn.Bck{Name: "etldp-" + trand.String(5), Provider: apc.AIS}
+		m       = ioContext{
+			t:         t,
+			num:       50,
+			fileSize:  cos.KiB,
+			fixedSize: true,
+			bck:       bckFrom,
+		}
+	)
+
+	// receiving targets count direct puts only when intra-data is a separate network
+	for _, tsi := range tools.GetClusterMap(t, proxyURL).Tmap {
+		if tsi.URL(cmn.NetIntraData) == tsi.URL(cmn.NetIntraControl) {
+			t.Skipf("%s requires separate %s network (%s)", t.Name(), cmn.NetIntraData, tsi)
+		}
+	}
+
+	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
+	m.init(true /*cleanup*/)
+	m.puts()
+
+	// MD5 output (hex digest) has the same size for any input
+	b, err := io.ReadAll(tetl.MD5Transform(bytes.NewReader(nil)))
+	tassert.CheckFatal(t, err)
+	md5Size := int64(len(b))
+
+	for _, commType := range []string{etl.Hpush, etl.Hpull} {
+		t.Run(strings.TrimSuffix(commType, "://"), func(t *testing.T) {
+			initMsg := tetl.InitSpec(t, baseParams, tetl.MD5, commType)
+			t.Cleanup(func() { tetl.StopAndDeleteETL(t, baseParams, initMsg.Name()) })
+
+			t.Run("bucket", func(t *testing.T) {
+				bckTo := cmn.Bck{Name: "etldp-out-" + trand.String(5), Provider: apc.AIS}
+				t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
+
+				msg := &apc.TCBMsg{
+					Transform:  apc.Transform{Name: initMsg.Name()},
+					CopyBckMsg: apc.CopyBckMsg{Force: true},
+				}
+				xid, err := api.ETLBucket(baseParams, bckFrom, bckTo, msg)
+				tassert.CheckFatal(t, err)
+				err = tetl.WaitForFinished(baseParams, xid, apc.ActETLBck, 2*time.Minute)
+				tassert.CheckFatal(t, err)
+
+				checkDirectPutStats(t, baseParams, xid, m.num, md5Size)
+			})
+
+			t.Run("multi-obj", func(t *testing.T) {
+				bckTo := cmn.Bck{Name: "etldp-out-" + trand.String(5), Provider: apc.AIS}
+				t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
+
+				msg := &cmn.TCOMsg{ToBck: bckTo}
+				msg.Transform.Name = initMsg.Name()
+				msg.ListRange.ObjNames = m.objNames
+				xid, err := api.ETLMultiObj(baseParams, bckFrom, msg)
+				tassert.CheckFatal(t, err)
+				err = tetl.WaitForFinished(baseParams, xid, apc.ActETLObjects, 2*time.Minute)
+				tassert.CheckFatal(t, err)
+
+				checkDirectPutStats(t, baseParams, xid, m.num, md5Size)
+			})
+		})
+	}
+}
+
+// check that objects were sent by direct put, and that sent bytes match
+// both the transformed size and the bytes received by the destination targets
+func checkDirectPutStats(t *testing.T, bp api.BaseParams, xid string, objCnt int, transformedSize int64) {
+	t.Helper()
+	snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid})
+	tassert.CheckFatal(t, err)
+
+	locObjs, outObjs, inObjs := snaps.ObjCounts(xid)
+	_, outBytes, inBytes := snaps.ByteCounts(xid)
+	tlog.Logfln("x-etl[%s]: local %d, sent %d (%d bytes), received %d (%d bytes)",
+		xid, locObjs, outObjs, outBytes, inObjs, inBytes)
+
+	tassert.Fatalf(t, outObjs > 0, "expected direct put to other targets, got none (local %d)", locObjs)
+	tassert.Errorf(t, locObjs+outObjs == int64(objCnt), "expected %d objects, got local %d + sent %d", objCnt, locObjs, outObjs)
+	tassert.Errorf(t, inObjs == outObjs, "sent %d objects, received %d", outObjs, inObjs)
+	tassert.Errorf(t, outBytes == outObjs*transformedSize, "sent %d objects, expected %d bytes, got %d",
+		outObjs, outObjs*transformedSize, outBytes)
+	tassert.Errorf(t, outBytes == inBytes, "sent %d bytes, received %d", outBytes, inBytes)
+}
+
 func TestETLInspectBucket(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeK8s})
 	tetl.CheckNoRunningETLContainers(t, baseParams)

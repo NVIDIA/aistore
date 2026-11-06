@@ -462,6 +462,81 @@ var _ = Describe("CommunicatorTest", func() {
 		Expect(rtyr.resp.StatusCode).To(Equal(http.StatusBadGateway))
 		Expect(reqCount.Load()).To(Equal(int32(1)))
 	})
+
+	// ---------------------------------------------------------------------------
+	// offline transform: 204 (direct put) takes its size from `Ais-Direct-Put-Length`;
+	// a missing or invalid header yields zero. Other responses keep the body size.
+	// ---------------------------------------------------------------------------
+	for _, commType := range []string{Hpush, Hpull} {
+		for _, tc := range []struct {
+			hdr    string // Ais-Direct-Put-Length ("" - not set)
+			body   []byte
+			status int
+			size   int64 // expected
+		}{
+			{status: http.StatusNoContent, hdr: "12345", size: 12345},
+			{status: http.StatusNoContent, hdr: "0", size: 0},
+			{status: http.StatusNoContent, hdr: "", size: 0},
+			{status: http.StatusNoContent, hdr: "abc", size: 0},
+			{status: http.StatusNoContent, hdr: "99999999999999999999", size: 0}, // overflows int64
+			{status: http.StatusNoContent, hdr: "-1", size: 0},
+			{status: http.StatusOK, hdr: "12345", body: []byte("transformed"), size: int64(len("transformed"))},
+		} {
+			desc := fmt.Sprintf("%s: status=%d, %s=%q", commType, tc.status, apc.HdrDirectPutLength, tc.hdr)
+			It("offline transform size: "+desc, func() {
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					if tc.hdr != "" {
+						w.Header().Set(apc.HdrDirectPutLength, tc.hdr)
+					}
+					w.WriteHeader(tc.status)
+					if len(tc.body) > 0 {
+						_, err := w.Write(tc.body)
+						Expect(err).NotTo(HaveOccurred())
+					}
+				}))
+				defer srv.Close()
+
+				msg := &ETLSpecMsg{
+					InitMsgBase: InitMsgBase{
+						CommTypeX:   commType,
+						InitTimeout: cos.Duration(DefaultInitTimeout),
+					},
+				}
+				xetl := &XactETL{}
+				xetl.InitBase(context.Background(), cos.GenUUID(), apc.ActETLInline, nil)
+				switch commType {
+				case Hpush:
+					pc := &pushComm{}
+					pc.msg, pc.podURI, pc.xctn, pc.client = msg, srv.URL, xetl, &http.Client{}
+					comm = pc
+				case Hpull:
+					rc := &redirectComm{}
+					rc.msg, rc.podURI, rc.xctn, rc.client = msg, srv.URL, xetl, &http.Client{}
+					comm = rc
+				}
+
+				lom := &core.LOM{ObjName: objName}
+				Expect(lom.InitBck(clusterBck)).NotTo(HaveOccurred())
+				Expect(lom.Load(false /*cache it*/, false /*locked*/)).NotTo(HaveOccurred())
+
+				resp := comm.OfflineTransform(lom, false, false, nil)
+
+				Expect(resp.Ecode).To(Equal(tc.status))
+				Expect(resp.OAH.Lsize()).To(Equal(tc.size))
+				Expect(lom.Lsize()).To(Equal(dataSize), "source object size must not change")
+				if tc.status == http.StatusNoContent {
+					Expect(resp.Err).To(Equal(cmn.ErrSkip))
+					Expect(resp.R).To(BeNil())
+					return
+				}
+				Expect(resp.Err).NotTo(HaveOccurred())
+				b, err := cos.ReadAll(resp.R)
+				resp.R.Close()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(b).To(Equal(tc.body))
+			})
+		}
+	}
 })
 
 // Creates a file with random content.
