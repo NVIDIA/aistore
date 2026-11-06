@@ -32,7 +32,7 @@ AIStore can natively **read**, **write**, **append**¹, and **list** archives. O
   - [Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/obj/object.py) - ditto
   - [Python SDK/Archive](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/archive_config.py) - see archive-related config
 - [**get-batch**](/docs/get_batch.md) - efficient multi-object/multi-file retrieval
-- **list-objects** - "opens" archives and includes contained pathnames in results
+- **list-objects** - "opens" archives and includes contained pathnames in results. Listing supports both monolithic and chunked archives.
 - **[dsort](/docs/cli/dsort.md)** - distributed archive creation and transformation
 - **[aisloader](/docs/aisloader.md)** - benchmarking with archive workloads
 - Concurrent multi-object transactions for bulk archive generation from [selected](/docs/batch.md) objects

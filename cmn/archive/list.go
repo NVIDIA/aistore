@@ -10,7 +10,6 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"io"
-	"os"
 	"slices"
 	"strings"
 
@@ -28,35 +27,24 @@ type Entry struct {
 	Size int64 // uncompressed size
 }
 
-func List(fqn string) ([]*Entry, error) {
-	var (
-		lst   []*Entry
-		finfo os.FileInfo
-	)
-	fh, err := os.Open(fqn)
-	if err != nil {
-		return nil, err
-	}
-	mime, err := MimeFile(fh, nil /*NOTE: not reading file magic*/, "", fqn)
+func List(fh cos.ReadReaderAt, size int64, filename string) ([]*Entry, error) {
+	var lst []*Entry
+	mime, err := Mime("", filename)
 	if err != nil {
 		return nil, err
 	}
 	switch mime {
 	case ExtTar:
-		lst, err = lsTar(fh)
+		lst, err = lsTar(io.NewSectionReader(fh, 0, size))
 	case ExtTgz, ExtTarGz:
 		lst, err = lsTgz(fh)
 	case ExtZip:
-		finfo, err = os.Stat(fqn)
-		if err == nil {
-			lst, err = lsZip(fh, finfo.Size())
-		}
+		lst, err = lsZip(fh, size)
 	case ExtTarLz4:
 		lst, err = lsLz4(fh)
 	default:
 		debug.Assert(false, mime)
 	}
-	cos.Close(fh)
 	if err != nil {
 		return nil, err
 	}

@@ -7,6 +7,7 @@ package integration_test
 import (
 	"archive/tar"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"net/url"
 	"path"
@@ -30,6 +31,61 @@ import (
 	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
 )
+
+func TestListChunkedArchives(t *testing.T) {
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	for _, test := range []struct {
+		ext       string
+		numChunks int
+	}{
+		{archive.ExtTar, 0}, {archive.ExtTar, 3},
+		{archive.ExtTgz, 0}, {archive.ExtTgz, 3},
+		{archive.ExtTarGz, 0}, {archive.ExtTarGz, 3},
+		{archive.ExtZip, 0}, {archive.ExtZip, 3},
+		{archive.ExtTarLz4, 0}, {archive.ExtTarLz4, 3},
+	} {
+		t.Run(fmt.Sprintf("%s/chunks=%d", test.ext, test.numChunks), func(t *testing.T) {
+			bck := cmn.Bck{Name: "list-archive-" + trand.String(8), Provider: apc.AIS}
+			tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+				Chunks: &cmn.ChunksConfToSet{ObjSizeLimit: apc.Ptr(cos.SizeIEC(0))},
+			}, true /*cleanup*/)
+			const fileSize = 8 * cos.KiB
+			names := []string{"a.txt", "nested/b.txt", "z.txt"}
+			objName := "archive" + test.ext
+			reader, err := readers.New(&readers.Arg{
+				Type: readers.File, Path: t.TempDir(), Name: objName,
+				Arch: &readers.Arch{Mime: test.ext, Names: names, Num: len(names), MinSize: fileSize},
+			})
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { reader.Close() })
+			size, err := reader.Seek(0, io.SeekEnd)
+			tassert.CheckFatal(t, err)
+			reader.Reset()
+			errCh := make(chan error, 1)
+			tools.Put(proxyURL, bck, objName, reader, uint64(size), test.numChunks, errCh)
+			tassert.SelectErr(t, errCh, "put archive", true)
+
+			props, err := api.HeadObjectV2(bp, bck, objName, apc.GetPropsChunked, api.HeadArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, props.Chunks != nil && props.Chunks.ChunkCount == test.numChunks,
+				"expected %d chunks, got %+v", test.numChunks, props.Chunks)
+
+			lst, err := api.ListObjects(bp, bck, &apc.LsoMsg{
+				Flags: apc.LsArchDir, Props: apc.JoinProps(apc.GetPropsName, apc.GetPropsSize),
+			}, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(lst.Entries) == len(names)+1, "expected archive and %d files, got %d entries", len(names), len(lst.Entries))
+			tassert.Errorf(t, lst.Entries[0].Name == objName && lst.Entries[0].IsAnyFlagSet(apc.EntryIsArchive),
+				"expected parent archive %s, got %+v", objName, lst.Entries[0])
+			for i, name := range names {
+				entry := lst.Entries[i+1]
+				tassert.Errorf(t, entry.Name == path.Join(objName, name) && entry.Size == fileSize && entry.IsAnyFlagSet(apc.EntryInArch),
+					"expected archived file %s (%d bytes), got %+v", name, fileSize, entry)
+			}
+		})
+	}
+}
 
 //
 // GET from

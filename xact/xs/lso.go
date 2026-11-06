@@ -899,7 +899,9 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 	}
 
 	// Handle file entries
-	entry, err := r.walk.wi.callback(fqn, de)
+	lom := core.AllocLOM("")
+	defer core.FreeLOM(lom)
+	entry, err := r.walk.wi._cb(lom, fqn)
 	if err != nil || entry == nil {
 		return err
 	}
@@ -921,7 +923,7 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 
 	// ls arch
 	// looking only at the file extension - not reading ("detecting") file magic (TODO: add lsmsg flag)
-	archList, err := archive.List(fqn)
+	archList, err := r.lsArch(lom)
 	if err != nil {
 		if archive.IsErrUnknownFileExt(err) {
 			// skip and keep going
@@ -946,6 +948,23 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		}
 	}
 	return nil
+}
+
+func (*LsoXact) lsArch(lom *core.LOM) ([]*archive.Entry, error) {
+	if _, err := archive.Mime("", lom.FQN); err != nil {
+		return nil, err
+	}
+	lom.Lock(false)
+	defer lom.Unlock(false)
+	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+		return nil, err
+	}
+	fh, err := lom.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer cos.Close(fh)
+	return archive.List(fh, lom.Lsize(), lom.FQN)
 }
 
 func (r *LsoXact) Snap() *core.Snap { return r.Base.NewSnap(r) }
