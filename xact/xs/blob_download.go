@@ -1048,7 +1048,9 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 		defer manifest.StreamWriteDone()
 	}
 	chwritten, err := w.cw.WriteChunk(int(partNum), res.R, size, buf, extra...)
-	cos.Close(res.R)
+	if cerr := res.R.Close(); err == nil {
+		err = cerr
+	}
 	if err != nil {
 		return 0, err
 	}

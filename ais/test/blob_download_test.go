@@ -394,6 +394,8 @@ func TestBlobDownloadParentCancellation(t *testing.T) {
 		body, size, err := api.GetObjectReader(bp, bck, objName, getArgs)
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, size == objSize, "expected size %d, got %d", objSize, size)
+		_, err = io.CopyN(io.Discard, body, 1) // cancel after the backend has started delivering data
+		tassert.CheckFatal(t, err)
 		xargs := &xact.ArgsMsg{Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
 		snaps, err := api.WaitForSnaps(bp, xargs, xargs.Started())
 		tassert.CheckFatal(t, err)
