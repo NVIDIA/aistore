@@ -6,6 +6,8 @@
 package xs
 
 import (
+	"strconv"
+
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -147,10 +149,11 @@ func (r *streamingX) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
+// - cnt (optional) - number of objects sent to tsi (in ObjName of OpcDone)
 // TODO:
 // - dup sentinel.bcast
 // - both sentinel.bcast and this code must transition to use T2T off-streams control path
-func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error) {
+func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error, cnt ...int64) {
 	if r.p.dm == nil { // single target
 		return
 	}
@@ -159,6 +162,9 @@ func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error) {
 	o.Hdr.Opaque = cos.UnsafeB(uuid)
 	if abortErr == nil {
 		o.Hdr.Opcode = transport.OpcDone
+		if len(cnt) > 0 {
+			o.Hdr.ObjName = strconv.FormatInt(cnt[0], 10)
+		}
 	} else {
 		o.Hdr.Opcode = transport.OpcAbort
 		o.Hdr.ObjName = abortErr.Error() // (see NewErrRecvAbort)

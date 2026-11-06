@@ -58,7 +58,8 @@ policy for when it is captured, how long it remains valid, or which changes inva
 Existing reactions are partial and separate:
 
 - `AbortByReb` (xact/api_table.go), enforced only when a rebalance starts (reb/globrun.go: `xreg.AbortByNewReb`)
-- in-job checks at arbitrary points: `CheckSameTargets` in sentinel (tcb, tcobjs), lso, moss
+- in-job checks at arbitrary points: `CheckSameTargets` in sentinel (tcb, tcobjs), lso, moss;
+  archive per-shard quiesce (`archwi.qcb`) uses the strict `CompareTargets`
 - BMD application: `_postBMD` aborts jobs on removed buckets; `_abortDisabled` aborts mirroring/EC
   when disabled (ais/tgtcp.go). These are not a general metadata-consistency policy
 
@@ -138,8 +139,8 @@ Approach (coordinate with [out-of-band control](#out-of-band-control-for-all-xac
   the write; `DM.wrapRecvData` calls `InObjsAdd` before the callback and cannot prove this
 - a peer is complete only after its `done` arrives and completed counts match, including an explicit zero;
   scope counts to xaction/transaction IDs and make duplicate control delivery idempotent
-- cover per-transaction completion in tco/archive as well as whole-xaction teardown; otherwise a work item
-  may be released or an archive finalized before its last data callback finishes
+- cover per-transaction completion in tco as well as whole-xaction teardown; otherwise a work item
+  may be released before its last data callback finishes
 - once all expected peers satisfy this rule, and local work/receives are drained: explicitly authorize
   `UnregRecv` to skip `DM.quiesce`. Track callback exit and any asynchronous finalization before freeing state
 - preserve existing abort/error cleanup and the quiet-period fallback whenever successful drain is unproven;

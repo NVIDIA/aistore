@@ -1,7 +1,7 @@
 // Package archive: write, read, copy, append, list primitives
 // across all supported formats
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package archive
 
@@ -22,6 +22,12 @@ type (
 	errUnknownFileExt struct {
 		filename string
 		detail   string
+	}
+
+	// failed to write the header of an entry and wrote nothing (the archive is still valid)
+	errEntryNotWritten struct {
+		name string
+		err  error
 	}
 )
 
@@ -49,5 +55,13 @@ func (e *errUnknownFileExt) Error() (s string) {
 
 func IsErrUnknownFileExt(err error) bool {
 	_, ok := err.(*errUnknownFileExt)
+	return ok
+}
+
+func (e *errEntryNotWritten) Error() string { return e.name + ": " + e.err.Error() }
+func (e *errEntryNotWritten) Unwrap() error { return e.err }
+
+func IsErrEntryNotWritten(err error) bool {
+	_, ok := err.(*errEntryNotWritten)
 	return ok
 }

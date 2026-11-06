@@ -6,12 +6,16 @@ package integration_test
 
 import (
 	"archive/tar"
+	"bytes"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net/url"
 	"path"
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +26,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -341,6 +346,450 @@ func TestArchMultiObjInvalidArchName(t *testing.T) {
 		_, err := api.ArchiveMultiObj(baseParams, bck, &msg)
 		tassert.Errorf(t, err != nil, "expected error to occur (archname: %q)", archName)
 	}
+}
+
+const (
+	archLargeSize = 128 * cos.MiB
+	archNumSmall  = 40
+)
+
+type archLarge struct {
+	small ioContext
+	bckTo cmn.Bck
+	smap  *meta.Smap
+	peer  *meta.Snode
+	large string
+	names []string
+}
+
+// a peer sends a large object last - its 'done' (other stream) can arrive first
+func newArchSmall(t *testing.T, numSmall int) *archLarge {
+	proxyURL := tools.RandomProxyURL(t)
+	a := &archLarge{
+		small: ioContext{t: t, num: numSmall, prefix: "a-", fileSize: cos.KiB, fixedSize: true, ordered: true},
+		bckTo: cmn.Bck{Name: trand.String(10), Provider: apc.AIS},
+	}
+	a.small.init(true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, a.small.bck, nil, true /*cleanup*/)
+	tools.CreateBucket(t, proxyURL, a.bckTo, nil, true /*cleanup*/)
+	a.small.puts()
+	return a
+}
+
+func newArchLarge(t *testing.T, numShards int, ext string) (a *archLarge, archNames []string) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2})
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		smap       = tools.GetClusterMap(t, proxyURL)
+	)
+	if n := smap.CountActiveTs(); n < 2 {
+		t.Skipf("%s requires at least 2 active targets (have %d)", t.Name(), n)
+	}
+	if config := tools.GetClusterConfig(t); config.Arch.SbundleMult < 2 {
+		tools.SetClusterConfig(t, cos.StrKVs{"arch.bundle_multiplier": "2"})
+		t.Cleanup(func() {
+			tools.SetClusterConfig(t, cos.StrKVs{"arch.bundle_multiplier": strconv.Itoa(config.Arch.SbundleMult)})
+		})
+	}
+	a = newArchSmall(t, archNumSmall)
+
+	var err error
+	a.peer, err = smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	objName := tools.GenerateObjectNameOnTarget("z-", a.small.bck, smap, a.peer)
+	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: archLargeSize, CksumType: cos.ChecksumNone})
+	tassert.CheckFatal(t, err)
+	_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: a.small.bck, ObjName: objName, Reader: reader})
+	tassert.CheckFatal(t, err)
+	a.smap, a.large = smap, objName
+	a.names = append(slices.Clone(a.small.objNames), objName)
+
+	archNames = make([]string, 0, numShards)
+	for i := 0; len(archNames) < numShards; i++ {
+		archName := fmt.Sprintf("shard-%d%s", i, ext)
+		dt, err := smap.HrwObjName2T(meta.CloneBck(&a.bckTo), archName)
+		tassert.CheckFatal(t, err)
+		if dt.ID() != a.peer.ID() {
+			archNames = append(archNames, archName)
+		}
+	}
+	tlog.Logfln("large object on %s, shards %v", a.peer.StringEx(), archNames)
+	return a, archNames
+}
+
+// archive objNames and return the job filter
+func (a *archLarge) arch(t *testing.T, archName string, objNames []string, appendIfExists bool) xact.ArgsMsg {
+	msg := cmn.ArchiveBckMsg{
+		ToBck: a.bckTo,
+		ArchiveMsg: apc.ArchiveMsg{
+			ArchName:       archName,
+			ListRange:      apc.ListRange{ObjNames: objNames},
+			AppendIfExists: appendIfExists,
+		},
+	}
+	xid, err := api.ArchiveMultiObj(tools.BaseAPIParams(), a.small.bck, &msg)
+	tassert.CheckFatal(t, err)
+	return xact.ArgsMsg{ID: xid, Kind: apc.ActArchive}
+}
+
+func (a *archLarge) countInArch(t *testing.T, archName string) (n int) {
+	lsmsg := &apc.LsoMsg{Prefix: archName}
+	lsmsg.SetFlag(apc.LsArchDir)
+	lst, err := api.ListObjects(tools.BaseAPIParams(), a.bckTo, lsmsg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	for _, en := range lst.Entries {
+		if en.IsAnyFlagSet(apc.EntryInArch) {
+			n++
+		}
+	}
+	return n
+}
+
+func TestArchLargeLast(t *testing.T) {
+	a, archNames := newArchLarge(t, 3 /*num shards*/, archive.ExtTar)
+	baseParams := tools.BaseAPIParams()
+
+	for _, archName := range archNames {
+		flt := a.arch(t, archName, a.names, false)
+		err := api.WaitForSnapsIdle(baseParams, &flt)
+		tassert.CheckFatal(t, err)
+
+		n := a.countInArch(t, archName)
+		tlog.Logfln("%s: %d archived objects", a.bckTo.Cname(archName), n)
+		tassert.Errorf(t, n == len(a.names), "%s: expected %d archived objects, have %d",
+			a.bckTo.Cname(archName), len(a.names), n)
+
+		// the next shard (a new job with new streams)
+		tassert.CheckError(t, api.AbortXaction(baseParams, &flt))
+	}
+}
+
+// the original shard (for TAR append in place)
+func (a *archLarge) makeOrig(t *testing.T, archName string, objNames []string) (orig []byte) {
+	baseParams := tools.BaseAPIParams()
+	flt := a.arch(t, archName, objNames, false)
+	tassert.CheckFatal(t, api.WaitForSnapsIdle(baseParams, &flt))
+	tassert.CheckFatal(t, api.AbortXaction(baseParams, &flt))
+	n := a.countInArch(t, archName)
+	tassert.Fatalf(t, n == len(objNames), "%s: expected %d archived objects, have %d", a.bckTo.Cname(archName), len(objNames), n)
+	return a.getShard(t, archName)
+}
+
+func (a *archLarge) getShard(t *testing.T, archName string) []byte {
+	var buf bytes.Buffer
+	_, err := api.GetObject(tools.BaseAPIParams(), a.bckTo, archName, &api.GetArgs{Writer: &buf})
+	tassert.CheckFatal(t, err)
+	return buf.Bytes()
+}
+
+func (a *archLarge) checkOrig(t *testing.T, archName string, orig []byte, numOrig int) {
+	var (
+		cname = a.bckTo.Cname(archName)
+		n     int
+	)
+	err := tools.WaitForCondition(func() bool { n = a.countInArch(t, archName); return n > 0 },
+		tools.WaitRetryOpts{MaxRetries: 10, Interval: time.Second})
+	tassert.Fatalf(t, err == nil, "%s: no rollback after 10s (no original shard)", cname)
+	shard := a.getShard(t, archName)
+	tlog.Logfln("%s: size %d (original %d), %d archived objects", cname, len(shard), len(orig), n)
+	tassert.Fatalf(t, n != len(a.names), "%s: the job archived all objects (increase archLargeSize)", cname)
+	tassert.Errorf(t, bytes.Equal(shard, orig), "%s: expected the original (size %d), have size %d", cname, len(orig), len(shard))
+	tassert.Errorf(t, n == numOrig, "%s: expected %d archived objects (original), have %d", cname, numOrig, n)
+}
+
+// the job on one target (dflt.DaemonID)
+func archSnap(t *testing.T, dflt *xact.ArgsMsg) *core.Snap {
+	snaps, err := api.QueryXactionSnaps(tools.BaseAPIParams(), dflt)
+	tassert.CheckFatal(t, err)
+	tsnaps := snaps[dflt.DaemonID]
+	tassert.Fatalf(t, len(tsnaps) == 1, "expected one %s on %s, have %d", dflt.ID, dflt.DaemonID, len(tsnaps))
+	return tsnaps[0]
+}
+
+// TAR append in place, aborted while the designated target waits for the large object
+func TestArchAppendAbort(t *testing.T) {
+	const half = archNumSmall / 2
+	a, archNames := newArchLarge(t, 1 /*num shards*/, archive.ExtTar)
+	archName := archNames[0]
+
+	orig := a.makeOrig(t, archName, a.small.objNames[:half])
+
+	flt := a.arch(t, archName, a.names[half:], true /*append*/)
+	tassert.CheckFatal(t, api.AbortXaction(tools.BaseAPIParams(), &flt))
+
+	a.checkOrig(t, archName, orig, half)
+}
+
+// TAR append in place, a PUT of the same name, then the abort (the newer object stays)
+func TestArchAppendAbortPut(t *testing.T) {
+	const half = archNumSmall / 2
+	a, archNames := newArchLarge(t, 1 /*num shards*/, archive.ExtTar)
+	var (
+		baseParams = tools.BaseAPIParams()
+		archName   = archNames[0]
+		cname      = a.bckTo.Cname(archName)
+	)
+	a.makeOrig(t, archName, a.small.objNames[:half])
+
+	flt := a.arch(t, archName, a.names[half:], true /*append*/)
+	newer := []byte(trand.String(int(cos.KiB)))
+	_, err := api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: a.bckTo, ObjName: archName, Reader: readers.NewBytes(newer)})
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, api.AbortXaction(baseParams, &flt))
+
+	// the rollback is asynchronous (see checkOrig)
+	for range 10 {
+		time.Sleep(time.Second)
+		tassert.Fatalf(t, bytes.Equal(a.getShard(t, archName), newer), "%s: expected the newer object (not the original and not the archive)", cname)
+	}
+}
+
+// TAR append in place of an object that the format of the shard cannot encode (a USTAR shard and a long flat name)
+func TestArchAppendSkipEntry(t *testing.T) {
+	const numSmall = 4
+	var (
+		baseParams = tools.BaseAPIParams()
+		long       = strings.Repeat("x", 160)
+		archName   = "shard.tar"
+		a          = newArchSmall(t, numSmall)
+	)
+	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: cos.ChecksumNone})
+	tassert.CheckFatal(t, err)
+	_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: a.small.bck, ObjName: long, Reader: reader})
+	tassert.CheckFatal(t, err)
+
+	a.makeOrig(t, archName, a.small.objNames[:2])
+
+	flt := a.arch(t, archName, append(slices.Clone(a.small.objNames[2:]), long), true /*append*/)
+	tassert.CheckFatal(t, api.WaitForSnapsIdle(baseParams, &flt))
+	n := a.countInArch(t, archName)
+	tlog.Logfln("%s: %d archived objects", a.bckTo.Cname(archName), n)
+	tassert.Errorf(t, n == numSmall, "%s: expected %d archived objects (all but the long name), have %d", a.bckTo.Cname(archName), numSmall, n)
+}
+
+func (a *archLarge) dtNames(t *testing.T, numOrig int, dt *meta.Snode) []string {
+	objNames := make([]string, 0, len(a.names)-numOrig)
+	for _, name := range a.small.objNames[numOrig:] {
+		tsi, err := a.smap.HrwObjName2T(meta.CloneBck(&a.small.bck), name)
+		tassert.CheckFatal(t, err)
+		if tsi.ID() == dt.ID() {
+			objNames = append(objNames, name)
+		}
+	}
+	return append(objNames, a.large)
+}
+
+// num small objects on the peer to delay its 'done'
+func (a *archLarge) putOnPeer(t *testing.T, num int) []string {
+	baseParams := tools.BaseAPIParams()
+	objNames := make([]string, 0, num)
+	for i := range num {
+		name := tools.GenerateObjectNameOnTarget(fmt.Sprintf("p-%d-", i), a.small.bck, a.smap, a.peer)
+		tassert.CheckFatal(t, tools.PutObjRR(baseParams, a.small.bck, name, cos.KiB, cos.ChecksumNone))
+		objNames = append(objNames, name)
+	}
+	return objNames
+}
+
+// archive objNames, then freeze the peer (the only sender)
+func (a *archLarge) archFreeze(t *testing.T, archName string, objNames []string, dt *meta.Snode,
+	allDone, appendIfExists bool) (dflt xact.ArgsMsg, resume func() error, notDone bool) {
+	pause, resume, err := tools.NodePauser(a.peer)
+	tassert.CheckFatal(t, err)
+	flt := a.arch(t, archName, objNames, appendIfExists)
+	t.Cleanup(func() { _ = api.AbortXaction(tools.BaseAPIParams(), &flt) })
+	t.Cleanup(func() { _ = resume() }) // (before the abort)
+
+	dflt = flt
+	dflt.DaemonID = dt.ID()
+	tassert.CheckFatal(t, pause())
+	if !allDone {
+		time.Sleep(2 * time.Second) // (while frozen, the 'done' of the other peers arrives)
+	}
+	snap := archSnap(t, &dflt)
+	deadline := time.Now().Add(5 * time.Second)
+	for allDone && strings.Contains(snap.CtlMsg, "peers-not-done:") && time.Now().Before(deadline) {
+		tassert.CheckFatal(t, resume())
+		time.Sleep(time.Millisecond) // (a 128 MiB object takes many steps)
+		tassert.CheckFatal(t, pause())
+		snap = archSnap(t, &dflt)
+	}
+	tlog.Logfln("froze %s: %s", a.peer.StringEx(), snap.CtlMsg)
+	notDone = strings.Contains(snap.CtlMsg, "peers-not-done:1,")
+	if allDone {
+		tassert.Fatalf(t, strings.Contains(snap.CtlMsg, "from-peers:"),
+			"%s: no object in transit at the freeze, have %q", a.bckTo.Cname(archName), snap.CtlMsg)
+	}
+	return dflt, resume, notDone
+}
+
+// TAR append in place, the peer freezes after its 'done' w/ the large object in transit
+func TestArchAppendFrozenPeer(t *testing.T) {
+	const (
+		half     = archNumSmall / 2
+		sendFile = 10 * time.Second
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	config := tools.GetClusterConfig(t)
+	if !config.TestingEnv() {
+		t.Skipf("%s requires a testing env (send_file_time %v)", t.Name(), sendFile)
+	}
+	a, archNames := newArchLarge(t, 1 /*num shards*/, archive.ExtTar)
+	var (
+		archName = archNames[0]
+		cname    = a.bckTo.Cname(archName)
+	)
+	dt, err := tools.GetClusterMap(t, tools.RandomProxyURL(t)).HrwObjName2T(meta.CloneBck(&a.bckTo), archName)
+	tassert.CheckFatal(t, err)
+
+	// give up before the primary removes the frozen peer
+	tools.SetClusterConfig(t, cos.StrKVs{"timeout.send_file_time": sendFile.String()})
+	t.Cleanup(func() { tools.SetClusterConfig(t, origConfig(config)) })
+
+	orig := a.makeOrig(t, archName, a.small.objNames[:half])
+
+	dflt, resume, _ := a.archFreeze(t, archName, []string{a.large}, dt, true /*all done*/, true /*append*/)
+
+	// after send_file_time with no progress, the designated target times out or gives up
+	dflt.Timeout = sendFile + 30*time.Second // (timeout for the quiesce checks and the API calls)
+	_, err = api.WaitForSnaps(tools.BaseAPIParams(), &dflt, noFromPeers)
+	tassert.CheckFatal(t, err)
+	snap := archSnap(t, &dflt)
+	tlog.Logfln("%s: %s", dt.StringEx(), snap.Err)
+	tassert.Fatalf(t, !snap.AbortedX, "%s: expected no abort (the frozen peer left the Smap?), have %q", cname, snap.AbortErr)
+	gaveUp := strings.Contains(snap.Err, "still being received")
+	tassert.Fatalf(t, gaveUp || strings.Contains(snap.Err, cmn.ErrQuiesceTimeout.Error()),
+		"%s: expected %s to time out, have %q", cname, dt.StringEx(), snap.Err)
+	tlog.Logfln("%s: gave up (a receive in progress) %t", dt.StringEx(), gaveUp)
+
+	tassert.CheckFatal(t, resume())
+	a.checkOrig(t, archName, orig, half)
+}
+
+// the designated target does not wait for objects from peers
+func noFromPeers(snaps xact.MultiSnap) (done, reset bool, err error) {
+	for _, tsnaps := range snaps {
+		for _, snap := range tsnaps {
+			if strings.Contains(snap.CtlMsg, "from-peers:") {
+				return false, false, nil
+			}
+		}
+	}
+	return true, false, nil
+}
+
+func waitAbort(t *testing.T, dflt *xact.ArgsMsg) {
+	args := *dflt
+	args.Timeout = 10 * time.Second
+	snaps, err := api.WaitForSnaps(tools.BaseAPIParams(), &args, args.Finished())
+	aborted := err == nil && len(snaps[dflt.DaemonID]) == 1 && snaps[dflt.DaemonID][0].AbortedX
+	tassert.Errorf(t, aborted, "%s: expected an abort before the restart (%v)", dflt.DaemonID, err)
+}
+
+func origConfig(config *cmn.Config) cos.StrKVs {
+	return cos.StrKVs{
+		"timeout.send_file_time":          config.Timeout.SendFile.String(),
+		"keepalivetracker.proxy.interval": config.Keepalive.Proxy.Interval.String(),
+	}
+}
+
+// the peer crashes and restarts
+func TestArchKilledPeer(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	t.Run("leave", func(t *testing.T) { testArchKilledPeer(t, archive.ExtTar, false /*all done*/, true /*wait rm*/) })
+	t.Run("restart", func(t *testing.T) { testArchKilledPeer(t, archive.ExtTar, false /*all done*/, false /*wait rm*/) })
+	t.Run("zip", func(t *testing.T) { testArchKilledPeer(t, archive.ExtZip, true /*all done*/, true /*wait rm*/) })
+}
+
+func testArchKilledPeer(t *testing.T, ext string, allDone, waitRm bool) {
+	const (
+		half    = archNumSmall / 2
+		numPeer = 200
+	)
+	numTries := cos.Ternary(allDone, 1, 5)
+	a, archNames := newArchLarge(t, numTries, ext)
+	if !waitRm {
+		// keep the peer in the Smap until it restarts
+		config := tools.GetClusterConfig(t)
+		tools.SetClusterConfig(t, cos.StrKVs{"keepalivetracker.proxy.interval": "40s"})
+		t.Cleanup(func() { tools.SetClusterConfig(t, origConfig(config)) })
+	}
+	var (
+		proxyURL       = tools.RandomProxyURL(t)
+		baseParams     = tools.BaseAPIParams(proxyURL)
+		smap           = tools.GetClusterMap(t, proxyURL)
+		appendIfExists = ext == archive.ExtTar
+		archName       string
+		dt             *meta.Snode
+		orig           []byte
+		dflt           xact.ArgsMsg
+		resume         func() error
+		notDone        bool
+		peerNames      []string
+		err            error
+	)
+	if !allDone {
+		peerNames = a.putOnPeer(t, numPeer)
+	}
+	for i := range numTries {
+		archName = archNames[i]
+		dt, err = smap.HrwObjName2T(meta.CloneBck(&a.bckTo), archName)
+		tassert.CheckFatal(t, err)
+
+		// 1. the original shard (TAR only)
+		if appendIfExists {
+			orig = a.makeOrig(t, archName, a.small.objNames[:half])
+		}
+		// 2. archive, then freeze the peer
+		objNames := peerNames
+		if allDone {
+			objNames = a.dtNames(t, half, dt)
+		}
+		dflt, resume, notDone = a.archFreeze(t, archName, objNames, dt, allDone, appendIfExists)
+		if allDone || notDone {
+			break
+		}
+		tlog.Logfln("the peer was done at the freeze, try again w/ the next shard")
+		tassert.CheckFatal(t, resume())
+		flt := dflt
+		flt.DaemonID = ""
+		tassert.CheckFatal(t, api.WaitForSnapsIdle(baseParams, &flt))
+	}
+	cname := a.bckTo.Cname(archName)
+	tassert.Fatalf(t, allDone || notDone, "%s: the peer was done at each freeze (%d tries)", cname, numTries)
+
+	// 3. crash the peer and restart it
+	cmd, err := tools.CrashNode(a.peer)
+	tassert.CheckError(t, err)
+	if waitRm {
+		_, err = tools.WaitForClusterState(proxyURL, "target crashed", smap.Version, smap.CountActivePs(), smap.CountActiveTs()-1)
+		tassert.CheckError(t, err)
+		if !allDone {
+			waitAbort(t, &dflt) // before the restart
+		}
+	}
+	tassert.CheckFatal(t, tools.RestoreNode(cmd, false, "target"))
+	_, err = tools.WaitForClusterState(proxyURL, "target restarted", smap.Version, smap.CountActivePs(), smap.CountActiveTs())
+	tassert.CheckFatal(t, err)
+	tools.WaitForRebalAndResil(t, baseParams)
+
+	// 4. the designated target does not wait for the peer and does not publish
+	snap := archSnap(t, &dflt)
+	tlog.Logfln("%s: aborted %t [%s] [%s] %s", dt.StringEx(), snap.AbortedX, snap.AbortErr, snap.Err, snap.CtlMsg)
+	tassert.Errorf(t, !strings.Contains(snap.CtlMsg, "peers-not-done:") && !strings.Contains(snap.CtlMsg, "from-peers:"),
+		"%s: %s still waits for the crashed peer: %s", cname, dt.StringEx(), snap.CtlMsg)
+	if !allDone {
+		want := cos.Ternary(waitRm, "membership change", "targets changed")
+		tassert.Errorf(t, snap.AbortedX && strings.Contains(snap.AbortErr, want),
+			"%s: expected an abort (%s), have %t %q", cname, want, snap.AbortedX, snap.AbortErr)
+	}
+	if appendIfExists {
+		a.checkOrig(t, archName, orig, half)
+		return
+	}
+	_, err = api.HeadObject(baseParams, a.bckTo, archName, api.HeadArgs{FltPresence: apc.FltPresent})
+	tassert.Errorf(t, cmn.IsStatusNotFound(err), "%s: expected no shard (a truncated object), have %v", cname, err)
 }
 
 func testArch(t *testing.T, bck *meta.Bck) {

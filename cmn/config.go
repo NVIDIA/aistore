@@ -3407,7 +3407,7 @@ const (
 // - renewal size: XferRenewSize(window) bytes - each one transferred renews the deadline for another window
 // - minimum transfer rate: renewal size / window = XferMinRate, until clamped
 //
-// e.g.: 1m => 3.75MiB (config-validated minimum, see TimeoutConf.Validate); 5m => 18.75MiB;
+// e.g.: 1m => 3.75MiB (config-validated minimum except in a testing env, see TimeoutConf.Validate); 5m => 18.75MiB;
 // >= ~17m => 64MiB (max; the minimum transfer rate then decreases: 64MiB/window)
 const (
 	XferMinRate  = 64 * cos.KiB // bytes per second
@@ -3433,6 +3433,8 @@ func (c *TimeoutConf) ColdRangeBackoff() time.Duration {
 	cgc := cos.NonZero(c.ColdGetConflict.D(), ColdGetConflictDflt)
 	return cos.ClampDuration(2*cgc, floor, max(c.MaxHostBusy.D(), floor))
 }
+
+const minSendFileTest = 5 * time.Second // timeout.send_file_time in a testing env
 
 func (c *TimeoutConf) Validate() error {
 	debug.Assert(SharedStreamsDflt >= 2*hk.Prune2mIval)
@@ -3460,8 +3462,8 @@ func (c *TimeoutConf) Validate() error {
 		return fmt.Errorf("invalid timeout.join_startup_time=%s, must be >= 2*(timeout.startup_time=%s)",
 			c.JoinAtStartup, c.Startup)
 	}
-	if c.SendFile.D() < time.Minute {
-		return fmt.Errorf("invalid timeout.send_file_time=%s (cannot be less than 1m)", c.SendFile)
+	if minSendFile := cos.Ternary(Rom.TestingEnv(), minSendFileTest, time.Minute); c.SendFile.D() < minSendFile {
+		return fmt.Errorf("invalid timeout.send_file_time=%s (cannot be less than %v)", c.SendFile, minSendFile)
 	}
 	// must be greater than (2 * keepalive.interval*keepalive.factor)
 	if c.EcStreams > 0 && c.EcStreams.D() < SharedStreamsMin {
@@ -3749,6 +3751,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	}
 
 	nlog.SetPre(config.LogDir, daeRole)
+	Rom.testingEnv = config.TestingEnv()
 
 	// Global (aka Cluster) config
 	// Normally, when the node is being deployed the very first time the last updated version
@@ -3800,7 +3803,6 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 	// initialize atomic part of the config including most often used timeouts and features
 	debug.Assert(onSignVerifyToggle == nil, "startup sequence: must not trigger runtime sign/verify hook")
 	Rom.Set(&config.ClusterConfig)
-	Rom.testingEnv = config.TestingEnv()
 
 	// create dirs
 	if err := cos.CreateDir(config.LogDir); err != nil {

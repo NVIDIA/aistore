@@ -162,6 +162,8 @@ func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err 
 	tw.lck.Lock()
 	if err = tw.tw.WriteHeader(&hdr); err == nil {
 		_, err = io.CopyBuffer(tw.tw, reader, tw.buf)
+	} else if tw.tw.Flush() == nil {
+		err = &errEntryNotWritten{fullname, err} // a non-fatal header error
 	}
 	tw.lck.Unlock()
 	return err
