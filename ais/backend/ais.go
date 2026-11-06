@@ -13,7 +13,6 @@ import (
 	"os"
 	"regexp"
 	"sync"
-	"time"
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -24,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 )
 
@@ -587,36 +585,16 @@ func (m *AISbp) HeadObj(_ context.Context, lom *core.LOM, _ *http.Request) (oa *
 	return
 }
 
-// TODO: retry
-func (m *AISbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (ecode int, err error) {
-	var (
-		remAis    *remAis
-		r         io.ReadCloser
-		size      int64
-		remoteBck = lom.Bck().Clone()
-	)
-	if remAis, err = m.getRemAis(remoteBck.Ns.UUID); err != nil {
-		return
+// TODO: retry upon 'unreachable' or timeout
+func (m *AISbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *http.Request) (int, error) {
+	res := m.GetObjReader(ctx, lom, 0, 0)
+	if res.Err != nil {
+		return res.ErrCode, res.Err
 	}
-	unsetUUID(&remoteBck)
-	if r, size, err = api.GetObjectReader(remAis.bpL, remoteBck, lom.ObjName, &api.GetArgs{Context: ctx}); err != nil {
-		return m.extractErrCode(err, remAis.uuid)
-	}
-	params := core.AllocPutParams()
-	{
-		params.WorkTag = fs.WorkfileColdget
-		params.Reader = r
-		params.OWT = owt
-		params.Size = size
-		params.Atime = time.Now()
-		params.SkipBackend = true
-	}
-	err = m.t.PutObject(lom, params)
+	params := allocPutParams(&res, owt)
+	err := m.t.PutObject(lom, params)
 	core.FreePutParams(params)
-
-	// TODO: retry upon 'unreachable' or timeout
-
-	return m.extractErrCode(err, remAis.uuid)
+	return 0, err // local write: no remote error mapping (cf. other backends)
 }
 
 func (m *AISbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) (res core.GetReaderResult) {
