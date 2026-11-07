@@ -44,13 +44,13 @@ type (
 		sid     string
 		loghdr  string
 		prev    ObjHdr // previous header on this stream; best-effort string-reuse source
+		off     int64  // current object offset, valid after reader recycle
 	}
 	objReader struct {
 		body   io.Reader
 		pdu    *rpdu
 		parent *iterator
 		hdr    ObjHdr
-		off    int64
 	}
 )
 
@@ -222,10 +222,16 @@ func (it *iterator) rxObj(hlen int) (err error) {
 			obj.pdu = it.pdu
 		}
 		err = eofOK(err)
-		size, off := obj.hdr.ObjAttrs.Size, obj.off
-		control := obj.hdr.IsControl() // callback may recycle obj
+
+		var (
+			size    = obj.hdr.ObjAttrs.Size
+			pdu     = obj.pdu
+			control = obj.hdr.IsControl() // callback may recycle obj
+		)
 		if errCb := h.recv(&obj.hdr, obj, err); errCb != nil {
 			err = errCb
+		} else if pdu != nil && pdu.err != nil {
+			err = pdu.err // (callback may have discarded the read error)
 		}
 		debug.DeadBeefSmall(it.hbuf[:hlen])
 
@@ -233,12 +239,11 @@ func (it *iterator) rxObj(hlen int) (err error) {
 		if err == nil && !control {
 			g.tstats.Inc(cos.StreamsInObjCount) // stats/target_stats.go
 
-			if size >= 0 {
-				g.tstats.Add(cos.StreamsInObjSize, size)
-			} else {
+			if size < 0 {
 				debug.Assert(size == SizeUnknown)
-				g.tstats.Add(cos.StreamsInObjSize, obj.off-off)
+				size = it.off
 			}
+			g.tstats.Add(cos.StreamsInObjSize, size)
 		}
 	} else if err != nil && err != io.EOF {
 		if errCb := h.recv(&ObjHdr{SID: it.sid}, nil, err); errCb != nil {
@@ -302,6 +307,7 @@ func (it *iterator) nextObj(hlen int) (*objReader, error) {
 
 	obj := allocRecv()
 	obj.body, obj.hdr, obj.parent = it.body, hdr, it
+	it.off = 0 // new object (see also Stream.dryrun)
 	return obj, nil
 }
 
@@ -326,31 +332,32 @@ func (obj *objReader) Read(b []byte) (n int, err error) {
 	}
 	debug.AssertFunc(func() bool { return obj.Size() >= 0 })
 
-	rem := obj.Size() - obj.off
+	it := obj.parent
+	rem := obj.Size() - it.off
 	if rem < int64(len(b)) && rem >= 0 {
 		b = b[:int(rem)]
 	}
 
 	n, err = obj.body.Read(b)
-	obj.off += int64(n) // NOTE: `GORACE` complaining here can be safely ignored
+	it.off += int64(n)
 
 	switch err {
 	case nil:
-		if obj.off >= obj.Size() {
+		if it.off >= obj.Size() {
 			// ok (w/ EOF to the caller)
 			err = io.EOF
 		}
 	case io.EOF:
 		// premature EOF
-		if obj.off != obj.Size() {
-			err = obj.parent.newErr(io.ErrUnexpectedEOF, sbrObjDataEOF, obj.String())
+		if it.off != obj.Size() {
+			err = it.newErr(io.ErrUnexpectedEOF, sbrObjDataEOF, obj.String())
 		}
 	default:
 		// ditto, w/ error
-		if obj.off < obj.Size() {
-			err = obj.parent.newErr(err, sbrObjDataSize, obj.String())
+		if it.off < obj.Size() {
+			err = it.newErr(err, sbrObjDataSize, obj.String())
 		} else {
-			err = obj.parent.newErr(err, sbrObjData, obj.String())
+			err = it.newErr(err, sbrObjData, obj.String())
 		}
 	}
 	return n, err
@@ -368,36 +375,38 @@ func (obj *objReader) IsUnsized() bool { return obj.hdr.IsUnsized() }
 //
 
 func (obj *objReader) readPDU(b []byte) (n int, err error) {
-	pdu := obj.pdu
+	pdu, it := obj.pdu, obj.parent
+	if pdu.err != nil {
+		return 0, pdu.err
+	}
 	if pdu.woff == 0 {
-		err = pdu.readHdr()
-		if err != nil {
-			return 0, err
+		if pdu.err = pdu.readHdr(); pdu.err != nil {
+			return 0, pdu.err
 		}
 	}
 	for !pdu.done {
-		if _, err = pdu.readFrom(); err != nil && err != io.EOF {
-			err = obj.parent.newErr(err, sbrPDUData, obj.String())
+		if _, err = pdu.readFrom(); err != nil {
+			pdu.err = it.newErr(err, sbrPDUData, obj.String())
 			break
 		}
-		debug.Assert(err == nil || (err == io.EOF && pdu.done))
 		if !pdu.done {
 			runtime.Gosched()
 		}
 	}
 	n = pdu.read(b)
-	obj.off += int64(n)
+	it.off += int64(n)
 
-	if err != nil {
-		return n, err
+	if pdu.err != nil {
+		return n, pdu.err
 	}
 	if pdu.rlength() == 0 {
 		if pdu.last {
 			err = io.EOF
 			if obj.IsUnsized() {
-				obj.hdr.ObjAttrs.Size = obj.off
-			} else if obj.Size() != obj.off {
-				err = obj.parent.newErr(io.ErrUnexpectedEOF, sbrPDUDataSize, obj.String())
+				obj.hdr.ObjAttrs.Size = it.off
+			} else if obj.Size() != it.off {
+				pdu.err = it.newErr(io.ErrUnexpectedEOF, sbrPDUDataSize, obj.String())
+				return n, pdu.err
 			}
 		} else {
 			pdu.reset()

@@ -223,6 +223,17 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 	case inPDU:
 		for !s.pdu.done {
 			err = s.pdu.readFrom(&s.sendoff)
+			switch err {
+			case nil:
+			case io.EOF:
+				// validate EOF vs sent size
+				size := s.sendoff.obj.Size()
+				if off := s.sendoff.off + int64(s.pdu.plength()); off < size {
+					return 0, fmt.Errorf("%s: read (%d) shorter than size (%d): %w", s, off, size, io.ErrUnexpectedEOF)
+				}
+			default:
+				return 0, err
+			}
 			if s.pdu.done {
 				s.pdu.insHeader()
 				break
@@ -238,7 +249,7 @@ func (s *Stream) Read(b []byte) (n int, err error) {
 				s.pdu.reset()
 			}
 		}
-		return n, err
+		return n, nil
 	case inHdr:
 		return s.sendHdr(b)
 	}

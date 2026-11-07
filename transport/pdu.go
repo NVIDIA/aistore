@@ -29,6 +29,7 @@ type (
 		pdu
 		flags uint64
 		plen  int
+		err   error // (retained across callback reads)
 	}
 )
 
@@ -120,6 +121,7 @@ func (pdu *rpdu) readHdr() error {
 	}
 
 	pdu.woff = sizeProtoHdr
+	pdu.done = pdu.plen == 0
 	pdu.last = pdu.flags&pduLastFl != 0
 	debug.Func(func() { debug.Assertf(pdu.plen > 0 || (pdu.plen == 0 && pdu.last), fmterr, pdu.plen, fl2s(pdu.flags)) })
 	return nil
@@ -128,14 +130,15 @@ func (pdu *rpdu) readHdr() error {
 func (pdu *rpdu) reset() {
 	pdu.roff, pdu.woff = sizeProtoHdr, 0
 	pdu.done, pdu.last = false, false
+	pdu.err = nil
 }
 
 func (pdu *rpdu) readFrom() (n int, err error) {
 	n, err = pdu.parent.body.Read(pdu.buf[pdu.woff : sizeProtoHdr+pdu.plen]) // NOTE: maxSizePDU
 	pdu.woff += n
 	pdu.done = pdu.plength() == pdu.plen
-	if err != nil {
-		pdu.done, pdu.last = true, true
+	if cos.IsOkEOF(err) {
+		err = cos.Ternary(pdu.done, nil, io.ErrUnexpectedEOF)
 	}
 	return
 }

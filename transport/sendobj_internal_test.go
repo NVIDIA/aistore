@@ -7,7 +7,11 @@ package transport
 import (
 	"errors"
 	"io"
+	"strings"
 	"testing"
+	"testing/iotest"
+
+	"github.com/NVIDIA/aistore/cmn"
 )
 
 type closeErrReader struct {
@@ -50,5 +54,41 @@ func TestDoCmplRetainsNonFinalError(t *testing.T) {
 	}
 	if !errors.Is(gotErr, expected) {
 		t.Fatalf("completion error %v, expected %v", gotErr, expected)
+	}
+}
+
+func TestSendPDUObjectEOF(t *testing.T) {
+	sourceErr := errors.New("source failed")
+	tests := []struct {
+		name string
+		body io.Reader
+		size int64
+		want error
+	}{
+		{"unsized", strings.NewReader("abc"), SizeUnknown, nil},
+		{"empty unsized", strings.NewReader(""), SizeUnknown, nil},
+		{"sized", iotest.DataErrReader(strings.NewReader("abc")), 3, nil},
+		{"short sized", strings.NewReader("abc"), 4, io.ErrUnexpectedEOF},
+		{"source error", io.MultiReader(strings.NewReader("abc"), iotest.ErrReader(sourceErr)), SizeUnknown, sourceErr},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			s := &Stream{
+				pdu: newSendPDU(make([]byte, 1024)),
+				sendoff: sendoff{ins: inPDU, obj: Obj{
+					Hdr:    ObjHdr{ObjAttrs: cmn.ObjAttrs{Size: test.size}},
+					Reader: io.NopCloser(test.body),
+				}},
+			}
+			// read just one byte so the frame stays available for inspection
+			n, err := s.Read(make([]byte, 1))
+			if test.want == nil {
+				if n != 1 || err != nil || !s.pdu.last {
+					t.Fatalf("Read() = (%d, %v), last = %t, want one byte of the final pdu", n, err, s.pdu.last)
+				}
+			} else if n != 0 || !errors.Is(err, test.want) {
+				t.Fatalf("Read() = (%d, %v), want (0, %v)", n, err, test.want)
+			}
+		})
 	}
 }
