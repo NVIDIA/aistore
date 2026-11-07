@@ -247,8 +247,12 @@ func DestroyBucket(tb testing.TB, proxyURL string, bck cmn.Bck) {
 			return
 		}
 		herr := cmn.AsErrHTTP(err)
-		if herr == nil || herr.Status != http.StatusNotFound {
-			tassert.CheckFatal(tb, err)
+		switch {
+		case herr == nil:
+			tassert.Fatalf(tb, false, "destroy %s via %s: %v", bck.Cname(""), proxyURL, err)
+		case herr.Status != http.StatusNotFound:
+			tassert.Fatalf(tb, false, "destroy %s via %s: %v (status %d, %s %s)",
+				bck.Cname(""), proxyURL, err, herr.Status, herr.Method, herr.URLPath)
 		}
 	}
 }

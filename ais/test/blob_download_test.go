@@ -873,9 +873,12 @@ func TestBlobDownloadRemoteAISReadTimeout(t *testing.T) {
 		bck       = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.Alias}}
 		objName   = t.Name() + "-object"
 	)
+	tlog.Logfln("remote cluster: alias %q, UUID %q, URL %s", tools.RemoteCluster.Alias, tools.RemoteCluster.UUID, tools.RemoteCluster.URL)
+	tlog.Logfln("create %s (via %s)", bck.Cname(""), proxyURL)
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 	initMountpaths(t, proxyURL)
 
+	tlog.Logfln("put %s (size %s) directly to the remote cluster", remoteBck.Cname(objName), cos.ToSizeIEC(objSize, 0))
 	_, err := api.PutObject(&api.PutArgs{
 		BaseParams: remoteBP, Bck: remoteBck, ObjName: objName,
 		Reader: readers.NewBytes(bytes.Repeat([]byte{'x'}, objSize)), Size: objSize,
@@ -886,22 +889,27 @@ func TestBlobDownloadRemoteAISReadTimeout(t *testing.T) {
 		ChunkSize: cmn.ChunkSizeMin, NumWorkers: 2, ChunkReadTimeout: cos.Duration(time.Nanosecond),
 	})
 	tassert.CheckFatal(t, err)
+	tlog.Logfln("%s[%s]: %s, chunk read timeout 1ns", apc.ActBlobDl, xid, bck.Cname(objName))
 
 	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
 	snaps, err := api.WaitForSnaps(bp, args, args.Finished())
 	tassert.CheckFatal(t, err)
 
 	var errText string
-	for _, targetSnaps := range snaps {
+	for tid, targetSnaps := range snaps {
 		for _, snap := range targetSnaps {
-			if snap.ID == xid {
-				errText = snap.Err
+			if snap.ID != xid {
+				continue
 			}
+			tlog.Logfln("%s[%s] on %s: finished %t, aborted %t, err %q, abort-err %q",
+				apc.ActBlobDl, xid, meta.Tname(tid), snap.IsFinished(), snap.IsAborted(), snap.Err, snap.AbortErr)
+			errText = snap.Err
 		}
 	}
 	tassert.Fatalf(t, strings.Contains(errText, context.DeadlineExceeded.Error()),
 		"expected context deadline, got %q", errText)
 
+	tlog.Logfln("validate: no chunks on disk for %s", bck.Cname(objName))
 	m := ioContext{t: t, bck: bck}
 	m.validateChunksOnDisk(bck, objName, 0)
 }
