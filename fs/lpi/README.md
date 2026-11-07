@@ -143,7 +143,7 @@ See `fs/lpi_test.go` for an example of generating markers via `Pos()` and replay
 Currently, LPI self-disables on detecting non-monotonic remote pages (first <= prevRemoteLast).
 
 Consider adding a small "forgiveness window" and logic:
-- when disabled, x-lso keeps calling the main LPI's Do() method;
+- when disabled, x-list keeps calling the main LPI's Do() method;
 - the latter should not walk local mountpaths; it should only observe remote page
   boundaries (first/last) and track a sequence of monotonic pages;
 - maintain a counter of consecutive "good" pages where first > prevRemoteLast (and last >= first).

@@ -656,7 +656,7 @@ func TestS3ListObjectsRemotePages(t *testing.T) {
 		if uuid == "" {
 			uuid = nextUUID
 		}
-		tassert.Fatalf(t, nextUUID == uuid, "page %d: x-lso UUID changed mid-listing: %q => %q", page, uuid, nextUUID)
+		tassert.Fatalf(t, nextUUID == uuid, "page %d: x-list UUID changed mid-listing: %q => %q", page, uuid, nextUUID)
 
 		// A-flow tokens name an object already returned; OCI markers name the next object.
 		tassert.Fatalf(t, orig != "",
@@ -2306,7 +2306,7 @@ func TestS3ListObjectsCrossProxyPages(t *testing.T) {
 		}
 	}
 	tassert.Fatalf(t, other != nil, "expecting a second active proxy")
-	tlog.Logf("x-lso[%s]: owner %s, non-owner %s\n", uuid, owner.StringEx(), other.StringEx())
+	tlog.Logf("x-list[%s]: owner %s, non-owner %s\n", uuid, owner.StringEx(), other.StringEx())
 
 	seen := make([]string, 0, m.num)
 	for _, o := range out.Contents {
@@ -2334,7 +2334,7 @@ func TestS3ListObjectsCrossProxyPages(t *testing.T) {
 		if next != "" {
 			nextUUID, _ := aiss3.DecodeToken(next)
 			tassert.Fatalf(t, nextUUID == uuid,
-				"page %d via %s: x-lso UUID changed %q => %q", page, via.StringEx(), uuid, nextUUID)
+				"page %d via %s: x-list UUID changed %q => %q", page, via.StringEx(), uuid, nextUUID)
 		}
 		for _, o := range out.Contents {
 			tassert.Fatalf(t, !slices.Contains(seen, *o.Key),

@@ -226,7 +226,7 @@ func (c *lsoCtx) lsPage() (*cmn.LsoRes, error) {
 	return lst, err
 }
 
-// new request: assign x-lso UUID; otherwise use existing
+// new request: assign x-list UUID; otherwise use existing
 // map to `psi` owner
 // return nil owner for local execution
 func (c *lsoCtx) owner() (psi *meta.Snode, err error) {
@@ -260,7 +260,7 @@ func (c *lsoCtx) owner() (psi *meta.Snode, err error) {
 	return psi, err
 }
 
-// forward x-lso next-page request to x-lso owner
+// forward x-list next-page request to x-list owner
 func (c *lsoCtx) forwardLSO(psi *meta.Snode) {
 	p, r, lsmsg := c.p, c.r, c.lsmsg
 	debug.AssertFunc(func() bool { return psi.ID() != p.SID() }, "reversing to self")
@@ -509,6 +509,7 @@ func (c *lsoCtx) lsObjsR() (*cmn.LsoRes, error) {
 		bargs     = allocBcArgs()
 		timeout   = c.config.Client.ListObjTimeout.D()
 	)
+	defer freeBcArgs(bargs)
 	bargs.req = cmn.HreqArgs{
 		Method: http.MethodGet,
 		Path:   apc.URLPathBuckets.Join(bck.Name),
@@ -561,8 +562,6 @@ func (c *lsoCtx) lsObjsR() (*cmn.LsoRes, error) {
 			freeBcastRes(results)
 
 			p._abrtR(bargs, path)
-
-			freeBcArgs(bargs)
 			return nil, err
 		}
 		freeBcastRes(results)
@@ -570,7 +569,6 @@ func (c *lsoCtx) lsObjsR() (*cmn.LsoRes, error) {
 		smapCurr := p.owner.smap.Get()
 		if err := smap.CheckSameTargets(smapCurr, lsotag+" R-flow"); err != nil {
 			p._abrtR(bargs, path)
-			freeBcArgs(bargs)
 			return nil, err
 		}
 
@@ -582,14 +580,13 @@ func (c *lsoCtx) lsObjsR() (*cmn.LsoRes, error) {
 		results = p.bcastGroup(bargs)
 	}
 
-	freeBcArgs(bargs)
-
 	var (
 		lists     = make([]*cmn.LsoRes, 0, len(results))
 		nextToken string
 	)
 	for _, res := range results {
 		if res.err != nil {
+			c.abortTimedOutR(results, &bargs.req)
 			if res.details == "" || res.details == dfltDetail {
 				res.details = xact.Cname(apc.ActList, lsmsg.UUID)
 			}
@@ -609,7 +606,39 @@ func (c *lsoCtx) lsObjsR() (*cmn.LsoRes, error) {
 	return page, nil
 }
 
-// (best-effort, async)
+// send one abort if the designated target's page call timed out
+func (c *lsoCtx) abortTimedOutR(results sliceResults, pageReq *cmn.HreqArgs) {
+	for _, res := range results {
+		if res.si.ID() != c.tsi.ID() {
+			continue
+		}
+		if cos.IsErrClientTimeout(res.err) {
+			args := allocCargs()
+			args.si = c.tsi
+			args.timeout = c.config.Timeout.MaxKeepalive.D()
+			args.req = cmn.HreqArgs{
+				Method: http.MethodGet,
+				Path:   apc.URLPathBuckets.Join(c.bck.Name, apc.Abort2PC),
+				Query:  pageReq.Query,
+				Body:   pageReq.Body,
+			}
+			go c.p.abortPageR(args, c.smap)
+		}
+		return
+	}
+}
+
+// abort the designated target without delaying the response to the client
+func (p *proxy) abortPageR(args *callArgs, smap *smapX) {
+	res := p.call(args, smap)
+	if res.err != nil {
+		nlog.Warningln(p, "failed to abort timed-out listing on", args.si, res.err)
+	}
+	freeCR(res)
+	freeCargs(args)
+}
+
+// best-effort abort of a failed startup
 func (p *proxy) _abrtR(bargs *bcastArgs, path string) {
 	bargs.noResults = true
 	bargs.req.Path = path + "/" + apc.Abort2PC // mutates bargs w/ no reuse

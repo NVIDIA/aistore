@@ -81,7 +81,7 @@ func (t *target) verifyBckVerb(w http.ResponseWriter, r *http.Request, dpq *dpq)
 // More precisely, 4 different paths:
 // - /v1/buckets                    - list buckets
 // - /v1/buckets/bucket-name        - list objects (NBI)
-// - /v1/buckets/bucket-name/phase  - list objects 2PC (x-lso)
+// - /v1/buckets/bucket-name/phase  - list objects 2PC (x-list)
 // - /v1/buckets/phase              - summary-style cases
 func (t *target) httpbckget(w http.ResponseWriter, r *http.Request, dpq *dpq) {
 	// do not use parseReq - note optional bucket/query bucket
@@ -426,7 +426,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 
 		if phase == apc.Begin2PC {
 			// R-flow:
-			// - beginStreams (in x-lso.Start) including dm.RegRecv
+			// - beginStreams (in x-list.Start) including dm.RegRecv
 			// - have a fresh full idle window for commit phase (and first page)
 			// - ack without paging
 			xls.IncPending()

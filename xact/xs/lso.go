@@ -680,8 +680,8 @@ rerr:
 	if aborted && err == nil {
 		err = r.AbortErr()
 	}
+	r.Abort(err)
 	if r.p.dm != nil {
-		r.Abort(err)
 		r.sendAbort()
 	}
 	return page, err
@@ -983,9 +983,11 @@ func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 	if hdr.Opcode == transport.OpcAbort {
 		errCause := hdr.ObjName // (see streamingX.sendTerm)
 		err = r.NewErrRecvAbortXact(hdr.SID, errCause)
+		transport.FreeRecv(objReader) // header only (hdr invalid hereafter)
 		if !r.Abort(err) {
 			return nil // duplicate
 		}
+		return err
 	}
 	if err != nil && !cos.IsOkEOF(err) {
 		nlog.Errorln(core.T.String(), r.String(), len(r.remtCh), err)

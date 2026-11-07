@@ -166,11 +166,11 @@ func (r *ListObjectResult) FromLsoResult(lst *cmn.LsoRes, token string) {
 // S3 list-objects: compound continuation token.
 //
 // S3 treats the continuation token as opaque (AWS itself returns base64 blobs), which lets us
-// carry the x-lso UUID alongside the token proper:
+// carry the x-list UUID alongside the token proper:
 //
 //	base64url( [ver] uuid \x00 orig )
 //
-// The UUID is x-lso ID - it is what makes a paged S3 listing a _single_ listing: without it
+// The UUID is x-list ID - it is what makes a paged S3 listing a _single_ listing: without it
 // the proxy starts a brand-new xaction for every page (see ais/plstcx.go, `newls`).
 //
 // `orig` is the original token as produced by the flow underneath;

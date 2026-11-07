@@ -223,13 +223,14 @@ func (it *iterator) rxObj(hlen int) (err error) {
 		}
 		err = eofOK(err)
 		size, off := obj.hdr.ObjAttrs.Size, obj.off
+		control := obj.hdr.IsControl() // callback may recycle obj
 		if errCb := h.recv(&obj.hdr, obj, err); errCb != nil {
 			err = errCb
 		}
 		debug.DeadBeefSmall(it.hbuf[:hlen])
 
 		// stream Rx stats: data only
-		if err == nil && !obj.hdr.IsControl() {
+		if err == nil && !control {
 			g.tstats.Inc(cos.StreamsInObjCount) // stats/target_stats.go
 
 			if size >= 0 {

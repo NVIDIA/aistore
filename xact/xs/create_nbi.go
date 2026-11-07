@@ -258,7 +258,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 		// next chunk
 		all = all[:idx]
 		ntotal += int64(idx)
-		r.ObjsAdd(idx, 0) // like x-lso: count names, zero bytes
+		r.ObjsAdd(idx, 0) // like x-list: count names, zero bytes
 
 		if err := r.writeChunk(num, all); err != nil {
 			r.Abort(err)

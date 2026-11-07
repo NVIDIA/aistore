@@ -1009,7 +1009,7 @@ type (
 	ArchConf      struct{ XactConf }
 	ArchConfToSet struct{ XactConfToSet }
 
-	// list-objects (x-lso)
+	// list-objects (x-list)
 	LsoConf struct {
 		// stream bundle multiplier, et. al - the common knobs
 		// included by all xactions that generate intra-cluster traffic
@@ -1027,7 +1027,7 @@ type (
 		// If 0, the system default (below) is used.
 		WalkBuffer int `json:"walk_buffer"`
 
-		// Idle timeout for the x-lso demand xaction: how long a listing
+		// Idle timeout for the x-list demand xaction: how long a listing
 		// session survives without a next-page request before it self-terminates.
 		// Must exceed the client's think-time between pages, or long-running
 		// paginated listings will hit `ErrGone` and restart from scratch.

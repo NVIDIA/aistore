@@ -39,7 +39,7 @@ type (
 // Currently, LPI self-disables on detecting non-monotonic remote pages (first <= prevRemoteLast)
 //
 // Consider adding a small "forgiveness window":
-// - when disabled, x-lso keeps calling Do();
+// - when disabled, x-list keeps calling Do();
 // - the latter should not walk local mountpaths; it should only observe remote page
 //   boundaries (first/last) and track a sequence of monotonic pages;
 // - maintain a counter of consecutive "good" pages where first > prevRemoteLast (and last >= first).

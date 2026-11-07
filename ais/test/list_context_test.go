@@ -45,11 +45,13 @@ const (
 
 // fake remote AIS behavior, per bucket
 const (
-	lsoCtxBlock   = iota // respond 200, then block until canceled
-	lsoCtxRetry          // 429
-	lsoCtxEmpty          // empty pages, no last page
-	lsoCtxSparse         // empty pages, then a single-entry last page
-	lsoCtxEndless        // full sorted pages, no last page
+	lsoCtxBlock       = iota // respond 200, then block until canceled
+	lsoCtxRetry              // 429
+	lsoCtxEmpty              // empty pages, no last page
+	lsoCtxSparse             // empty pages, then a single-entry last page
+	lsoCtxEndless            // full sorted pages, no last page
+	lsoCtxPageError          // fail the second call once
+	lsoCtxPageTimeout        // return the first page, then block
 )
 
 type (
@@ -66,6 +68,74 @@ type (
 		handshakes atomic.Int64
 	}
 )
+
+func TestLsoRemotePageFailure(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+	bp := tools.BaseAPIParams()
+	nat := tools.GetClusterMap(t, tools.GetPrimaryURL()).CountActiveTs()
+	remote := attachLsoCtxRemote(t, bp, nat)
+
+	for _, name := range []string{"remote-only", "single-target"} {
+		t.Run(name, func(t *testing.T) {
+			msg := &apc.LsoMsg{PageSize: 1}
+			if name == "single-target" {
+				tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 1, MaxTargets: 1})
+				msg.AddProps(apc.GetPropsDefaultAIS...)
+			} else {
+				msg.SetFlag(apc.LsNameOnly)
+			}
+			b := remote.addBck(t, bp, "fail-page", lsoCtxPageError)
+
+			page, err := api.ListObjectsPage(bp, b.bck, msg, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(page.Entries) == 1 && page.Entries[0].Name == "first" && msg.ContinuationToken != "",
+				"unexpected first page: %+v", page)
+			_, err = api.ListObjectsPage(bp, b.bck, msg, api.ListArgs{})
+			tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), "injected page error"), "expected page error, got %v", err)
+
+			page, err = api.ListObjectsPage(bp, b.bck, msg, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(page.Entries) == 1 && page.Entries[0].Name == "second" && msg.ContinuationToken == "",
+				"retry did not return the last page: %+v", page)
+			tassert.Fatalf(t, b.calls.Load() == 3, "expected three backend LISTs, got %d", b.calls.Load())
+		})
+	}
+}
+
+func TestLsoRemotePageTimeoutAbortsDesignated(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2})
+	bp := tools.BaseAPIParams()
+	smap := tools.GetClusterMap(t, tools.GetPrimaryURL())
+	remote := attachLsoCtxRemote(t, bp, smap.CountActiveTs())
+	b := remote.addBck(t, bp, "block-lso", lsoCtxPageTimeout)
+
+	config := tools.GetClusterConfig(t)
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": config.Client.ListObjTimeout.String()})
+	})
+	tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": "2s"})
+
+	msg := &apc.LsoMsg{PageSize: 1}
+	msg.AddProps(apc.GetPropsDefaultAIS...)
+	_, err := api.ListObjectsPage(bp, b.bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, msg.ContinuationToken != "", "expected a second page")
+	dt, err := smap.HrwTargetTask(msg.UUID)
+	tassert.CheckFatal(t, err)
+
+	_, err = api.ListObjectsPage(bp, b.bck, msg, api.ListArgs{})
+	tassert.Fatalf(t, err != nil && (strings.Contains(err.Error(), "deadline exceeded") ||
+		strings.Contains(err.Error(), "timed out waiting")), "expected page timeout, got %v", err)
+	waitLsoCtxCount(t, &b.canceled, 1)
+	tassert.Fatalf(t, b.calls.Load() == 2, "expected two backend LISTs, got %d", b.calls.Load())
+
+	args := &xact.ArgsMsg{ID: msg.UUID, Kind: apc.ActList, DaemonID: dt.ID()}
+	snaps, err := api.QueryXactionSnaps(bp, args)
+	tassert.CheckFatal(t, err)
+	all := snaps[dt.ID()]
+	tassert.Fatalf(t, len(all) == 1 && all[0].IsAborted() && strings.Contains(all[0].AbortErr, "2pc abort"),
+		"expected designated target %s to receive the proxy abort: %+v", dt, all)
+}
 
 func TestLsoContext(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2})
@@ -226,8 +296,7 @@ func (remote *lsoCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "throttled", http.StatusTooManyRequests)
 	case lsoCtxSparse:
 		if n > lsoCtxStress {
-			w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
-			_ = msgp.Encode(w, &cmn.LsoRes{Entries: cmn.LsoEntries{{Name: "obj"}}})
+			servePage(w, "obj", "")
 			return
 		}
 		fallthrough
@@ -238,6 +307,21 @@ func (remote *lsoCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	case lsoCtxEndless:
 		time.Sleep(10 * time.Millisecond) // pace the inventory cleanup stress test
 		serveEndlessPage(w, r)
+	case lsoCtxPageError:
+		switch n {
+		case 1:
+			servePage(w, "first", "next")
+		case 2:
+			http.Error(w, "injected page error", http.StatusInternalServerError)
+		default:
+			servePage(w, "second", "")
+		}
+	case lsoCtxPageTimeout:
+		if n == 1 {
+			servePage(w, "first", "next")
+			return
+		}
+		fallthrough
 	case lsoCtxBlock:
 		w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
 		w.WriteHeader(http.StatusOK)
@@ -247,6 +331,12 @@ func (remote *lsoCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "invalid mode "+strconv.Itoa(b.mode), http.StatusInternalServerError)
 	}
+}
+
+// single-entry page; empty token: last page
+func servePage(w http.ResponseWriter, name, token string) {
+	w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
+	_ = msgp.Encode(w, &cmn.LsoRes{Entries: cmn.LsoEntries{{Name: name}}, ContinuationToken: token})
 }
 
 // generate a sorted page of names (the bucket has no last page)

@@ -191,7 +191,7 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 		return nil, err
 	}
 	if lom.IsLoadedUnresolvedFntl() {
-		nlog.Warningln("x-lso/walk: skipping", lom.Cname(), "[", cmn.NewErrFntlUnresolved(fqn), "]")
+		nlog.Warningln("x-list/walk: skipping", lom.Cname(), "[", cmn.NewErrFntlUnresolved(fqn), "]")
 		return nil, nil
 	}
 

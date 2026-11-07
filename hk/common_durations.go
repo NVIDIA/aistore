@@ -19,7 +19,7 @@ const (
 	//
 	// when things are getting _old_
 	//
-	OldAgeXshort   = time.Minute      // Brief xactions (currently, x-lso only - see `xact.Descriptor`)
+	OldAgeXshort   = time.Minute      // Brief xactions (currently, x-list only - see `xact.Descriptor`)
 	OldAgeXshortV  = 10 * time.Minute // ditto, at V(4, ModXs)
 	OldAgeX        = time.Hour        // non-Brief xactions (see `xact.Descriptor`)
 	OldAgeNotif    = 3 * time.Minute  // old notifications

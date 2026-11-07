@@ -21,7 +21,7 @@ import (
 
 // core next-page and next-remote-page methods for object listing
 
-// TODO: x-lso R-flow stats: total(objects, bytes) vs in-cluster(objects, bytes)
+// TODO: x-list R-flow stats: total(objects, bytes) vs in-cluster(objects, bytes)
 //
 // total:
 //   - per page from resp.Lst.Entries; count = len, bytes = sum(en.Size)

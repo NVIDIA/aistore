@@ -121,7 +121,7 @@ func TestLiveBriefXactQueryableAcrossHistoryThreshold(t *testing.T) {
 }
 
 // two distinct entries can carry the same xaction ID: a stopped-but-unreaped one and a
-// live one renewed under the same client-supplied UUID (x-lso, x-moss)
+// live one renewed under the same client-supplied UUID (x-list, x-moss)
 func TestSameIDDistinctEntries(t *testing.T) {
 	TestReset()
 

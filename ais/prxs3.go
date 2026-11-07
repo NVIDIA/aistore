@@ -423,7 +423,7 @@ func (p *proxy) listObjectsS3(w http.ResponseWriter, r *http.Request, bucket str
 		return
 	}
 
-	// decode x-lso UUID and original continuation token, while keeping the client-sent token
+	// decode x-list UUID and original continuation token, while keeping the client-sent token
 	// for the response (see below)
 	token := lsmsg.ContinuationToken
 	lsmsg.UUID, lsmsg.ContinuationToken = s3.DecodeToken(token)
@@ -485,7 +485,7 @@ func (c *lsoCtx) s3Page() {
 	resp := s3.NewListObjectResult(bck.Name, maxKeys)
 	resp.FromLsoResult(lst, token)
 
-	// encode x-lso UUID and next continuation token
+	// encode x-list UUID and next continuation token
 	resp.NextContinuationToken = s3.EncodeToken(lsmsg.UUID, resp.NextContinuationToken)
 
 	sgl := p.gmm.NewSGL(0)

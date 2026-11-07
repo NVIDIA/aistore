@@ -495,7 +495,7 @@ func (m *AISbp) ListObjects(ctx context.Context, remoteBck *meta.Bck, msg *apc.L
 	origEntries := lst.Entries[:0]
 	*lst = *lstRes
 	lst.Entries = origEntries
-	lst.Entries = append(lst.Entries, lstRes.Entries...) // not clearing remote `apc.EntryIsCached` - done later by x-lso
+	lst.Entries = append(lst.Entries, lstRes.Entries...) // not clearing remote `apc.EntryIsCached` - done later by x-list
 
 	// Restore the original request UUID (UUID of the remote cluster is already inside `ContinuationToken`).
 	lst.UUID = msg.UUID
