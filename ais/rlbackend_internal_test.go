@@ -324,3 +324,18 @@ func TestRLBackendListObjectsCanceled(t *testing.T) {
 	tassert.Fatalf(t, ecode == 0, "expected code 0, got %d", ecode)
 	tassert.Fatalf(t, backend.calls == 1, "expected no retry call, got %d calls", backend.calls)
 }
+
+type conditionalWriteBackend struct {
+	core.Backend
+	enabled bool
+}
+
+func (bp *conditionalWriteBackend) CondWrite() bool { return bp.enabled }
+
+func TestRLBackendCondWrite(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		wrapped := &conditionalWriteBackend{enabled: enabled}
+		bp := &rlbackend{Backend: wrapped}
+		tassert.Fatalf(t, bp.CondWrite() == enabled, "lost backend conditional-write capability")
+	}
+}
