@@ -17,6 +17,8 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -30,7 +32,7 @@ import (
 
 const nbiCreateTimeout = 30 * time.Second
 
-func TestCreateInventorySimple(t *testing.T) {
+func TestCreateNbiSimple(t *testing.T) {
 	var (
 		m = &ioContext{
 			t:      t,
@@ -64,11 +66,83 @@ func TestCreateInventorySimple(t *testing.T) {
 	tassert.CheckFatal(t, err)
 }
 
+func TestCreateNbiAbort(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2})
+	var (
+		bp     = tools.BaseAPIParams()
+		nat    = tools.GetClusterMap(t, tools.GetPrimaryURL()).CountActiveTs()
+		remote = attachLsoCtxRemote(t, bp, nat)
+	)
+
+	t.Run("inflight", func(t *testing.T) {
+		b := remote.addBck(t, bp, "block-nbi", lsoCtxBlock)
+		xid, err := api.CreateNBI(bp, b.bck, &apc.CreateNBIMsg{})
+		tassert.CheckFatal(t, err)
+		waitLsoCtxCount(t, &b.calls, nat)
+		tassert.CheckFatal(t, api.AbortXaction(bp, &xact.ArgsMsg{ID: xid}))
+		assertLsoCtxStable(t, &b.calls, nat, 200*time.Millisecond)
+		waitLsoCtxCount(t, &b.canceled, nat)
+		waitLsoCtxAborted(t, bp, xid, apc.ActCreateNBI, nat)
+	})
+
+	t.Run("cleanup", func(t *testing.T) {
+		numAborts := 5
+		if !testing.Short() {
+			numAborts = 50
+		}
+		initMountpaths(t, tools.GetPrimaryURL())
+		b := remote.addBck(t, bp, "endless", lsoCtxEndless)
+		for i := range numAborts {
+			xid, err := api.CreateNBI(bp, b.bck, &apc.CreateNBIMsg{
+				LsoMsg:        apc.LsoMsg{PageSize: 512},
+				NamesPerChunk: 1024,
+			})
+			tassert.CheckFatal(t, err)
+
+			err = tools.WaitForCondition(func() bool { return len(nbiFiles(t, b.bck, fs.ChunkCT)) > 0 },
+				tools.WaitRetryOpts{MaxRetries: 200, Interval: 50 * time.Millisecond})
+			tassert.Fatalf(t, err == nil, "%s[%s]: no chunks after 10s: %v", apc.ActCreateNBI, xid, err)
+
+			time.Sleep(time.Duration(rand.IntN(300)) * time.Millisecond)
+			tassert.CheckFatal(t, api.AbortXaction(bp, &xact.ArgsMsg{ID: xid}))
+			waitLsoCtxAborted(t, bp, xid, apc.ActCreateNBI, nat)
+
+			if files := nbiFiles(t, b.bck, fs.ObjCT, fs.ChunkCT, fs.ChunkMetaCT, fs.WorkCT); len(files) > 0 {
+				tassert.Fatalf(t, false, "abort %d of %d (%s[%s]): %d leftover file(s), e.g. %s",
+					i+1, numAborts, apc.ActCreateNBI, xid, len(files), files[0])
+			}
+			infos, err := api.GetNBI(bp, b.bck, "")
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(infos) == 0, "abort %d of %d (%s[%s]): aborted job left inventory %s",
+				i+1, numAborts, apc.ActCreateNBI, xid, cos.MustMarshal(infos))
+		}
+	})
+}
+
+// inventory files of the requested types on registered mountpaths
+func nbiFiles(t *testing.T, bck cmn.Bck, cts ...string) (files []string) {
+	t.Helper()
+	err := fs.WalkBck(&fs.WalkBckOpts{
+		WalkOpts: fs.WalkOpts{
+			Bck:    *meta.SysBckNBI().Bucket(),
+			Prefix: string(bck.MakeUname("")),
+			CTs:    cts,
+			Callback: func(fqn string, _ fs.DirEntry) error {
+				files = append(files, fqn)
+				return nil
+			},
+			Sorted: true,
+		},
+	})
+	tassert.CheckFatal(t, err)
+	return files
+}
+
 //
 // create and list inventory
 //
 
-func TestListInventory(t *testing.T) {
+func TestLsoNbi(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	type test struct {
@@ -244,7 +318,7 @@ func TestListInventory(t *testing.T) {
 }
 
 // prefix filtering over NBI
-func TestListInventoryPrefix(t *testing.T) {
+func TestLsoNbiPrefix(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	var (
@@ -341,7 +415,7 @@ func TestListInventoryPrefix(t *testing.T) {
 	}
 }
 
-// _nbiPrefixPermScenario is one NBI create + list permutation for TestListInventoryPrefixPermute.
+// _nbiPrefixPermScenario is one NBI create + list permutation for TestLsoNbiPrefixPermute.
 type _nbiPrefixPermScenario struct {
 	name          string
 	pageSize      int64 // CreateNBIMsg.PageSize
@@ -481,7 +555,7 @@ func _runNBIPrefixPermCase(t *testing.T, bck cmn.Bck, bp api.BaseParams, parent 
 		"prefix %q: expected 0, got %d", missing, len(gotMissing))
 }
 
-func TestListInventoryPrefixPermute(t *testing.T) {
+func TestLsoNbiPrefixPermute(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	// One shared object tree for all scenarios:
@@ -563,7 +637,7 @@ func TestListInventoryPrefixPermute(t *testing.T) {
 // non-recursive listing over NBI
 //
 
-func TestListInventoryNoRecursion(t *testing.T) {
+func TestLsoNbiNoRecursion(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	var (
@@ -851,7 +925,7 @@ func TestListInventoryNoRecursion(t *testing.T) {
 //   - dir-only prefix levels (no files)
 //   - file-only prefix levels (no dirs)
 //   - non-existent prefix
-func TestListInventoryNoRecursionPagination(t *testing.T) {
+func TestLsoNbiNoRecursionPagination(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
 
 	var (

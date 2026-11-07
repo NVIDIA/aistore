@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +31,9 @@ const (
 
 const (
 	registerTimeout = time.Minute * 2
+
+	// alias prefix for the shared mock remote ais server
+	MockRemoteAISAliasPrefix = "lsoctx-"
 )
 
 type (
@@ -253,7 +257,14 @@ func initRemAis() {
 		}
 		return
 	}
-	cos.AssertMsg(len(all.A) < 2, "multi-remote clustering is not implemented yet")
+	// an interrupted test can leave its mock attached
+	all.A = slices.DeleteFunc(all.A, func(remais *meta.RemAis) bool {
+		return strings.HasPrefix(remais.Alias, MockRemoteAISAliasPrefix) && (remais.Smap == nil || remais.Smap.Primary == nil)
+	})
+	if len(all.A) > 1 {
+		fmt.Fprintln(os.Stderr, "multiple remote AIS clusters are configured for testing")
+		os.Exit(1)
+	}
 	if len(all.A) == 1 {
 		remais := all.A[0]
 		RemoteCluster.UUID = remais.UUID

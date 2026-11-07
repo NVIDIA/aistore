@@ -41,7 +41,7 @@ func TestMain(m *testing.M) {
 	var (
 		primaryURL string
 		err        error
-		exists     bool
+		createBck  bool
 	)
 
 	initTestEnv()
@@ -64,13 +64,17 @@ func TestMain(m *testing.M) {
 	}
 
 	if !cliBck.IsAIS() {
-		exists, err = tools.BucketExists(nil, tools.GetPrimaryURL(), cliBck)
-		if err == nil && !exists {
+		var exists bool
+		exists, err = tools.BucketExists(nil, primaryURL, cliBck)
+		switch {
+		case cliBck.IsRemoteAIS() && cmn.IsErrHTTPNotFound(err):
+			createBck = true
+		case err != nil:
+			goto fail
+		case !exists:
 			s := "%q not found \n(hint: "
 			s += "check whether %q exists and make sure to build aisnode executable with the corresponding build tag)"
 			err = fmt.Errorf(s, cliBck, cliBck)
-		}
-		if err != nil {
 			goto fail
 		}
 	}
@@ -84,7 +88,21 @@ func TestMain(m *testing.M) {
 		goto fail
 	}
 
+	if createBck {
+		err = api.CreateBucket(tools.BaseAPIParams(primaryURL), cliBck, nil)
+		if err != nil {
+			goto fail
+		}
+	}
+
 	m.Run()
+
+	if createBck {
+		err = api.DestroyBucket(tools.BaseAPIParams(tools.GetPrimaryURL()), cliBck)
+		if err != nil && !cmn.IsErrHTTPNotFound(err) {
+			goto fail
+		}
+	}
 	return
 
 fail:
