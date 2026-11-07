@@ -104,7 +104,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	}
 	lmfh, err := lom.Create()
 	if err != nil {
-		cos.Close(res.R)
+		cmn.CloseRemote(res.R, lom, 4, cos.ModAIS)
 		goi._cleanup(revert, nil, nil, nil, err, "(fcreate)")
 		return err
 	}
@@ -123,7 +123,7 @@ func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	goi.setwhdr(whdr, nil /*cksum*/, res.Size)
 
 	written, err = cos.CopyBuffer(mw, res.R, buf)
-	cos.Close(res.R)
+	cmn.CloseRemote(res.R, lom, 4, cos.ModAIS)
 
 	if err != nil {
 		goi._cleanup(revert, lmfh, buf, slab, err, "(rr/wl)")

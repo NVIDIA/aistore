@@ -1179,7 +1179,7 @@ func isErrNotFoundExtended(err error, status int) bool {
 		IsErrObjDefunct(err) || IsErrLmetaNotFound(err)
 }
 
-func IsFileAlreadyClosed(err error) bool {
+func IsReaderClosed(err error) bool {
 	return errors.Is(err, fs.ErrClosed)
 }
 

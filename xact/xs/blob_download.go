@@ -1026,13 +1026,13 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 	if res.Err != nil {
 		core.RR.Throttle(lom.Bprops(), w.parent.config, res.ErrCode, res.Err)
 		if res.R != nil {
-			cos.Close(res.R)
+			cmn.CloseRemote(res.R, w.parent, 4, cos.ModXs)
 		}
 		return res.ErrCode, res.Err
 	}
 	debug.Assert(res.R != nil)
 	if res.Size != size {
-		cos.Close(res.R)
+		cmn.CloseRemote(res.R, w.parent, 4, cos.ModXs)
 		return http.StatusBadGateway, fmt.Errorf("%s: range at %d: expected %d bytes, got %d", lom.Cname(), wi.roff, size, res.Size)
 	}
 
@@ -1048,13 +1048,7 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 		defer manifest.StreamWriteDone()
 	}
 	chwritten, err := w.cw.WriteChunk(int(partNum), res.R, size, buf, extra...)
-	// GCS Close can return a prior read error, so avoid cos.Close.
-	closeErr := res.R.Close()
-	if err != nil || closeErr != nil {
-		if cmn.Rom.V(4, cos.ModXs) {
-			nlog.Warningf("%s: WriteChunk: %v, close: %v", w.parent.Name(), err, closeErr)
-		}
-	}
+	cmn.CloseRemote(res.R, w.parent, 4, cos.ModXs)
 	if err != nil {
 		return 0, err
 	}

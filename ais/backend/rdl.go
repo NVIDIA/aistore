@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core"
@@ -108,7 +109,7 @@ func (d *rdl) fini(res *core.GetReaderResult) {
 	d.timer.Stop()
 	d.cancel(nil) // (the first cause wins - see expired)
 	if res.R != nil {
-		res.R.Close()
+		cmn.CloseRemote(res.R, "remote GET deadline", 4, cos.ModBackend)
 		res.R = nil
 	}
 	if e := d.timeout(); e != nil {

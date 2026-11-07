@@ -8,6 +8,7 @@ package cmn
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/nlog"
 )
 
 const (
@@ -355,4 +357,17 @@ func ociDecodeMetadata(header http.Header) map[string]string {
 // store only non-default values
 func IsDefaultContentType(v string) bool {
 	return v == "" || v == cos.ContentBinary || v == cos.ContentBinaryS3
+}
+
+// close remote (backend) reader; never assert, except double-close
+// - tag: string or fmt.Stringer (e.g., *core.LOM)
+func CloseRemote(r io.ReadCloser, tag any, verbosity, mod int) {
+	err := r.Close()
+	if err == nil {
+		return
+	}
+	debug.Assert(!IsReaderClosed(err), tag, err)
+	if Rom.V(verbosity, mod) {
+		nlog.Warningln(tag, "close remote:", err)
+	}
 }

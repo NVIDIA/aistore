@@ -627,7 +627,7 @@ func (m *AISbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length 
 		*oa = cmn.ObjAttrs{}
 		res.ExpCksum, res.Err = oa.FromHeader(oah.RespHeader())
 		if res.Err != nil {
-			cos.Close(res.R)
+			cmn.CloseRemote(res.R, lom, 4, cos.ModBackend)
 			res.R, res.Size, res.ErrCode = nil, 0, http.StatusBadGateway
 			return res
 		}
@@ -638,7 +638,7 @@ func (m *AISbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length 
 	}
 	if res.Err == nil && p != nil {
 		if res.ErrCode, res.Err = m.checkPin(p, oah.RespHeader()); res.Err != nil {
-			cos.Close(res.R) // do not consume a different revision's body
+			cmn.CloseRemote(res.R, lom, 4, cos.ModBackend) // do not consume a different revision's body
 			res.R, res.Size = nil, 0
 		}
 	}

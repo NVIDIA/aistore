@@ -18,7 +18,7 @@ import (
 
 type (
 	GetReaderResult struct {
-		R        io.ReadCloser
+		R        io.ReadCloser // see cmn.CloseRemote and usage
 		Err      error
 		ExpCksum *cos.Cksum
 		Pin      ObjPin // full GET: response revision matching the returned metadata; zero when unavailable

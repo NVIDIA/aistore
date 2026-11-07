@@ -144,10 +144,10 @@ func (s *Stream) doCmpl(obj *Obj, err error) {
 	// its own reader _before_ its Dec, rc == 0 implies that every destination reader
 	// has been released. (The one exception below is a reader that was already closed.)
 	if obj.Reader != nil {
-		if err != nil && cmn.IsFileAlreadyClosed(err) {
+		if err != nil && cmn.IsReaderClosed(err) {
 			nlog.Errorf("%s %s: %v", s, obj, err)
 		} else {
-			cos.Close(obj.Reader)
+			cmn.CloseRemote(obj.Reader, obj, 4, cos.ModTransport)
 		}
 	}
 

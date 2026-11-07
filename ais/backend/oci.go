@@ -985,7 +985,7 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 		res.ExpCksum = expCksum
 		if res.Err != nil {
 			cancel()
-			resp.Content.Close()
+			cmn.CloseRemote(resp.Content, lom, 4, cos.ModBackend)
 		}
 		return res
 	}

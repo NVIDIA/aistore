@@ -410,12 +410,12 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 		// NOTE: for range reads, use the requested length, not rc.Attrs.Size (which is the full object size)
 		rsize := rc.Remain()
 		if rsize < 0 {
-			rc.Close()
+			cmn.CloseRemote(rc, lom, 4, cos.ModBackend)
 			res.Err = errors.New("gcp: returned length is less than 0")
 			return res
 		}
 		if length < rsize {
-			rc.Close()
+			cmn.CloseRemote(rc, lom, 4, cos.ModBackend)
 			res.Err = errors.New("gcp: returned length is more than the requested range-read length")
 			return res
 		}

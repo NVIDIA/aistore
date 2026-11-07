@@ -214,7 +214,7 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 	)
 	defer func() {
 		if poi.r != nil {
-			cos.Close(poi.r) // poi owns it (see "transfer ownership")
+			cmn.CloseRemote(poi.r, lom, 4, cos.ModAIS) // poi owns it (see "transfer ownership")
 		}
 	}()
 
@@ -278,7 +278,7 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 		partNum++
 	}
 
-	cos.Close(poi.r) // ditto
+	cmn.CloseRemote(poi.r, lom, 4, cos.ModAIS) // ditto
 	poi.r = nil
 	cargs := completeArgs{
 		r:           poi.oreq,
@@ -316,7 +316,7 @@ func (poi *putOI) putObject() (ecode int, err error) {
 				nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")
 			}
 			cos.DrainReader(poi.r)
-			cos.Close(poi.r)
+			cmn.CloseRemote(poi.r, poi.lom, 4, cos.ModAIS)
 			return 0, nil
 		}
 	}
@@ -674,14 +674,13 @@ func (poi *putOI) _cleanup(buf []byte, slab *memsys.Slab, lmfh cos.LomWriter, er
 	if buf != nil {
 		slab.Free(buf)
 	}
-	if err == nil {
-		cos.Close(poi.r)
-		return // ok
+	if err != nil {
+		cos.DrainReader(poi.r)
 	}
-
-	// not ok
-	cos.DrainReader(poi.r)
-	poi.r.Close()
+	cmn.CloseRemote(poi.r, poi.lom, 4, cos.ModAIS)
+	if err == nil {
+		return
+	}
 	if lmfh != nil {
 		if nerr := lmfh.Close(); nerr != nil {
 			nlog.Errorf(fmtNested, poi.t, err, "close", poi.workFQN, nerr)
@@ -2121,7 +2120,7 @@ func (coi *coi) _dryRun(lom *core.LOM, objnameTo string, args *core.ETLArgs) (re
 	}
 	// discard the reader and be done
 	size, err := io.Copy(io.Discard, resp.R)
-	resp.R.Close()
+	cmn.CloseRemote(resp.R, lom, 4, cos.ModAIS)
 	return xs.CoiRes{Lsize: size, Err: err}
 }
 
@@ -2372,7 +2371,7 @@ func (coi *coi) put(t *target, sargs *sendArgs) error {
 	}
 	req, _, cancel, errN := reqArgs.ReqWith(coi.Config.Timeout.SendFile.D())
 	if errN != nil {
-		cos.Close(sargs.reader)
+		cmn.CloseRemote(sargs.reader, sargs.objNameTo, 4, cos.ModAIS)
 		return fmt.Errorf("unexpected failure to create request, err: %w", errN)
 	}
 	// HreqArgs cannot infer BodyR length; propagate it explicitly for correct

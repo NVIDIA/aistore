@@ -164,7 +164,7 @@ func (sb *Streams) Send(obj *transport.Obj, roc cos.ReadOpenCloser, nodes ...*me
 
 	if obj.IsHeaderOnly() {
 		if roc != nil {
-			cos.Close(roc)
+			cmn.CloseRemote(roc, obj, 4, cos.ModTransport)
 			roc = nil
 		}
 	}
@@ -272,7 +272,7 @@ func (sb *Streams) _validate(obj *transport.Obj, bun bundle, nodes []*meta.Snode
 // (the object's callback, when defined, overrides the parent callback from transport.Extra)
 func (sb *Streams) _doCmpl(obj *transport.Obj, roc cos.ReadOpenCloser, err error) {
 	if roc != nil {
-		cos.Close(roc)
+		cmn.CloseRemote(roc, obj, 4, cos.ModTransport)
 	}
 	switch {
 	case obj.SentCB != nil:

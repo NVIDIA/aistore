@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/load"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/memsys"
 )
@@ -95,7 +94,7 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 	manifest, err := core.NewUfest("", goi.lom, false /*must-exist*/)
 	if err != nil {
 		stopFirst()
-		cos.Close(first.R)
+		cmn.CloseRemote(first.R, goi.lom, 4, cos.ModAIS)
 		return true, http.StatusInternalServerError, err
 	}
 	r := &coldRangeGet{
@@ -169,12 +168,7 @@ func (w *coldRangeWorker) run(first *core.GetReaderResult) {
 		err := w.writeChunk(0, &limited, r.chunkSize, buf)
 		// cancel the unused tail before closing the initial full GET
 		r.stopFirst()
-		closeErr := first.R.Close()
-		if err != nil || closeErr != nil {
-			if cmn.Rom.V(4, cos.ModAIS) {
-				nlog.Warningf("%s: writeChunk: %v, close: %v", r.goi.lom.Cname(), err, closeErr)
-			}
-		}
+		cmn.CloseRemote(first.R, r.goi.lom, 4, cos.ModAIS)
 		if err != nil {
 			r.fail(http.StatusInternalServerError, err)
 			return
@@ -190,23 +184,17 @@ func (w *coldRangeWorker) run(first *core.GetReaderResult) {
 		if res.Err != nil {
 			r.fail(res.ErrCode, res.Err)
 			if res.R != nil {
-				cos.Close(res.R)
+				cmn.CloseRemote(res.R, r.goi.lom, 4, cos.ModAIS)
 			}
 			return
 		}
 		if res.Size != size {
 			r.fail(http.StatusBadGateway, fmt.Errorf("%s: range at %d: expected %d bytes, got %d", r.goi.lom.Cname(), off, size, res.Size))
-			cos.Close(res.R)
+			cmn.CloseRemote(res.R, r.goi.lom, 4, cos.ModAIS)
 			return
 		}
 		err := w.writeChunk(off, res.R, size, buf)
-		// Note: GCS Close can return a prior read error, so avoid cos.Close.
-		closeErr := res.R.Close()
-		if err != nil || closeErr != nil {
-			if cmn.Rom.V(4, cos.ModAIS) {
-				nlog.Warningf("%s: writeChunk: %v, close: %v", r.goi.lom.Cname(), err, closeErr)
-			}
-		}
+		cmn.CloseRemote(res.R, r.goi.lom, 4, cos.ModAIS)
 		if err != nil {
 			r.fail(http.StatusInternalServerError, err)
 			return

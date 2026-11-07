@@ -111,7 +111,7 @@ func (bp *rlbackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, ori
 func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) (res core.GetReaderResult) {
 	closeErrReader := func() {
 		if res.Err != nil && res.R != nil {
-			cos.Close(res.R)
+			cmn.CloseRemote(res.R, lom, 4, cos.ModBackend)
 			res.R = nil
 		}
 	}

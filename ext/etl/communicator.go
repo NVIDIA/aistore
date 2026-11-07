@@ -245,7 +245,7 @@ func handleRespEcode(ecode int, oah cos.OAH, r cos.ReadOpenCloser, err error) co
 	case http.StatusNoContent:
 		// already delivered to destination target, no additional action needed
 		if r != nil {
-			cos.Close(r)
+			cmn.CloseRemote(r, "etl (no content)", 4, cos.ModETL)
 		}
 		return core.ReadResp{R: nil, OAH: oah, Err: cmn.ErrSkip, Ecode: http.StatusNoContent}
 	default:

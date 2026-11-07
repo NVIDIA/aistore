@@ -10,6 +10,16 @@ import (
 	"testing"
 )
 
+type closeErrReader struct {
+	io.Reader
+	closes int
+}
+
+func (r *closeErrReader) Close() error {
+	r.closes++
+	return io.ErrUnexpectedEOF
+}
+
 func TestDoCmplRetainsNonFinalError(t *testing.T) {
 	expected := errors.New("destination failed")
 	var (
@@ -24,12 +34,17 @@ func TestDoCmplRetainsNonFinalError(t *testing.T) {
 	}
 	objs[0].SetCmpl(len(objs))
 	*objs[1], *objs[2] = *objs[0], *objs[0]
+	reader := &closeErrReader{}
+	objs[0].Reader = reader
 
 	s := &Stream{}
 	s.doCmpl(objs[0], expected)
 	s.doCmpl(objs[1], errors.New("another destination failed"))
 	s.doCmpl(objs[2], nil)
 
+	if reader.closes != 1 {
+		t.Fatalf("reader closed %d times, expected 1", reader.closes)
+	}
 	if called != 1 {
 		t.Fatalf("completion count %d, expected 1", called)
 	}
