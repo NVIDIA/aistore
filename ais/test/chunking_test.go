@@ -6,6 +6,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"maps"
@@ -146,6 +147,90 @@ func TestColdGetAutoChunks(t *testing.T) {
 	t.Run("above-limit", func(t *testing.T) {
 		coldGetObjectsAndCheckPolicy(t, bp, cliBck, chunkPolicyLimit+1, true)
 	})
+}
+
+func TestColdGetRangesRemoteDelete(t *testing.T) {
+	const (
+		objSize   = 64 * cos.MiB
+		chunkSize = 4 * cos.MiB
+	)
+	tools.CheckSkip(t, &tools.SkipTestArgs{
+		Long: true, Bck: cliBck, RequiredCloudProvider: apc.GCP, RequiredDeployment: tools.ClusterTypeLocal,
+	})
+	proxyURL := tools.RandomProxyURL(t)
+	bp := tools.BaseAPIParams(proxyURL)
+	initMountpaths(t, proxyURL)
+	for _, tc := range []struct {
+		name   string
+		chunks int
+	}{
+		{name: "first-ranges", chunks: 1},
+		{name: "later-ranges", chunks: 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bck := cmn.Bck{Name: "cold-range-delete-" + trand.String(8), Provider: apc.AIS}
+			tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
+				Chunks: &cmn.ChunksConfToSet{ObjSizeLimit: apc.Ptr(cos.SizeIEC(chunkSize)), ChunkSize: apc.Ptr(cos.SizeIEC(chunkSize))},
+				Cksum:  &cmn.CksumConfToSet{ValidateColdGet: apc.Ptr(false)},
+			}, true /*cleanup*/)
+			tools.SetBackendBck(t, bp, bck, cliBck)
+			objects := ioContext{
+				t: t, bck: cliBck, num: 1, fileSize: objSize, fixedSize: true,
+				prefix: t.Name() + "/" + trand.String(8) + "/", skipRemoteEvict: true,
+				chunksConf: &ioCtxChunksConf{},
+			}
+			objects.init(false)
+			objects.remotePuts(false /*evict*/)
+			objName := objects.objNames[0]
+			t.Cleanup(func() { tassert.CheckError(t, api.DeleteObject(bp, cliBck, objName)) })
+			tlog.Logfln("delete during parallel cold GET: %s", cliBck.Cname(objName))
+			get := ioContext{t: t, bck: bck, num: 1}
+			get.init(false)
+			get.objNames = objects.objNames
+			get.otherTasksToTrigger = 1
+			get.controlCh = make(chan struct{}, 1)
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+			finished := false
+			t.Cleanup(func() {
+				cancel()
+				if !finished {
+					<-get.controlCh
+				}
+			})
+			go get.gets(&api.GetArgs{Context: ctx}, false)
+			err := tools.WaitForCondition(func() bool {
+				return len(get.findObjChunksOnDisk(bck, objName)) >= tc.chunks
+			}, tools.WaitRetryOpts{MaxRetries: 1500, Interval: 20 * time.Millisecond})
+			tassert.CheckFatal(t, err)
+			lock, err := api.CheckObjectLock(bp, bck, objName)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, lock == apc.LockWrite, "expected active cold GET, got lock %d", lock)
+			// The backend bucket has a separate lock, so deletion can interrupt pinned ranges.
+			tassert.CheckFatal(t, api.DeleteObject(bp, cliBck, objName))
+			select {
+			case <-get.controlCh:
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			}
+			finished = true
+			tassert.Fatalf(t, get.numGetErrs.Load() == 1, "expected remote deletion to fail the cold GET")
+			lock, err = api.CheckObjectLock(bp, bck, objName)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, lock == apc.LockNone, "expected released lock, got %d", lock)
+			_, err = api.HeadObjectV2(bp, bck, objName, apc.GetPropsName, api.HeadArgs{FltPresence: apc.FltPresent})
+			tassert.Fatalf(t, api.HTTPStatus(err) == http.StatusNotFound, "failed GET cached an object: %v", err)
+			get.validateChunksOnDisk(bck, objName, 0)
+			_, err = api.GetObject(bp, bck, objName, nil)
+			tassert.Fatalf(t, api.HTTPStatus(err) == http.StatusNotFound, "expected deleted remote object, got %v", err)
+
+			replacement := bytes.Repeat([]byte{'r'}, cos.KiB)
+			tools.PutObject(t, cliBck, objName, readers.NewBytes(replacement), uint64(len(replacement)))
+			var out bytes.Buffer
+			_, err = api.GetObjectWithValidation(bp, bck, objName, &api.GetArgs{Writer: &out})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, bytes.Equal(out.Bytes(), replacement), "recovery GET returned stale or incomplete data")
+		})
+	}
 }
 
 func TestRemaisColdGetRanges(t *testing.T) {

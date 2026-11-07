@@ -1048,8 +1048,12 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 		defer manifest.StreamWriteDone()
 	}
 	chwritten, err := w.cw.WriteChunk(int(partNum), res.R, size, buf, extra...)
-	if cerr := res.R.Close(); err == nil {
-		err = cerr
+	// GCS Close can return a prior read error, so avoid cos.Close.
+	closeErr := res.R.Close()
+	if err != nil || closeErr != nil {
+		if cmn.Rom.V(4, cos.ModXs) {
+			nlog.Warningf("%s: WriteChunk: %v, close: %v", w.parent.Name(), err, closeErr)
+		}
 	}
 	if err != nil {
 		return 0, err
