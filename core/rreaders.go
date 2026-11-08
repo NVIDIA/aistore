@@ -17,6 +17,7 @@ import (
 // - cap on extra readers: available mountpaths times a per-media multiplier (see get_tunables)
 // - backoff after remote 429/503; buckets with rate_limit.backend use the configured limiter
 // - TODO: consider per-bucket granularity
+// - TODO: consider in-flight protection under scheduler, CPU, memory, and disk pressure
 
 type rreaders struct {
 	backoffUntil atomic.Int64 // mono time: no extra range readers until then

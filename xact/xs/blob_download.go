@@ -299,7 +299,8 @@ func (p *blobFactory) Start() (err error) {
 	r.setChunkSize()
 
 	// 2. require multiple chunks within the manifest limit
-	if err := r.validateChunkCount(); err != nil {
+	nchunks, err := r.chunkCount()
+	if err != nil {
 		return err
 	}
 
@@ -316,7 +317,7 @@ func (p *blobFactory) Start() (err error) {
 	if err != nil {
 		return fmt.Errorf("%w: %w", errBlobDlAdmission, err)
 	}
-	r.numWorkers = numWorkers
+	r.numWorkers = min(numWorkers, nchunks)
 
 	// 4a. target-wide range readers (shared w/ parallel cold GET); may reduce num workers
 	if err = r.reserveReaders(); err != nil {
@@ -442,16 +443,16 @@ func (r *XactBlobDl) estMemCost() (sglCost, bufCost int64) {
 	return
 }
 
-func (r *XactBlobDl) validateChunkCount() error {
+func (r *XactBlobDl) chunkCount() (int, error) {
 	n := cos.DivCeil(r.fullSize, r.chunkSize)
 	if n < 2 {
-		return fmt.Errorf("%w: %s: size %s with chunk size %s", errBlobDlOneChunk, r.Name(),
+		return 0, fmt.Errorf("%w: %s: size %s with chunk size %s", errBlobDlOneChunk, r.Name(),
 			cos.IEC(r.fullSize, 0), cos.IEC(r.chunkSize, 0))
 	}
 	if n <= core.MaxChunkCount {
-		return nil
+		return int(n), nil
 	}
-	return fmt.Errorf("%w: %s: size %s with chunk size %s requires %d chunks, exceeds maximum %d",
+	return 0, fmt.Errorf("%w: %s: size %s with chunk size %s requires %d chunks, exceeds maximum %d",
 		errBlobDlChunkLimit, r.Name(), cos.IEC(r.fullSize, 0), cos.IEC(r.chunkSize, 0), n, core.MaxChunkCount)
 }
 

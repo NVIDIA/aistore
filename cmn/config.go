@@ -309,6 +309,12 @@ type (
 		// duration of the upload.
 		CheckpointEvery int `json:"checkpoint_every,omitempty"`
 
+		// Maximum number of concurrent range readers per cold GET, including the one
+		// reading the first chunk (parallel cold GET).
+		// 0 (zero) means default (ColdReadersDflt); 1 disables parallel range reads;
+		// in all cases, bounded by the target-wide range-reader budget.
+		ColdReaders int `json:"cold_readers,omitempty"`
+
 		// Reserved bitwise field for future advanced behaviors (compression, GC, placement, etc.)
 		Flags uint64 `json:"flags,omitempty"`
 	}
@@ -334,6 +340,11 @@ type (
 		// chunks. `0` keeps the partial manifest strictly in memory
 		// for the duration of the upload.
 		CheckpointEvery *int `json:"checkpoint_every,omitempty"` // +gen:optional
+		// Maximum number of concurrent range readers per cold GET,
+		// including the one reading the first chunk. `0` selects the
+		// system default (4); `1` disables parallel range reads.
+		// Bounded by the target-wide range-reader budget.
+		ColdReaders *int `json:"cold_readers,omitempty"` // +gen:optional
 		// Reserved bitwise field for future advanced behaviors
 		// (compression, GC, placement, etc.).
 		Flags *uint64 `json:"flags,omitempty"` // +gen:optional
@@ -2113,6 +2124,10 @@ const (
 	ChunkSizeMax  = 5 * cos.GiB
 
 	checkpointEveryMax = 1024
+
+	// parallel cold GET: readers per GET (see ChunksConf.ColdReaders)
+	ColdReadersDflt = 4
+	ColdReadersMax  = 32
 )
 
 const (
@@ -2121,6 +2136,14 @@ const (
 )
 
 func (c *ChunksConf) AutoEnabled() bool { return c.ObjSizeLimit > 0 }
+
+// return the configured number of cold readers, or the default
+func (c *ChunksConf) NumColdReaders() int {
+	if c.ColdReaders > 0 {
+		return c.ColdReaders
+	}
+	return ColdReadersDflt
+}
 
 // EqualLayout compares properties that determine an object's chunking layout.
 func (c *ChunksConf) EqualLayout(other *ChunksConf) bool {
@@ -2167,6 +2190,10 @@ func (c *ChunksConf) Validate() error {
 			cos.IEC(ChunkSizeMin, 0), cos.IEC(ChunkSizeMax, 0), c.ChunkSize, c.ChunkSize)
 	}
 
+	if c.ColdReaders < 0 || c.ColdReaders > ColdReadersMax {
+		return fmt.Errorf("chunks.cold_readers must be an integer in the range [0, %d] (got %d)", ColdReadersMax, c.ColdReaders)
+	}
+
 	if !c.AutoEnabled() { // including v4.0 and prior
 		return nil
 	}
@@ -2196,6 +2223,9 @@ func (c *ChunksConf) String() string {
 	}
 
 	s := fmt.Sprintf("chunk-size: %s; %s; objsize-limit: %s", c.ChunkSize.String(), checkpoint, c.ObjSizeLimit.String())
+	if c.ColdReaders != 0 {
+		s += fmt.Sprintf("; cold-readers: %d", c.ColdReaders)
+	}
 	if c.Flags != 0 {
 		s += fmt.Sprintf("; flags: 0x%x", c.Flags)
 	}

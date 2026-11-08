@@ -31,7 +31,7 @@ AIS offers several ways to fetch large objects in parallel or ahead of time. Whi
 | [Prefetch](#prefetch-before-the-workload-runs) with `--blob-threshold` | CLI, Go, Python | yes, for objects at or above the threshold | bucket: chunking config wins | datasets known in advance |
 | [Blob-download job](#blob-download-job) | CLI, Go, Python | yes | job: explicit tunables apply | specific large objects |
 | [GET with blob download](#get-with-blob-download) | Go, Python, any HTTP client, boto3 via an event hook | yes | request: client tunables apply | on-demand reads of large cold objects |
-| [Cold GET into a chunked bucket](#cold-get-into-a-chunked-bucket) | any, including unmodified S3 clients | yes, up to the per-GET reader limit (see [limits](#limits-and-defaults)) | bucket: chunking config | on-demand reads of large cold objects, no client changes |
+| [Cold GET into a chunked bucket](#cold-get-into-a-chunked-bucket) | any, including unmodified S3 clients | yes, up to [`chunks.cold_readers`](#number-of-readers) per GET (4 by default) | bucket: chunking config | on-demand reads of large cold objects, no client changes |
 | [Streaming cold GET](#streaming-cold-get) | any, including unmodified S3 clients | does not add parallelism | bucket or cluster feature flag | faster first byte, no client changes |
 | [OCI native backend](#oci-buckets) | any, `oc://` buckets only | yes | node environment | data stored in OCI |
 
@@ -194,12 +194,12 @@ With auto-chunking enabled, a regular cold GET of a large object reads it from t
 $ ais bucket props set s3://training-data chunks.objsize_limit=256MiB chunks.chunk_size=128MiB
 ```
 
-Changing `chunks` properties also starts rechunk of the objects already in the cluster; see [Storage layout](/docs/storage_svcs.md#rechunk).
+Changing the chunk layout also starts rechunk of the objects already in the cluster. See [Storage layout](/docs/storage_svcs.md#rechunk).
 
 For an eligible object, the target:
 
 1. issues the usual full-object GET to the backend, and uses it for the first chunk only;
-2. reads the remaining chunks as concurrent range requests, up to the per-GET maximum number of readers (see [limits](#limits-and-defaults));
+2. reads the remaining chunks as concurrent range requests, up to `chunks.cold_readers` readers per GET (see [below](#number-of-readers));
 3. pins every range read to the remote object version (ETag, generation, or version) returned by the initial GET;
 4. writes the chunks into the cluster, finalizes the object, and serves it through the regular GET path, including range reads and archive extraction.
 
@@ -227,8 +227,24 @@ An object qualifies when all of the following hold:
 Notes:
 
 * parallel range reads aim to improve backend download throughput while preserving regular GET semantics: the object is cached and finalized before serving the client. A faster download can shorten the first reader's wait, but that reader still waits for the entire object;
-* parallelism is bounded by the number of chunks: with the default `chunks.chunk_size` of 1 GiB, a 2 GiB object uses two readers. To use all readers, choose a chunk size of at most the typical object size divided by the per-GET maximum;
+
+* parallelism is bounded by the number of chunks. With the default `chunks.chunk_size` of 1 GiB, a 2 GiB object can use at most two readers. To make use of all readers, divide the typical object size by the effective reader limit and use that chunk size or smaller. Note that `chunks.cold_readers=0` defaults to a limit of four, and `1` disables parallel cold GETs altogether.
+
 * the whole-object checksum is the one supplied by the remote, if any, as with a sequential cold GET; otherwise, chunks arrive out of order, so it is CRC32C, combined from per-chunk checksums, regardless of the bucket's checksum type. With `checksum.type` set to `none`, no checksum is stored.
+
+### Number of readers
+
+`chunks.cold_readers` sets the maximum number of concurrent range readers per cold GET, including the one reading the first chunk:
+
+* `0` or unset uses the default of four readers.
+* `1` bypasses AIS's parallel cold GET path.
+* Values from `2` to `32` set the per-GET limit.
+
+The value is an upper bound: the number of chunks and the target-wide budget of range readers (see [limits](#limits-and-defaults)) can reduce it, and high load disables parallel reads altogether. As with other `chunks` properties, a bucket inherits the cluster-wide value at creation. Unlike the chunking layout (`chunks.objsize_limit`, `chunks.chunk_size`, and `chunks.max_monolithic_size`), changing `chunks.cold_readers` does not start rechunk.
+
+```console
+$ ais bucket props set s3://training-data chunks.cold_readers=8
+```
 
 ## Streaming cold GET
 
@@ -303,7 +319,6 @@ Fixed values (current heuristics, not configuration), defined in [core/get_tunab
 
 | Value | Applies to | Meaning | Constant |
 |---|---|---|---|
-| 4 | parallel cold GET | maximum readers per GET, including the one reading the first chunk | `ColdRangeMaxWorkers` |
 | 16 MiB | parallel cold GET | minimum object size | `ColdRangeMinSize` |
 | 2 per mountpath for rotational disks or slow filesystems; 16 otherwise | parallel cold GET, blob download | target-wide budget of extra range readers; downloads without a client stream use up to half | `RRMultHDD`, `RRMultNVMe` |
 | 1 per mountpath for rotational disks or slow filesystems; 4 for SSD; 8 for NVMe | multi-object jobs, blob download | default number of workers before load and size limits; blob download uses at least two | `NwpMultHDD`, `NwpMultSSD`, `NwpMultNVMe` |

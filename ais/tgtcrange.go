@@ -49,7 +49,8 @@ type (
 // - non-nil stop: the caller must call it
 func (goi *getOI) coldReader(bp core.Backend, parallel bool) (res core.GetReaderResult, stop context.CancelFunc) {
 	ctx := goi.ctx
-	if parallel && goi.lom.Bprops().Chunks.AutoEnabled() && !goi.lom.ValidateColdGet() &&
+	chunks := &goi.lom.Bprops().Chunks
+	if parallel && chunks.AutoEnabled() && chunks.NumColdReaders() > 1 && !goi.lom.ValidateColdGet() &&
 		!goi.lom.ECEnabled() && bp.Provider() != apc.OCI && !core.RR.BackingOff(goi.lom.Bprops()) {
 		ctx, stop = context.WithCancel(ctx)
 	}
@@ -85,7 +86,8 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 		return false, 0, nil
 	}
 	// the caller reads chunk zero; others are extra, subject to the per-target cap (see core.RR)
-	nextra := core.RR.Reserve(int(min(nchunks, core.ColdRangeMaxWorkers))-1, core.RR.Limit())
+	nreaders := goi.lom.Bprops().Chunks.NumColdReaders()
+	nextra := core.RR.Reserve(int(min(nchunks, int64(nreaders)))-1, core.RR.Limit())
 	if nextra == 0 {
 		return false, 0, nil
 	}

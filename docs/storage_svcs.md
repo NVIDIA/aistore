@@ -367,7 +367,7 @@ A layout rule is independent of how the object arrives. It applies equally to PU
 
 A user GET (native or S3) of a cold object in an auto-chunked bucket can fetch remote ranges in parallel when the object is at or above `chunks.objsize_limit` and the minimum size for parallel cold GET, and spans at least two chunks. Parallel reads also require an available remote version pin and sufficient target resources.
 
-Readers fetch chunks concurrently, up to the [per-GET reader limit](/docs/howto_large_cold_objects.md#limits-and-defaults), all pinned to the same remote version. When the remote supplies a whole-object checksum, parallel cold GET stores it as is, the same as a sequential cold GET. Otherwise, it combines per-chunk CRC32C checksums in object order, even when chunks arrive out of order, without rereading the data. Buckets with checksumming disabled remain without a payload checksum.
+Readers fetch chunks concurrently, up to [`chunks.cold_readers`](/docs/howto_large_cold_objects.md#number-of-readers) per GET (4 by default), all pinned to the same remote version. When the remote supplies a whole-object checksum, parallel cold GET stores it as is, the same as a sequential cold GET. Otherwise, it combines per-chunk CRC32C checksums in object order, even when chunks arrive out of order, without rereading the data. Buckets with checksumming disabled remain without a payload checksum.
 
 Jobs keep their own logic: prefetch chooses between the blob downloader and a sequential cold GET (see [Prefetch mechanism](#prefetch-mechanism)), and copy, transform, and other jobs read sequentially.
 
@@ -381,7 +381,7 @@ For large objects, use a `chunks.chunk_size` of 128–256 MiB. The object must s
 
 ### Rechunk
 
-Changing a bucket's `chunks` properties automatically starts rechunk to converge existing objects to the rules above:
+Changing a bucket's chunk layout automatically starts rechunk to converge existing objects to the rules above.
 
 ```console
 $ ais bucket props set ais://abc chunks.chunk_size=16MiB chunks.objsize_limit=50MiB

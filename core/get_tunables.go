@@ -14,9 +14,9 @@ import "github.com/NVIDIA/aistore/cmn/cos"
 // - API bounds on the requested number of blob-download workers: apc.MinBlobWorkers, apc.MaxBlobWorkers
 
 // parallel cold GET (ais/tgtcrange.go)
+// - readers per GET: bucket-configurable chunks.cold_readers (see cmn.ColdReadersDflt)
 const (
-	ColdRangeMaxWorkers = 4            // readers per GET, incl. the one reading the first chunk
-	ColdRangeMinSize    = 16 * cos.MiB // minimum object size: amortize setup and additional backend requests
+	ColdRangeMinSize = 16 * cos.MiB // minimum object size: amortize setup and additional backend requests
 )
 
 // media-type multipliers, per available mountpath

@@ -123,7 +123,7 @@ Re-chunking converges a bucket's existing objects to the bucket's `chunks` confi
 - Otherwise, a positive `chunks.objsize_limit` selects chunked storage for objects at or above that threshold; smaller objects are stored as monolithic (single file)
 - Setting `chunks.objsize_limit` to 0 disables automatic chunking: objects at or below `chunks.max_monolithic_size` are restored as monolithic; larger objects remain chunked
 
-The bucket's configuration is authoritative - as with mirroring and erasure coding, it is the single record of the bucket's intended storage layout. Changing the bucket's `chunks` properties starts rechunk automatically; run the job explicitly to convert incrementally (`--prefix`), to update the remote backend (`--sync-remote`), or to retry objects that failed.
+The bucket's configuration is authoritative - as with mirroring and erasure coding, it is the single record of the bucket's intended storage layout. Changing the bucket's chunk layout starts rechunk automatically. Run the job explicitly to convert incrementally (`--prefix`), update the remote backend (`--sync-remote`), or retry objects that failed.
 
 **Usage:**
 

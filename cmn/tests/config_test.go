@@ -167,6 +167,33 @@ func TestChunksConfValidate(t *testing.T) {
 	}
 }
 
+func TestChunksConfColdReaders(t *testing.T) {
+	for _, tc := range []struct {
+		in, want int
+		fail     bool
+	}{
+		{in: 0, want: cmn.ColdReadersDflt}, // default, not normalized
+		{in: 1, want: 1},                   // no parallel range reads
+		{in: 8, want: 8},
+		{in: cmn.ColdReadersMax, want: cmn.ColdReadersMax},
+		{in: -1, fail: true},
+		{in: cmn.ColdReadersMax + 1, fail: true},
+	} {
+		// validated regardless of auto-chunking
+		for _, osl := range []cos.SizeIEC{0, 64 * cos.MiB} {
+			c := cmn.ChunksConf{ObjSizeLimit: osl, ColdReaders: tc.in}
+			err := c.Validate()
+			if tc.fail {
+				tassert.Fatalf(t, err != nil, "cold_readers=%d (objsize_limit=%d): expected error", tc.in, osl)
+				continue
+			}
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, c.ColdReaders == tc.in, "cold_readers=%d: changed to %d", tc.in, c.ColdReaders)
+			tassert.Fatalf(t, c.NumColdReaders() == tc.want, "cold_readers=%d: want %d readers, got %d", tc.in, tc.want, c.NumColdReaders())
+		}
+	}
+}
+
 func TestChunksConfChunkSizeFor(t *testing.T) {
 	const (
 		chunkSize = 32 * cos.KiB
