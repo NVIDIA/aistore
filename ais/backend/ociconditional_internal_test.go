@@ -109,6 +109,12 @@ func TestOCIConditionalWire(t *testing.T) {
 	if code, err := put("lost", "If-Match", original); code != 412 || err == nil {
 		t.Fatalf("reused ETag: %d %v", code, err)
 	}
+	if code, err := put("bare", "If-Match", transport.etag); code != 0 || err != nil {
+		t.Fatalf("bare ETag: %d %v", code, err)
+	}
+	if transport.value != "bare" {
+		t.Fatal("bare-ETag replacement was not persisted")
+	}
 }
 
 func TestOCIConditionalConcurrentCreate(t *testing.T) {
@@ -167,6 +173,7 @@ func TestOCIConditionalInvalidHeader(t *testing.T) {
 	for _, tc := range []struct{ key, value string }{
 		{"If-None-Match", `"etag"`}, {"If-Match", `W/"weak"`},
 		{"If-Match", `"one", "two"`}, {"If-Match", ""}, {"If-Match", `""`},
+		{"If-Match", "*"}, {"If-Match", "one,two"},
 	} {
 		bp, transport := conditionalOCIBackend(t)
 		code, err := bp.PutObj(context.Background(), io.NopCloser(strings.NewReader("must-not-write")), conditionalLOM(), conditionalRequest(tc.key, tc.value))

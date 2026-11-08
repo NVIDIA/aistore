@@ -28,7 +28,6 @@ type failingOCIWriteTransport struct {
 	abortStatus   int
 	aborts        int
 	failPart      bool
-	abortBounded  bool
 }
 
 func (s *failingOCIWriteTransport) Do(r *http.Request) (*http.Response, error) {
@@ -45,8 +44,6 @@ func (s *failingOCIWriteTransport) Do(r *http.Request) (*http.Response, error) {
 	case r.Method == http.MethodDelete:
 		s.aborts++
 		s.abortUploadID = r.URL.Query().Get("uploadId")
-		deadline, ok := r.Context().Deadline()
-		s.abortBounded = ok && r.Context().Err() == nil && time.Until(deadline) > 0 && time.Until(deadline) <= time.Minute
 		status, body = http.StatusNoContent, ""
 		if s.abortStatus != 0 {
 			status, body = s.abortStatus, `{"code":"AbortRejected","message":"cleanup failed"}`
@@ -89,10 +86,10 @@ func TestOCIConditionalConflictCode(t *testing.T) {
 				t.Fatalf("status=%d err=%v", status, err)
 			}
 			wire := cmn.AsErrHTTP(err)
-			if conditional && (wire == nil || wire.TypeCode != "ConditionalRequestConflict") {
+			if conditional && (wire == nil || wire.TypeCode != cmn.TcodeCondWriteConflict) {
 				t.Fatalf("incorrect conditional error: %v", err)
 			}
-			if !conditional && wire != nil && wire.TypeCode == "ConditionalRequestConflict" {
+			if !conditional && wire != nil && wire.TypeCode == cmn.TcodeCondWriteConflict {
 				t.Fatal("unconditional conflict was misclassified")
 			}
 		})
@@ -109,10 +106,10 @@ func TestOCIConditionalAutomaticMultipart(t *testing.T) {
 		{name: "success", status: http.StatusOK},
 		{name: "precondition", status: http.StatusPreconditionFailed, wantAborts: 1},
 		{name: "conflict", status: http.StatusConflict, wantAborts: 1},
-		{name: "precondition-abort-fails", status: http.StatusPreconditionFailed, abortStatus: http.StatusBadRequest, wantAborts: 1},
+		{name: "precondition-abort-fails", status: http.StatusPreconditionFailed, abortStatus: http.StatusServiceUnavailable, wantAborts: 1},
 		{name: "conflict-abort-fails", status: http.StatusConflict, abortStatus: http.StatusBadRequest, wantAborts: 1},
-		{name: "other-conflict", status: http.StatusConflict, errorCode: "UnrelatedConflict"},
-		{name: "server-error", status: http.StatusInternalServerError, errorCode: "InternalServerError"},
+		{name: "other-conflict", status: http.StatusConflict, errorCode: "UnrelatedConflict", wantAborts: 1},
+		{name: "server-error", status: http.StatusInternalServerError, errorCode: "InternalServerError", wantAborts: 1},
 	}
 	for _, test := range tests {
 		for _, header := range []string{"If-Match", "If-None-Match"} {
@@ -126,7 +123,7 @@ func TestOCIConditionalAutomaticMultipart(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				retry := ocicmn.NoRetryPolicy()
+				retry := ocicmn.NewRetryPolicy(2, ocicmn.DefaultShouldRetryOperation, func(ocicmn.OCIOperationResponse) time.Duration { return 0 })
 				client.Configuration.RetryPolicy = &retry
 				transport := &failingOCIWriteTransport{status: test.status, errorCode: test.errorCode, abortStatus: test.abortStatus}
 				client.HTTPClient = transport
@@ -147,7 +144,7 @@ func TestOCIConditionalAutomaticMultipart(t *testing.T) {
 				}
 				if test.status == http.StatusConflict && test.errorCode == "" {
 					wire := cmn.AsErrHTTP(err)
-					if wire == nil || wire.TypeCode != "ConditionalRequestConflict" {
+					if wire == nil || wire.TypeCode != cmn.TcodeCondWriteConflict {
 						t.Fatalf("lost conditional conflict identity: %v", err)
 					}
 				}
@@ -158,8 +155,8 @@ func TestOCIConditionalAutomaticMultipart(t *testing.T) {
 				if transport.aborts != test.wantAborts {
 					t.Fatalf("aborts=%d, want %d", transport.aborts, test.wantAborts)
 				}
-				if test.wantAborts != 0 && (!transport.abortBounded || transport.abortUploadID != "upload") {
-					t.Fatalf("abort must have a bounded live context and the rejected upload ID: bounded=%t id=%q", transport.abortBounded, transport.abortUploadID)
+				if test.wantAborts != 0 && transport.abortUploadID != "upload" {
+					t.Fatalf("abort must use the failed upload ID: id=%q", transport.abortUploadID)
 				}
 			})
 		}

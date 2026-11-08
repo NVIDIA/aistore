@@ -491,6 +491,13 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 		return "", http.StatusNotFound, cos.NewErrNotFound(lom, uploadID)
 	}
 
+	// 0. write conditions (evaluated by the backend upon completion)
+	if !args.skipBackend {
+		if _, err := t.condWrite(lom.Bck(), args.r); err != nil {
+			return "", http.StatusBadRequest, err
+		}
+	}
+
 	// 1. validate/enforce parts, compute etag
 	manifest.Lock()
 	etag, err := validatePartsEtag(lom, manifest, args.parts, args.isS3)

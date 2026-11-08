@@ -71,6 +71,7 @@ type (
 		skipBackend bool          // don't write to backend (e.g., cold-GET caching, rechunk)
 		locked      bool          // true if the LOM is already locked by the caller
 		remoteErr   bool          // to exclude `putRemote` errors when counting soft IO errors
+		condWrite   bool          // forwarding client write conditions to the backend (see core.Backend.CondWrite)
 	}
 
 	getOI struct {
@@ -149,6 +150,18 @@ type (
 // PUT(object)
 //
 
+// validate client write conditions to be forwarded to the remote backend;
+// return true if forwarding
+func (t *target) condWrite(bck *meta.Bck, r *http.Request) (bool, error) {
+	if r == nil || !cos.IsCondWrite(r.Header) || !bck.IsRemote() || !t.Backend(bck).CondWrite() {
+		return false, nil
+	}
+	if _, err := cos.ParseCondWrite(r.Header); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // poi.restful entry point
 func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (_ int, err error) {
 	poi.oreq = r
@@ -156,6 +169,11 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (_ int, err
 	poi.resphdr = resphdr
 	poi.workFQN = poi.lom.GenFQN(fs.WorkCT, fs.WorkfilePut)
 	poi.owt = cmn.OwtPut // default
+
+	// validate before receiving the body
+	if poi.condWrite, err = poi.t.condWrite(poi.lom.Bck(), r); err != nil {
+		return http.StatusBadRequest, err
+	}
 
 	oah := poi.lom.ObjAttrs()
 	if poi.cksumToUse, err = oah.FromHeader(r.Header); err != nil {
@@ -310,12 +328,9 @@ func (poi *putOI) putObject() (ecode int, err error) {
 	poi.ltime = mono.NanoTime()
 
 	// if checksums match PUT is a no-op
-	if !poi.skipVC && !poi.skipBackend {
-		noop := poi.lom.EqCksum(poi.cksumToUse)
-		if noop && poi.oreq != nil && cos.IsCondWrite(poi.oreq.Header) {
-			noop = !poi.t.Backend(poi.lom.Bck()).CondWrite()
-		}
-		if noop {
+	// (unless the backend must evaluate write conditions)
+	if !poi.skipVC && !poi.skipBackend && !poi.condWrite {
+		if poi.lom.EqCksum(poi.cksumToUse) {
 			if cmn.Rom.V(4, cos.ModAIS) {
 				nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")
 			}

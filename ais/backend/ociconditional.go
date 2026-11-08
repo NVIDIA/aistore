@@ -8,11 +8,10 @@ package backend
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 
 	ocicmn "github.com/oracle/oci-go-sdk/v65/common"
 )
@@ -20,41 +19,22 @@ import (
 // forward write conditions to OCI for evaluation by the remote store.
 func (*ocibp) CondWrite() bool { return true }
 
-// validate create-only and single strong-ETag conditions for OCI to evaluate
-// atomically at PutObject or multipart commit; reject unsupported predicates.
+// translate write conditions (see cos.ParseCondWrite) to OCI request fields;
+// OCI expects bare If-Match ETag
 func ociWriteConditions(r *http.Request) (match, none *string, err error) {
 	if r == nil {
 		return nil, nil, nil
 	}
-	values := [2]string{}
-	for i, key := range []string{"If-Match", "If-None-Match"} {
-		headers := r.Header.Values(key)
-		if len(headers) == 0 {
-			continue
-		}
-		if len(headers) != 1 || strings.TrimSpace(headers[0]) == "" {
-			return nil, nil, fmt.Errorf("invalid %s condition", key)
-		}
-		values[i] = strings.TrimSpace(headers[0])
+	cw, err := cos.ParseCondWrite(r.Header)
+	if err != nil {
+		return nil, nil, err
 	}
-	if values[0] != "" && values[1] != "" {
-		return nil, nil, errors.New("combined If-Match and If-None-Match are unsupported")
+	if cw.IfMatch != "" {
+		match = &cw.IfMatch
 	}
-	if value := values[0]; value != "" {
-		if len(value) <= 2 || value[0] != '"' || value[len(value)-1] != '"' ||
-			strings.ContainsAny(value[1:len(value)-1], "\"\r\n") {
-			return nil, nil, errors.New("If-Match requires one quoted strong ETag")
-		}
-		// S3 wraps ETags in double quotes; native OCI compares the bare token.
-		// Strip only the validated outer quotes, never alter the opaque token.
-		value = value[1 : len(value)-1]
-		match = &value
-	}
-	if value := values[1]; value != "" {
-		if value != "*" {
-			return nil, nil, errors.New("If-None-Match only supports *")
-		}
-		none = &value
+	if cw.IfNoneMatch {
+		v := "*"
+		none = &v
 	}
 	return match, none, nil
 }
@@ -66,7 +46,7 @@ func ociWriteError(op, bucket, object string, err error, response any, match, no
 	if status == http.StatusConflict && (match != nil || none != nil) &&
 		errors.As(err, &serviceErr) && serviceErr.GetCode() == "ConcurrentObjectUpdate" {
 		wire := cmn.NewErrHTTP(nil, mapped, status)
-		wire.TypeCode = "ConditionalRequestConflict"
+		wire.TypeCode = cmn.TcodeCondWriteConflict
 		return status, wire
 	}
 	return status, mapped

@@ -23,7 +23,7 @@ func TestMultipartWrappedHTTPError(t *testing.T) {
 		name, code, want string
 		status           int
 	}{
-		{"conflict", "ConditionalRequestConflict", "ConditionalRequestConflict", http.StatusConflict},
+		{"conflict", cmn.TcodeCondWriteConflict, cmn.TcodeCondWriteConflict, http.StatusConflict},
 		{"precondition", "ErrFailedTo", "PreconditionFailed", http.StatusPreconditionFailed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -62,7 +62,7 @@ func TestWrappedHTTPErrorStatus(t *testing.T) {
 		{"both-zero", 0, 0, http.StatusBadRequest},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			original := &cmn.ErrHTTP{Status: tc.wrapped, TypeCode: "ConditionalRequestConflict", Message: "native OCI rejected write"}
+			original := &cmn.ErrHTTP{Status: tc.wrapped, TypeCode: cmn.TcodeCondWriteConflict, Message: "native OCI rejected write"}
 			err := fmt.Errorf("multipart completion: %w", original)
 			w := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, "/s3/bucket/manifest", http.NoBody)

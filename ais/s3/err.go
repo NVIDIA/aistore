@@ -33,6 +33,8 @@ const (
 	ErrCodeInvalidArgument = "InvalidArgument" // 400 (malformed query)
 	ErrCodeInvalidRequest  = "InvalidRequest"  // catch-all
 	ErrCodeNotImplemented  = "NotImplemented"  // 501
+
+	ErrCodePreconditionFailed = "PreconditionFailed" // 412
 )
 
 // See https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html
@@ -142,7 +144,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, errInfo ErrInfo) {
 	case isErrNoSuchUpload(err):
 		out.Code = NoSuchUpload
 	case in.Status == http.StatusPreconditionFailed:
-		out.Code = "PreconditionFailed"
+		out.Code = ErrCodePreconditionFailed
 	case in.TypeCode != "":
 		out.Code = in.TypeCode
 	default:

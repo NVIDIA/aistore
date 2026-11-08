@@ -36,6 +36,10 @@ const (
 	// from: https://docs.oracle.com/en-us/iaas/Content/Object/Tasks/managingobjects.htm
 	// User metadata uses the "opc-meta-" prefix (canonicalized to "Opc-Meta-").
 	OCIHeaderMetaPrefix = "Opc-Meta-"
+
+	// type code: conditional write lost to a concurrent update (409)
+	// (same as S3 error code, see https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html)
+	TcodeCondWriteConflict = "ConditionalRequestConflict"
 )
 
 type backendFuncs struct {
