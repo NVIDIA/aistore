@@ -659,6 +659,11 @@ func putUpload(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.R
 	if err != nil {
 		return nil, 0, err
 	}
+	match, none, ecode, err := awsWriteConditions(svc, oreq)
+	if err != nil {
+		cos.Close(r)
+		return nil, ecode, err
+	}
 
 	md[cos.S3MetadataChecksumType] = cksumType
 	md[cos.S3MetadataChecksumVal] = cksumValue
@@ -683,13 +688,15 @@ func putUpload(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.R
 		Body:     r,
 		Metadata: md,
 	}
+	// the uploader copies conditions to CompleteMultipartUpload
+	input.IfMatch, input.IfNoneMatch = match, none
 	if v, ok := lom.GetCustomKey(cos.HdrContentType); ok {
 		input.ContentType = aws.String(v)
 	}
 	out, err := uploader.Upload(ctx, input)
 	cos.Close(r)
 	if err != nil {
-		ecode, e := awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
+		ecode, e := awsWriteError(err, cloudBck, lom.ObjName, input.IfMatch != nil || input.IfNoneMatch != nil, sessConf.detail())
 		return nil, ecode, e
 	}
 	return out, 0, nil
@@ -776,15 +783,12 @@ func newPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser) (*ai
 // "S3 methods are safe to use concurrently. It is not safe to modify mutate
 // any of the struct's properties though."
 func (sc *sessConf) s3client(tag string) (*s3.Client, error) {
-	sc.endpoint = s3Endpoint
+	sc.endpoint = awsEndpoint(sc.bck)
 	sc.profile = awsProfile
 
 	if sc.bck != nil && sc.bck.Props != nil {
 		if sc.region == "" {
 			sc.region = sc.bck.Props.Extra.AWS.CloudRegion
-		}
-		if sc.bck.Props.Extra.AWS.Endpoint != "" {
-			sc.endpoint = sc.bck.Props.Extra.AWS.Endpoint
 		}
 		if sc.bck.Props.Extra.AWS.Profile != "" {
 			sc.profile = sc.bck.Props.Extra.AWS.Profile

@@ -109,6 +109,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, errInfo ErrInfo) {
 		out       Error         // out error
 		in        *cmn.ErrHTTP
 		errName   *cmn.ErrBckNameConflict
+		errUnsupp *cmn.ErrUnsupp
 		ok        bool
 		allocated bool
 	)
@@ -143,6 +144,8 @@ func WriteErr(w http.ResponseWriter, r *http.Request, errInfo ErrInfo) {
 		}
 	case isErrNoSuchUpload(err):
 		out.Code = NoSuchUpload
+	case in.Status == http.StatusNotImplemented && errors.As(err, &errUnsupp):
+		out.Code = ErrCodeNotImplemented
 	case in.Status == http.StatusPreconditionFailed:
 		out.Code = ErrCodePreconditionFailed
 	case in.TypeCode != "":

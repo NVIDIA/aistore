@@ -229,10 +229,10 @@ func TestOCIConditionalConcurrentReplace(t *testing.T) {
 }
 
 func TestOCICondWrite(t *testing.T) {
-	if (&base{}).CondWrite() {
+	if (&base{}).CondWrite(nil) {
 		t.Fatal("base backend unexpectedly opted into conditional writes")
 	}
-	if !(&ocibp{}).CondWrite() {
+	if !(&ocibp{}).CondWrite(nil) {
 		t.Fatal("OCI backend must support conditional writes")
 	}
 }

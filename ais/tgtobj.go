@@ -152,18 +152,24 @@ type (
 
 // validate client write conditions to be forwarded to the remote backend;
 // return true if forwarding
-func (t *target) condWrite(bck *meta.Bck, r *http.Request) (bool, error) {
-	if r == nil || !cos.IsCondWrite(r.Header) || !bck.IsRemote() || !t.Backend(bck).CondWrite() {
-		return false, nil
+func (t *target) condWrite(bck *meta.Bck, r *http.Request) (bool, int, error) {
+	if r == nil || !cos.IsCondWrite(r.Header) || !bck.IsRemote() {
+		return false, 0, nil
+	}
+	if !t.Backend(bck).CondWrite(bck) {
+		if bck.IsRemoteS3() {
+			return false, http.StatusNotImplemented, cmn.NewErrUnsupp("conditionally write to", bck.Cname(""))
+		}
+		return false, 0, nil
 	}
 	if _, err := cos.ParseCondWrite(r.Header); err != nil {
-		return false, err
+		return false, http.StatusBadRequest, err
 	}
-	return true, nil
+	return true, 0, nil
 }
 
 // poi.restful entry point
-func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (_ int, err error) {
+func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (ecode int, err error) {
 	poi.oreq = r
 	poi.r = r.Body
 	poi.resphdr = resphdr
@@ -171,8 +177,8 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (_ int, err
 	poi.owt = cmn.OwtPut // default
 
 	// validate before receiving the body
-	if poi.condWrite, err = poi.t.condWrite(poi.lom.Bck(), r); err != nil {
-		return http.StatusBadRequest, err
+	if poi.condWrite, ecode, err = poi.t.condWrite(poi.lom.Bck(), r); err != nil {
+		return ecode, err
 	}
 
 	oah := poi.lom.ObjAttrs()

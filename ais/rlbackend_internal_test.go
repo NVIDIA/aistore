@@ -330,12 +330,12 @@ type conditionalWriteBackend struct {
 	enabled bool
 }
 
-func (bp *conditionalWriteBackend) CondWrite() bool { return bp.enabled }
+func (bp *conditionalWriteBackend) CondWrite(*meta.Bck) bool { return bp.enabled }
 
 func TestRLBackendCondWrite(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		wrapped := &conditionalWriteBackend{enabled: enabled}
 		bp := &rlbackend{Backend: wrapped}
-		tassert.Fatalf(t, bp.CondWrite() == enabled, "lost backend conditional-write capability")
+		tassert.Fatalf(t, bp.CondWrite(nil) == enabled, "lost backend conditional-write capability")
 	}
 }

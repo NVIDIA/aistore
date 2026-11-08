@@ -493,8 +493,8 @@ func (ups *ups) complete(args *completeArgs) (string, int, error) {
 
 	// 0. write conditions (evaluated by the backend upon completion)
 	if !args.skipBackend {
-		if _, err := t.condWrite(lom.Bck(), args.r); err != nil {
-			return "", http.StatusBadRequest, err
+		if _, ecode, err := t.condWrite(lom.Bck(), args.r); err != nil {
+			return "", ecode, err
 		}
 	}
 

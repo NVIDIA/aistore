@@ -378,6 +378,7 @@ test:short:
   variables:
     BUCKET: "ais://test"
   script:
+    - go test -tags="debug aws gcp azure oci" ./ais/backend/...
     - ${SCRIPTS_DIR}/clean_deploy.sh --target-cnt $NUM_TARGET --proxy-cnt $NUM_PROXY --mountpath-cnt $FS_CNT --deployment all
     - make test-short
     - make test-tracing-unit

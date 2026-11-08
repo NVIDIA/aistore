@@ -159,13 +159,19 @@ func (*s3bp) CompleteMpt(ctx context.Context, lom *core.LOM, oreq *http.Request,
 	if errN != nil {
 		return "", "", http.StatusInternalServerError, errN
 	}
+	match, none, ecode, err := awsWriteConditions(svc, oreq)
+	if err != nil {
+		return "", "", ecode, err
+	}
 
 	var (
 		s3parts types.CompletedMultipartUpload
 		input   = s3.CompleteMultipartUploadInput{
-			Bucket:   aws.String(cloudBck.Name),
-			Key:      aws.String(lom.ObjName),
-			UploadId: aws.String(uploadID),
+			Bucket:      aws.String(cloudBck.Name),
+			Key:         aws.String(lom.ObjName),
+			UploadId:    aws.String(uploadID),
+			IfMatch:     match,
+			IfNoneMatch: none,
 		}
 	)
 
@@ -182,7 +188,7 @@ func (*s3bp) CompleteMpt(ctx context.Context, lom *core.LOM, oreq *http.Request,
 
 	out, err := svc.CompleteMultipartUpload(ctx, &input)
 	if err != nil {
-		ecode, errV := awsErrorToAISError(err, cloudBck, lom.ObjName)
+		ecode, errV := awsWriteError(err, cloudBck, lom.ObjName, input.IfMatch != nil || input.IfNoneMatch != nil)
 		return "", "", ecode, errV
 	}
 

@@ -115,6 +115,7 @@ func TestOCIFetchCliConfigInstancePrincipalInferredRegion(t *testing.T) {
 	}
 
 	t.Setenv(env.OCIInstancePrincipalAuth, "true")
+	t.Setenv(env.OCIRegion, "")
 
 	bp := &ocibp{}
 	if err := bp.fetchCliConfig(); err != nil {
@@ -147,6 +148,7 @@ func TestOCIFetchCliConfigInstancePrincipalRequiresRegion(t *testing.T) {
 	}
 
 	t.Setenv(env.OCIInstancePrincipalAuth, "true")
+	t.Setenv(env.OCIRegion, "")
 
 	bp := &ocibp{}
 	err := bp.fetchCliConfig()

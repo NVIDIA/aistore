@@ -12,12 +12,13 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/core/meta"
 
 	ocicmn "github.com/oracle/oci-go-sdk/v65/common"
 )
 
 // forward write conditions to OCI for evaluation by the remote store.
-func (*ocibp) CondWrite() bool { return true }
+func (*ocibp) CondWrite(*meta.Bck) bool { return true }
 
 // translate write conditions (see cos.ParseCondWrite) to OCI request fields;
 // OCI expects bare If-Match ETag
