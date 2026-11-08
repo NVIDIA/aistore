@@ -1912,7 +1912,12 @@ func TestRemaisBlobDownloadVersionPin(t *testing.T) {
 	backend.Set(apc.AIS, cmn.BackendConfAIS{"pin-" + trand.String(8): []string{bridge.URL}})
 	t.Cleanup(func() {
 		tlog.Logfln("restoring backend config")
-		tassert.CheckError(t, api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &config.Backend}, false))
+		err := api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &config.Backend}, false)
+		tassert.CheckError(t, err)
+		if err == nil {
+			// give proxies time to refresh the restored route before closing the bridge
+			time.Sleep(2 * config.Timeout.CplaneOperation.D())
+		}
 	})
 	tlog.Logfln("routing remote requests through %s", bridge.URL)
 	tassert.CheckFatal(t, api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &backend}, false))

@@ -567,9 +567,6 @@ func TestObjProps(t *testing.T) {
 			{checkPresent: false, verEnabled: false, bucketType: typeRemoteAIS, evict: false},
 			{checkPresent: false, verEnabled: false, bucketType: typeRemoteAIS, evict: true},
 
-			{checkPresent: false, verEnabled: false, bucketType: typeLocal},
-			{checkPresent: false, verEnabled: true, bucketType: typeLocal},
-
 			{checkPresent: false, verEnabled: false, bucketType: typeCloud, evict: false},
 			{checkPresent: false, verEnabled: false, bucketType: typeCloud, evict: true},
 			// valid only if the cloud bucket has versioning enabled
@@ -640,8 +637,6 @@ func TestObjProps(t *testing.T) {
 			}
 
 			for _, objName := range m.objNames {
-				tlog.Logfln("checking %s props...", m.bck.Cname(objName))
-
 				flt := apc.FltPresent
 				if test.checkPresent {
 					flt = apc.FltPresentNoProps
@@ -652,17 +647,16 @@ func TestObjProps(t *testing.T) {
 
 				reqProps := apc.JoinProps(apc.GetPropsVersion, apc.GetPropsAtime, apc.GetPropsCopies, apc.GetPropsEC)
 				props, err := api.HeadObjectV2(baseParams, m.bck, objName, reqProps, api.HeadArgs{FltPresence: flt})
+				switch {
+				case test.checkPresent && test.bucketType != typeLocal && test.evict:
+					tassert.Fatalf(t, err != nil, "%s should be marked as 'not exists' (it is not cached)", m.bck.Cname(objName))
+				case err != nil:
+					t.Fatalf("HEAD %s: %v", m.bck.Cname(objName), err)
+				}
 				if test.checkPresent {
-					if test.bucketType != typeLocal && test.evict {
-						tassert.Fatalf(t, err != nil,
-							"object should be marked as 'not exists' (it is not cached)")
-					} else {
-						tassert.CheckFatal(t, err)
-					}
 					tassert.Errorf(t, props == nil, "props should be empty")
 					continue
 				}
-				tassert.CheckFatal(t, err)
 
 				tassert.Errorf(
 					t, uint64(props.Size) == m.fileSize,

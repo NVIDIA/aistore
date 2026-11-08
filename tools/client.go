@@ -227,7 +227,12 @@ func GetProxyReadiness(proxyURL string) error {
 func CreateBucket(tb testing.TB, proxyURL string, bck cmn.Bck, props *cmn.BpropsToSet, cleanup bool) {
 	bp := BaseAPIParams(proxyURL)
 	if err := api.CreateBucket(bp, bck, props); err != nil {
-		tb.Fatalf("%v: %q", err, bck.String())
+		if herr := cmn.AsErrHTTP(err); herr != nil {
+			tb.Fatalf("create %s via %s: %v (status %d, %s %s)",
+				bck.Cname(""), proxyURL, err, herr.Status, herr.Method, herr.URLPath)
+			return
+		}
+		tb.Fatalf("create %s via %s: %v", bck.Cname(""), proxyURL, err)
 	}
 	if cleanup {
 		tb.Cleanup(func() {

@@ -236,6 +236,10 @@ func TestColdGetRangesRemoteDelete(t *testing.T) {
 func TestRemaisColdGetRanges(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true, RequiredDeployment: tools.ClusterTypeLocal})
 	tools.WaitForRebalAndResil(t, tools.BaseAPIParams(tools.RandomProxyURL(t)))
+	// give proxies time to refresh the restored route after the last subtest
+	var restoreDelay time.Duration
+	t.Cleanup(func() { time.Sleep(restoreDelay) })
+
 	const chunkSize = 4 * cos.MiB
 	tests := []struct {
 		name, cksum, fault string
@@ -408,7 +412,11 @@ func TestRemaisColdGetRanges(t *testing.T) {
 			backend.Conf = maps.Clone(backend.Conf)
 			backend.Set(apc.AIS, cmn.BackendConfAIS{"crange-" + trand.String(8): []string{bridge.URL}})
 			t.Cleanup(func() {
-				tassert.CheckError(t, api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &config.Backend}, false))
+				err := api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &config.Backend}, false)
+				tassert.CheckError(t, err)
+				if err == nil {
+					restoreDelay = 2 * config.Timeout.CplaneOperation.D()
+				}
 			})
 			tassert.CheckFatal(t, api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &backend}, false))
 
