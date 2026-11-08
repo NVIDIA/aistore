@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/exec"
+	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -76,6 +79,40 @@ func TestMemoryStats(t *testing.T) {
 	if mem.SwapTotal == 0 && mem.SwapFree == 0 {
 		t.Log("Either swap is off or failed to read its stats")
 	}
+
+	if runtime.GOOS == "darwin" {
+		checkDarwinActualFree(t, &mem)
+	}
+}
+
+// cross-check ActualFree against (free + speculative + inactive) pages * page size, as reported by `vm_stat`
+// (`vm_stat` excludes speculative pages from "Pages free"; Mach free_count includes them);
+// tolerate a 2x drift between the two samples (a wrong page size would be off by 4x on Apple Silicon)
+func checkDarwinActualFree(t *testing.T, mem *sys.MemStat) {
+	out, err := exec.Command("vm_stat").Output()
+	if err != nil {
+		t.Logf("skipping vm_stat cross-check: %v", err)
+		return
+	}
+	parse := func(re string) uint64 {
+		m := regexp.MustCompile(re).FindSubmatch(out)
+		if m == nil {
+			t.Fatalf("failed to parse %q from vm_stat output:\n%s", re, out)
+		}
+		v, err := strconv.ParseUint(string(m[1]), 10, 64)
+		tassert.CheckFatal(t, err)
+		return v
+	}
+	var (
+		pageSize    = parse(`page size of (\d+) bytes`)
+		free        = parse(`Pages free:\s+(\d+)`)
+		speculative = parse(`Pages speculative:\s+(\d+)`)
+		inactive    = parse(`Pages inactive:\s+(\d+)`)
+		expected    = (free + speculative + inactive) * pageSize
+	)
+	t.Logf("vm_stat: page size %d, (free + speculative + inactive) %s", pageSize, cos.ToSizeIEC(int64(expected), 2))
+	tassert.Errorf(t, mem.ActualFree >= expected/2 && mem.ActualFree <= expected*2,
+		"ActualFree %d is not within 2x of vm_stat (free + speculative + inactive) %d", mem.ActualFree, expected)
 }
 
 func TestProcAndMaxLoad(t *testing.T) {
