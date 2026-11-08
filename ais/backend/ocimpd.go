@@ -43,7 +43,7 @@ type ociMPDStruct struct {
 	client          *ocios.ObjectStorageClient
 	bucketName      string
 	objectName      string
-	etag            string // initial response's ETag, quoted for If-Match
+	etag            string // initial response's unquoted ETag
 	objectSize      int64
 	nextStart       int64 // == .objectSize once all children have been launched
 	closeInProgress bool
@@ -105,7 +105,8 @@ func (bp *ocibp) getObjReaderViaMPD(ctx context.Context, cancel context.CancelFu
 		res.Size = *resp.ContentLength
 		return res
 	}
-	if resp.ETag == nil || *resp.ETag == "" {
+	etag, ok := cmn.BackendHelpers.OCI.EncodeETag(resp.ETag)
+	if !ok || etag == "" {
 		res.ErrCode = http.StatusBadGateway
 		res.Err = fmt.Errorf("%s: missing ETag for multipart download", lom.Cname())
 		return res
@@ -130,7 +131,7 @@ func (bp *ocibp) getObjReaderViaMPD(ctx context.Context, cancel context.CancelFu
 		client:     client,
 		bucketName: cloudBck.Name,
 		objectName: lom.ObjName,
-		etag:       cmn.QuoteETag(*resp.ETag),
+		etag:       etag,
 		objectSize: objectSize,
 		nextStart:  partLength,
 		childList:  list.New(),

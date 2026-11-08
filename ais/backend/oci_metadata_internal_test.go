@@ -23,10 +23,17 @@ import (
 	ocios "github.com/oracle/oci-go-sdk/v65/objectstorage"
 )
 
+const ociMetadataRangeETag = "remote-etag"
+
 func TestOCIRangeReadsPreserveObjectAttributes(t *testing.T) {
 	client, err := ocios.NewObjectStorageClientWithConfigurationProvider(newTestOCIConfigProvider(t, "us-ashburn-1"))
 	tassert.CheckFatal(t, err)
-	server := httptest.NewServer(http.HandlerFunc(serveOCIMetadataRange))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("If-Match"); got != ociMetadataRangeETag {
+			t.Errorf("If-Match = %q, want %q", got, ociMetadataRangeETag)
+		}
+		serveOCIMetadataRange(w, r)
+	}))
 	t.Cleanup(server.Close)
 	client.Host = server.URL
 	bp := &ocibp{namespace: "namespace", defaultRegion: "us-ashburn-1"}
@@ -49,7 +56,7 @@ func TestOCIRangeReadsPreserveObjectAttributes(t *testing.T) {
 }
 
 func serveOCIMetadataRange(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("ETag", "remote-etag")
+	w.Header().Set("ETag", ociMetadataRangeETag)
 	w.Header().Set("Opc-Meta-Env", "remote")
 	w.Header().Set("Content-Type", "application/x-range-test")
 	w.Header().Set("Content-Length", "5")
@@ -60,7 +67,7 @@ func serveOCIMetadataRange(w http.ResponseWriter, _ *http.Request) {
 
 func checkOCIMetadataRange(t *testing.T, bp *ocibp, lom *core.LOM) {
 	t.Helper()
-	res := bp.GetObjReader(t.Context(), lom, 2, 5, nil)
+	res := bp.GetObjReader(t.Context(), lom, 2, 5, &core.ObjPin{ETag: ociMetadataRangeETag})
 	if res.Err != nil {
 		t.Error(res.Err)
 		return

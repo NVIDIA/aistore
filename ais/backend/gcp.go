@@ -6,6 +6,11 @@
  */
 package backend
 
+// ETag quoting:
+// - GCS ETags are opaque (not necessarily MD5)
+// - store unquoted (see cmn.BackendHelpers.Google.EncodeETag)
+// - use generation, not ETag, for preconditions (see gcpPin)
+
 import (
 	"context"
 	"errors"

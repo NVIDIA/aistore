@@ -6,17 +6,16 @@
  */
 package backend
 
-// Outstanding [TODO] items:
-//   1) Resolve if ais/test/mp_tuning.env is *not* the way to do this
-//   2) Avoid per MPU Child make([]byte) invocation (see e.g. memsys/)
-//   3) Resolve proper place/way to stress/bench test in pipeline(s)
-//   4) Add MPU stress (and benchmarking?)
-//   5) Add MPD stress (and benchmarking?)
-//   6) Add support for object versioning
-//   7) Resolve test:long:oci CI Pipeline failure in TestMultiProxy
-//   8) Support remaining OCI bucket props (for example, compartment overrides)
-//   9) Define our own "rcFile" equivalent if desired (preferably in something like JSON)
-//  10) Add in support for OCI SDK's rcFile if desired (perhaps in lieu of 9)
+// ETag quoting:
+// - native OCI returns bare ETags and requires bare If-Match values.
+// - ociWriteConditions strips client-supplied quotes before forwarding.
+
+// TODO:
+// - add an OCI backend config file for transfer tuning and compartment defaults
+//   - reduce/remove most of the existing "OCI_*" environment variables
+// - reuse automatic MPU part buffers after each part finishes
+// - include the largest object size in concurrent MPU/MPD tests
+// - support OCI object versioning
 
 import (
 	"container/list"
@@ -959,8 +958,7 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 		rangeHeader = cmn.MakeRangeHdr(offset, length)
 		req.Range = &rangeHeader
 		if p := core.RangePin(pin); p != nil && p.ETag != "" {
-			etag := cmn.QuoteETag(p.ETag)
-			req.IfMatch = &etag
+			req.IfMatch = &p.ETag
 		}
 	}
 

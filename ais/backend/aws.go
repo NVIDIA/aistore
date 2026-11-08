@@ -6,6 +6,11 @@
  */
 package backend
 
+// ETag quoting:
+// - S3 returns quoted, opaque ETags: "<md5>" or "<md5>-<number-of-parts>" (multipart)
+// - store unquoted (see cmn.BackendHelpers.Amazon.EncodeETag)
+// - quote when sending If-Match (cmn.QuoteETag)
+
 import (
 	"context"
 	"errors"

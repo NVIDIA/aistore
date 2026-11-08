@@ -6,6 +6,11 @@
  */
 package backend
 
+// ETag quoting:
+// - Azure returns quoted ETags ("0x8D..."), on the wire and in azcore.ETag
+// - store unquoted (see cmn.BackendHelpers.Azure.EncodeETag)
+// - quote when sending If-Match (cmn.QuoteETag)
+
 // TODO:
 // - check a variety of az clients instantiated below, and alternatives
 //
