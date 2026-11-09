@@ -499,7 +499,7 @@ func (poi *putOI) finalize() (ecode int, err error) {
 // - see docs/rate-limit
 func (poi *putOI) _retry503() (ecode int, err error) {
 	time.Sleep(time.Second)
-	ecode, err = poi.putRemote()
+	ecode, err = poi.putRemote(cmn.WithNoRetry(context.Background()))
 	if err != nil {
 		return ecode, err
 	}
@@ -515,7 +515,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 	)
 	// put remote
 	if bck.IsRemote() && poi.owt < cmn.OwtRebalance {
-		ecode, err = poi.putRemote()
+		ecode, err = poi.putRemote(context.Background())
 		if err != nil {
 			if cmn.Rom.V(5, cos.ModAIS) {
 				loghdr := poi.loghdr()
@@ -582,7 +582,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 }
 
 // via backend.PutObj()
-func (poi *putOI) putRemote() (int, error) {
+func (poi *putOI) putRemote(ctx context.Context) (int, error) {
 	var (
 		lom       = poi.lom
 		startTime = mono.NanoTime()
@@ -598,7 +598,7 @@ func (poi *putOI) putRemote() (int, error) {
 		ecode int
 		bp    = poi.t.Backend(lom.Bck())
 	)
-	ecode, err = bp.PutObj(context.Background(), lmfh, lom, poi.oreq)
+	ecode, err = bp.PutObj(ctx, lmfh, lom, poi.oreq)
 	if err == nil {
 		if !lom.Bck().IsRemoteAIS() {
 			lom.SetCustomKey(cmn.SourceObjMD, bp.Provider())
@@ -932,7 +932,7 @@ func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (int, error) {
 
 	// get remote reader (compare w/ t.GetCold)
 	goi.rget = true
-	res, stopFirst := goi.coldReader(bp, true /*parallel*/)
+	res, stopFirst := goi.coldReader(bp)
 	if stopFirst != nil {
 		defer stopFirst()
 		if res.Err == nil {
@@ -987,8 +987,7 @@ func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (int, error) {
 func (goi *getOI) coldRefetch(bp core.Backend) core.GetReaderResult {
 	goi.lom.Reset()
 	goi.lom.SetAtimeUnix(goi.atime)
-	res, _ := goi.coldReader(bp, false /*parallel*/)
-	return res
+	return bp.GetObjReader(cmn.WithNoRetry(goi.ctx), goi.lom, 0, 0)
 }
 
 func (goi *getOI) coldPut(res *core.GetReaderResult, config *cmn.Config) (int, error) {

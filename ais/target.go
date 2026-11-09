@@ -1728,15 +1728,17 @@ func (t *target) DeleteObject(lom *core.LOM, evict bool) (code int, err error) {
 	code, err, isback = t.delobj(lom, evict)
 	lom.Unlock(true)
 
-	// special corner-case retry (quote):
+	// special corner-case retry, e.g.:
 	// - googleapi: "Error 503: We encountered an internal error. Please try again."
-	// - aws-error[InternalError: We encountered an internal error. Please try again.]
+	// - aws-error[InternalError: We encountered an internal error. Please try again.] (500)
+	// - not when already retried via configured rate limiter
 	if err != nil && isback {
-		if code == http.StatusServiceUnavailable || strings.Contains(err.Error(), "try again") {
+		_, exhausted := errors.AsType[*cmn.ErrBackendRetry](err)
+		if !exhausted && (code == http.StatusServiceUnavailable || code == http.StatusInternalServerError) {
 			nlog.Errorf("failed to delete %s: %v(%d) - retrying...", lom, err, code)
 			time.Sleep(time.Second)
 			bp := t.Backend(lom.Bck())
-			code, err = bp.DeleteObj(context.Background(), lom)
+			code, err = bp.DeleteObj(cmn.WithNoRetry(context.Background()), lom)
 		}
 	}
 

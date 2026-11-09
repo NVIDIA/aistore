@@ -7,7 +7,10 @@ package ais
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,6 +21,8 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
+
+const retryPutBody = "retry body"
 
 type throttleBackend struct {
 	core.Backend
@@ -54,21 +59,36 @@ func (bp *throttleBackend) GetObj(context.Context, *core.LOM, cmn.OWT, *http.Req
 	return 0, nil
 }
 
+func (bp *throttleBackend) PutObj(ctx context.Context, r io.ReadCloser, _ *core.LOM, _ *http.Request) (int, error) {
+	body, err := io.ReadAll(r)
+	cos.Close(r)
+	if err != nil {
+		return 0, err
+	}
+	if string(body) != retryPutBody || cmn.IsNoRetry(ctx) != (bp.calls != 0) {
+		return 0, errors.New("unexpected PUT body or retry context")
+	}
+	if err := bp.errOnce(); err != nil {
+		return http.StatusTooManyRequests, err
+	}
+	return 0, nil
+}
+
 func (bp *throttleReaderBackend) GetObjReader(context.Context, *core.LOM, int64, int64, ...*core.ObjPin) core.GetReaderResult {
 	bp.calls++
 	return core.GetReaderResult{Err: bp.err, ErrCode: http.StatusTooManyRequests}
 }
 
-func TestRLBackendGetHead(t *testing.T) {
+func TestRLBackendObjectOps(t *testing.T) {
 	tests := []struct {
 		name string
 		verb string
-		do   func(*rlbackend, *core.LOM) error
+		do   func(*testing.T, *rlbackend, *core.LOM) error
 	}{
 		{
 			name: http.MethodGet,
 			verb: http.MethodGet,
-			do: func(bp *rlbackend, lom *core.LOM) error {
+			do: func(_ *testing.T, bp *rlbackend, lom *core.LOM) error {
 				_, err := bp.GetObj(context.Background(), lom, cmn.OwtGet, nil)
 				return err
 			},
@@ -76,11 +96,23 @@ func TestRLBackendGetHead(t *testing.T) {
 		{
 			name: http.MethodHead,
 			verb: http.MethodHead,
-			do: func(bp *rlbackend, lom *core.LOM) error {
+			do: func(_ *testing.T, bp *rlbackend, lom *core.LOM) error {
 				oa, _, err := bp.HeadObj(context.Background(), lom, nil)
 				if err == nil && (oa == nil || oa.Size != 1) {
 					return errors.New("invalid object attributes")
 				}
+				return err
+			},
+		},
+		{
+			name: http.MethodPut,
+			verb: http.MethodPut,
+			do: func(t *testing.T, bp *rlbackend, lom *core.LOM) error {
+				path := filepath.Join(t.TempDir(), "workfile")
+				tassert.CheckFatal(t, os.WriteFile(path, []byte(retryPutBody), 0o600))
+				r, err := cos.NewFileHandle(path)
+				tassert.CheckFatal(t, err)
+				_, err = bp.PutObj(t.Context(), r, lom, nil)
 				return err
 			},
 		},
@@ -106,7 +138,7 @@ func TestRLBackendGetHead(t *testing.T) {
 
 			backend := &throttleBackend{}
 			bp := &rlbackend{Backend: backend, t: mockTarget}
-			err = test.do(bp, lom)
+			err = test.do(t, bp, lom)
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, backend.calls == 2, "expected one retry, got %d calls", backend.calls)
 		})
@@ -286,7 +318,12 @@ func TestRLBackendListObjects(t *testing.T) {
 			tassert.Fatalf(t, errors.Is(err, test.wantErr), "expected error %v, got %v", test.wantErr, err)
 			tassert.Fatalf(t, backend.calls == test.wantCalls, "expected %d calls, got %d", test.wantCalls, backend.calls)
 			for i := range backend.calls {
-				tassert.Fatalf(t, backend.ctxs[i] == ctx, "call %d: backend received a different context", i+1)
+				if i == 0 {
+					tassert.Fatalf(t, backend.ctxs[i] == ctx, "call %d: backend received a different context", i+1)
+				} else {
+					// reactive retry: single attempt (see cmn.WithNoRetry)
+					tassert.Fatalf(t, cmn.IsNoRetry(backend.ctxs[i]), "call %d: expected no-retry context", i+1)
+				}
 				tassert.Fatalf(t, backend.bcks[i] == bck, "call %d: backend received a different bucket", i+1)
 				tassert.Fatalf(t, backend.msgs[i] == msg, "call %d: backend received a different list message", i+1)
 				tassert.Fatalf(t, backend.lists[i] == lst, "call %d: backend received a different list result", i+1)

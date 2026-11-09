@@ -51,6 +51,7 @@ type ociMPUStruct struct {
 	childSlice      []*ociMPUChildStruct
 	err             []error
 	rc              io.ReadCloser
+	md              ocicmn.RequestMetadata // retry policy, if any (see ociReqMeta)
 }
 
 // best-effort cleanup of the internal upload; preserve the caller's error
@@ -84,7 +85,8 @@ func (mpu *ociMPUStruct) abort() {
 // Finally, if there are no errors, putObjViaMPU() can perform the MPU "complete"
 // operation that logically combines all those uploaded parts. If there were errors,
 // the MPU operation is aborted.
-func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, oreq *http.Request, ifMatch, ifNoneMatch *string) (int, error) {
+func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, oreq *http.Request, ifMatch, ifNoneMatch *string,
+	md ocicmn.RequestMetadata) (int, error) {
 	var (
 		cloudBck   = lom.Bck().RemoteBck()
 		err        error
@@ -113,11 +115,13 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, 
 		childSlice:  make([]*ociMPUChildStruct, 0, totalParts),
 		err:         make([]error, 0, totalParts),
 		rc:          r,
+		md:          md,
 	}
 
 	createReq := ocios.CreateMultipartUploadRequest{
-		NamespaceName: &mpu.bp.namespace,
-		BucketName:    &mpu.bucketName,
+		RequestMetadata: mpu.md,
+		NamespaceName:   &mpu.bp.namespace,
+		BucketName:      &mpu.bucketName,
 		CreateMultipartUploadDetails: ocios.CreateMultipartUploadDetails{
 			Object:      &mpu.objectName,
 			Metadata:    ociMptMetadata(ociPutMetadata(lom, oreq)),
@@ -145,12 +149,13 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, 
 	}
 
 	commitReq := ocios.CommitMultipartUploadRequest{
-		NamespaceName: &mpu.bp.namespace,
-		BucketName:    &mpu.bucketName,
-		ObjectName:    &mpu.objectName,
-		UploadId:      &mpu.uploadID,
-		IfMatch:       ifMatch,
-		IfNoneMatch:   ifNoneMatch,
+		RequestMetadata: mpu.md,
+		NamespaceName:   &mpu.bp.namespace,
+		BucketName:      &mpu.bucketName,
+		ObjectName:      &mpu.objectName,
+		UploadId:        &mpu.uploadID,
+		IfMatch:         ifMatch,
+		IfNoneMatch:     ifNoneMatch,
 		CommitMultipartUploadDetails: ocios.CommitMultipartUploadDetails{
 			PartsToCommit: make([]ocios.CommitMultipartUploadPartDetails, 0, mpu.nextPartNum),
 		},
@@ -234,13 +239,14 @@ func (mpu *ociMPUStruct) launchChildren() {
 
 func (mpuChild *ociMPUChildStruct) Run() {
 	req := ocios.UploadPartRequest{
-		NamespaceName:  &mpuChild.mpu.bp.namespace,
-		BucketName:     &mpuChild.mpu.bucketName,
-		ObjectName:     &mpuChild.mpu.objectName,
-		UploadId:       &mpuChild.mpu.uploadID,
-		UploadPartNum:  &mpuChild.partNum,
-		ContentLength:  &mpuChild.length,
-		UploadPartBody: mpuChild,
+		RequestMetadata: mpuChild.mpu.md,
+		NamespaceName:   &mpuChild.mpu.bp.namespace,
+		BucketName:      &mpuChild.mpu.bucketName,
+		ObjectName:      &mpuChild.mpu.objectName,
+		UploadId:        &mpuChild.mpu.uploadID,
+		UploadPartNum:   &mpuChild.partNum,
+		ContentLength:   &mpuChild.length,
+		UploadPartBody:  mpuChild,
 	}
 
 	resp, err := mpuChild.mpu.client.UploadPart(context.Background(), req)

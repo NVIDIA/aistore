@@ -60,7 +60,7 @@ func (azbp *azbp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenC
 		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName
 	)
 
-	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, nil)
+	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, (*blockblob.ClientOptions)(azOpts()))
 	if err != nil {
 		cos.Close(r)
 		ecode, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
@@ -73,7 +73,7 @@ func (azbp *azbp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenC
 	rsc, ok := r.(io.ReadSeekCloser)
 	debug.Assertf(ok, "Azure backend requires io.ReadSeekCloser, but got %T", r)
 
-	_, err = client.StageBlock(ctx, blockID, rsc, nil)
+	_, err = client.StageBlock(azCtx(ctx), blockID, rsc, nil)
 
 	if err != nil {
 		ecode, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
@@ -95,7 +95,7 @@ func (azbp *azbp) CompleteMpt(ctx context.Context, lom *core.LOM, _ *http.Reques
 		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName
 	)
 
-	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, nil)
+	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, (*blockblob.ClientOptions)(azOpts()))
 	if err != nil {
 		ecode, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return "", "", ecode, err
@@ -109,7 +109,7 @@ func (azbp *azbp) CompleteMpt(ctx context.Context, lom *core.LOM, _ *http.Reques
 	}
 
 	// Commit the block list to create the final blob
-	resp, err := client.CommitBlockList(ctx, blockIDs, nil)
+	resp, err := client.CommitBlockList(azCtx(ctx), blockIDs, nil)
 	if err != nil {
 		ecode, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return "", "", ecode, err

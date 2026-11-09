@@ -53,6 +53,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
   * [Presigned requests](#presigned-s3-requests)
 * [Use Native Bucket Inventory](#use-native-bucket-inventory)
 * [Deleting nonexistent object](#deleting-nonexistent-object)
+* [S3 backend: SDK retries](#s3-backend-sdk-retries)
 * [Compatibility Matrix](#compatibility-matrix)
 * [Boto3 Examples](#boto3-examples)
 * [FAQs & Troubleshooting](#faqs--troubleshooting)
@@ -468,6 +469,24 @@ we return whatever the backend gives us - which, for S3, is 204 (no error).
 
 Apart from this single exception, returning an error on delete of a nonexistent
 object is an intentional semantic choice for consistency with the rest of AIS.
+
+---
+
+## S3 backend: SDK retries
+
+AIS makes at most two attempts per S3 request (the initial request and one retry), unless `max_attempts` in the AWS profile or `AWS_MAX_ATTEMPTS` sets a different number. Each bucket can select its own profile with `extra.aws.profile`, so a named profile sets the limit per bucket. Set the profile in the AWS config file on every target:
+
+```ini
+[profile prod-account]
+region = us-east-2
+max_attempts = 4
+```
+
+```console
+ais bucket props set s3://#prod/data extra.aws.profile=prod-account
+```
+
+When AIS retries an operation, for example with [backend rate limiting](/docs/rate_limit.md), each S3 SDK request gets one attempt regardless of `max_attempts`. See [v5.3 release notes](/docs/relnotes/5.3.md#sdk-retries).
 
 ---
 

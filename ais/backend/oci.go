@@ -482,6 +482,11 @@ func (bp *ocibp) ociClient(bck *cmn.Bck) (*ocios.ObjectStorageClient, string, er
 	if region != "" {
 		client.SetRegion(region)
 	}
+	// operator setting (OCI_SDK_DEFAULT_RETRY_ENABLED or GlobalRetry) takes precedence
+	if client.RetryPolicy() == nil {
+		rp := sdkRetryDflt.oci()
+		client.Configuration.RetryPolicy = &rp
+	}
 	bp.clients.Store(region, &client)
 	return &client, region, nil
 }
@@ -501,10 +506,11 @@ func (bp *ocibp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg
 		limitAsInt          int
 		noDirsFlag          = msg.IsFlagSet(apc.LsNoDirs)
 		req                 = ocios.ListObjectsRequest{
-			NamespaceName: &bp.namespace,
-			BucketName:    &cloudBck.Name,
-			Limit:         &limitAsInt,
-			Fields:        &fields,
+			RequestMetadata: ociReqMeta(ctx),
+			NamespaceName:   &bp.namespace,
+			BucketName:      &cloudBck.Name,
+			Limit:           &limitAsInt,
+			Fields:          &fields,
 		}
 	)
 	lst.ContinuationToken = ""
@@ -688,18 +694,19 @@ func (bp *ocibp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, ore
 
 	ociSetMetadata(lom.ObjAttrs(), ociPutMetadata(lom, oreq), ociPutContentType(lom, oreq))
 	if !avoidingMPU {
-		return bp.putObjViaMPU(r, lom, objectSize, oreq, ifMatch, ifNoneMatch)
+		return bp.putObjViaMPU(r, lom, objectSize, oreq, ifMatch, ifNoneMatch, ociReqMeta(ctx))
 	}
 
 	req := ocios.PutObjectRequest{
-		NamespaceName: &bp.namespace,
-		BucketName:    &cloudBck.Name,
-		ObjectName:    &lom.ObjName,
-		PutObjectBody: r,
-		IfMatch:       ifMatch,
-		IfNoneMatch:   ifNoneMatch,
-		OpcMeta:       ociPutMetadata(lom, oreq),
-		ContentType:   ociPutContentType(lom, oreq),
+		RequestMetadata: ociReqMeta(ctx),
+		NamespaceName:   &bp.namespace,
+		BucketName:      &cloudBck.Name,
+		ObjectName:      &lom.ObjName,
+		PutObjectBody:   r,
+		IfMatch:         ifMatch,
+		IfNoneMatch:     ifNoneMatch,
+		OpcMeta:         ociPutMetadata(lom, oreq),
+		ContentType:     ociPutContentType(lom, oreq),
 	}
 
 	resp, err := client.PutObject(ctx, req)
@@ -729,9 +736,10 @@ func (bp *ocibp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 		return ociClientToAISError("DeleteObject", cloudBck.Name, lom.ObjName, err)
 	}
 	req := ocios.DeleteObjectRequest{
-		NamespaceName: &bp.namespace,
-		BucketName:    &cloudBck.Name,
-		ObjectName:    &lom.ObjName,
+		RequestMetadata: ociReqMeta(ctx),
+		NamespaceName:   &bp.namespace,
+		BucketName:      &cloudBck.Name,
+		ObjectName:      &lom.ObjName,
 	}
 
 	resp, err := client.DeleteObject(ctx, req)
@@ -749,8 +757,9 @@ func (bp *ocibp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int
 		return nil, ecode, err
 	}
 	req := ocios.HeadBucketRequest{
-		NamespaceName: &bp.namespace,
-		BucketName:    &cloudBck.Name,
+		RequestMetadata: ociReqMeta(ctx),
+		NamespaceName:   &bp.namespace,
+		BucketName:      &cloudBck.Name,
 	}
 
 	resp, err := client.HeadBucket(ctx, req)
@@ -778,9 +787,10 @@ func (bp *ocibp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*
 		return nil, ecode, err
 	}
 	req := ocios.HeadObjectRequest{
-		NamespaceName: &bp.namespace,
-		BucketName:    &cloudBck.Name,
-		ObjectName:    &lom.ObjName,
+		RequestMetadata: ociReqMeta(ctx),
+		NamespaceName:   &bp.namespace,
+		BucketName:      &cloudBck.Name,
+		ObjectName:      &lom.ObjName,
 	}
 
 	resp, err := client.HeadObject(ctx, req)
@@ -947,9 +957,10 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 	}
 
 	req := ocios.GetObjectRequest{
-		NamespaceName: &bp.namespace,
-		BucketName:    &cloudBck.Name,
-		ObjectName:    &lom.ObjName,
+		RequestMetadata: ociReqMeta(ctx),
+		NamespaceName:   &bp.namespace,
+		BucketName:      &cloudBck.Name,
+		ObjectName:      &lom.ObjName,
 	}
 	if attemptingMPD {
 		rangeHeader = cmn.MakeRangeHdr(0, bp.mpdThreshold)
@@ -1000,4 +1011,33 @@ func (bp *ocibp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length
 	res.R = resp.Content
 	res.Size = *resp.ContentLength
 	return res
+}
+
+//
+// sdkRetry => OCI retry policy
+//
+
+// per call: single attempt (see sdkRetryNone); takes precedence over client policy
+var ociNoRetry = sdkRetryNone.oci()
+
+func ociReqMeta(ctx context.Context) (md ocicmn.RequestMetadata) {
+	if cmn.IsNoRetry(ctx) {
+		md.RetryPolicy = &ociNoRetry
+	}
+	return md
+}
+
+// SDK default backoff (no eventual-consistency retries)
+func (sr *sdkRetry) oci() ocicmn.RetryPolicy {
+	if sr.maxAttempts <= 1 {
+		return ocicmn.NoRetryPolicy()
+	}
+	opts := []ocicmn.RetryPolicyOption{
+		ocicmn.ReplaceWithValuesFromRetryPolicy(ocicmn.DefaultRetryPolicyWithoutEventualConsistency()),
+		ocicmn.WithMaximumNumberAttempts(uint(sr.maxAttempts)),
+	}
+	if sr.noBackoff {
+		opts = append(opts, ocicmn.WithFixedBackoff(0))
+	}
+	return ocicmn.NewRetryPolicyWithOptions(opts...)
 }

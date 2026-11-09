@@ -54,8 +54,9 @@ func (bp *ocibp) StartMpt(ctx context.Context, lom *core.LOM, _ *http.Request) (
 		client                       *ocios.ObjectStorageClient
 		cloudBck                     = lom.Bck().RemoteBck()
 		createMultipartUploadRequest = ocios.CreateMultipartUploadRequest{
-			NamespaceName: &bp.namespace,
-			BucketName:    &cloudBck.Name,
+			RequestMetadata: ociReqMeta(ctx),
+			NamespaceName:   &bp.namespace,
+			BucketName:      &cloudBck.Name,
 			CreateMultipartUploadDetails: ocios.CreateMultipartUploadDetails{
 				Object: &lom.ObjName,
 			},
@@ -89,13 +90,14 @@ func (bp *ocibp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenCl
 		cloudBck          = lom.Bck().RemoteBck()
 		partNumInt        = int(partNum)
 		uploadPartRequest = ocios.UploadPartRequest{
-			NamespaceName:  &bp.namespace,
-			BucketName:     &cloudBck.Name,
-			ObjectName:     &lom.ObjName,
-			UploadId:       &uploadID,
-			UploadPartNum:  &partNumInt,
-			ContentLength:  &size,
-			UploadPartBody: r,
+			RequestMetadata: ociReqMeta(ctx),
+			NamespaceName:   &bp.namespace,
+			BucketName:      &cloudBck.Name,
+			ObjectName:      &lom.ObjName,
+			UploadId:        &uploadID,
+			UploadPartNum:   &partNumInt,
+			ContentLength:   &size,
+			UploadPartBody:  r,
 		}
 		uploadPartResponse ocios.UploadPartResponse
 		err                error
@@ -125,10 +127,11 @@ func (bp *ocibp) CompleteMpt(ctx context.Context, lom *core.LOM, oreq *http.Requ
 		client                       *ocios.ObjectStorageClient
 		cloudBck                     = lom.Bck().RemoteBck()
 		commitMultipartUploadRequest = ocios.CommitMultipartUploadRequest{
-			NamespaceName: &bp.namespace,
-			BucketName:    &cloudBck.Name,
-			ObjectName:    &lom.ObjName,
-			UploadId:      &uploadID,
+			RequestMetadata: ociReqMeta(ctx),
+			NamespaceName:   &bp.namespace,
+			BucketName:      &cloudBck.Name,
+			ObjectName:      &lom.ObjName,
+			UploadId:        &uploadID,
 			CommitMultipartUploadDetails: ocios.CommitMultipartUploadDetails{
 				PartsToCommit: make([]ocios.CommitMultipartUploadPartDetails, 0, len(parts)),
 			},
@@ -179,10 +182,11 @@ func (bp *ocibp) AbortMpt(ctx context.Context, lom *core.LOM, _ *http.Request, u
 		client                      *ocios.ObjectStorageClient
 		cloudBck                    = lom.Bck().RemoteBck()
 		abortMultipartUploadRequest = ocios.AbortMultipartUploadRequest{
-			NamespaceName: &bp.namespace,
-			BucketName:    &cloudBck.Name,
-			ObjectName:    &lom.ObjName,
-			UploadId:      &uploadID,
+			RequestMetadata: ociReqMeta(ctx),
+			NamespaceName:   &bp.namespace,
+			BucketName:      &cloudBck.Name,
+			ObjectName:      &lom.ObjName,
+			UploadId:        &uploadID,
 		}
 		abortMultipartUploadResponse ocios.AbortMultipartUploadResponse
 		err                          error

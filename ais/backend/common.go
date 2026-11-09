@@ -22,6 +22,23 @@ import (
 
 const numBackendMetricks = 12
 
+// backend SDK client retry settings (provider-neutral)
+// - each backend converts it to its own SDK options (with few exceptions, e.g., GCS no-retry)
+// - an explicit operator setting in the SDK (env, profile) takes precedence over sdkRetryDflt
+type sdkRetry struct {
+	maxAttempts int  // including the first
+	noBackoff   bool // tests only
+}
+
+var (
+	sdkRetryDflt = sdkRetry{maxAttempts: cmn.BackendMaxAttempts}
+
+	// single attempt when:
+	// - caller retries on its own (see cmn.WithNoRetry)
+	// - reader is not seekable
+	sdkRetryNone = sdkRetry{maxAttempts: 1}
+)
+
 type base struct {
 	tstats   stats.Tracker
 	metrics  cos.StrKVs // this backend's metric names (below)

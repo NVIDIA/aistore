@@ -12,14 +12,17 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -202,6 +205,169 @@ func TestAWSUploaderConditions(t *testing.T) {
 				if herr := cmn.AsErrHTTP(errV); herr != nil && herr.TypeCode == cmn.TcodeCondWriteConflict {
 					t.Fatalf("unrelated conflict misclassified: %v", errV)
 				}
+			}
+		})
+	}
+}
+
+// respond to every request with the same status; count requests
+type retryS3Transport struct {
+	status int
+	code   string
+	n      atomic.Int32
+}
+
+func (s *retryS3Transport) Do(r *http.Request) (*http.Response, error) {
+	s.n.Add(1)
+	if r.Body != nil {
+		io.Copy(io.Discard, r.Body)
+		r.Body.Close()
+	}
+	h := make(http.Header)
+	h.Set(cos.HdrContentType, "application/xml")
+	body := `<Error><Code>` + s.code + `</Code><Message>retry test</Message></Error>`
+	if r.Method == http.MethodHead {
+		body = ""
+	}
+	return &http.Response{StatusCode: s.status, Header: h, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+}
+
+func newRetryS3Client(transport *retryS3Transport) *s3.Client {
+	sr := sdkRetryDflt // production settings, no backoff
+	sr.noBackoff = true
+	return s3.New(s3.Options{
+		Region:       "us-east-1",
+		BaseEndpoint: aws.String("http://s3.invalid"),
+		UsePathStyle: true,
+		HTTPClient:   transport,
+		Credentials:  aws.AnonymousCredentials{},
+		Retryer:      sr.s3(),
+	})
+}
+
+// client retryer: at most cmn.BackendMaxAttempts; with cmn.WithNoRetry: exactly one
+func TestAWSRetryAttempts(t *testing.T) {
+	const (
+		bucket = "bucket"
+		key    = "obj"
+	)
+	ops := []struct {
+		name string
+		call func(ctx context.Context, svc *s3.Client) error
+	}{
+		{"head", func(ctx context.Context, svc *s3.Client) error {
+			_, err := svc.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)}, awsCallOpts(ctx)...)
+			return err
+		}},
+		{"get", func(ctx context.Context, svc *s3.Client) error {
+			_, err := svc.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)}, awsCallOpts(ctx)...)
+			return err
+		}},
+		{"list", func(ctx context.Context, svc *s3.Client) error {
+			_, err := svc.ListObjectsV2(ctx, &s3.ListObjectsV2Input{Bucket: aws.String(bucket)}, awsCallOpts(ctx)...)
+			return err
+		}},
+		{"delete", func(ctx context.Context, svc *s3.Client) error {
+			_, err := svc.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)}, awsCallOpts(ctx)...)
+			return err
+		}},
+		{"put", func(ctx context.Context, svc *s3.Client) error {
+			uploader := s3manager.NewUploader(svc)
+			uploader.ClientOptions = append(uploader.ClientOptions, awsCallOpts(ctx)...)
+			_, err := uploader.Upload(ctx, &s3.PutObjectInput{
+				Bucket: aws.String(bucket),
+				Key:    aws.String(key),
+				Body:   bytes.NewReader(make([]byte, 1024)),
+			})
+			return err
+		}},
+	}
+	statuses := []struct {
+		status int
+		code   string
+	}{
+		{http.StatusServiceUnavailable, "SlowDown"},
+		{http.StatusTooManyRequests, "SlowDown"},
+		{http.StatusInternalServerError, "InternalError"},
+	}
+	for _, op := range ops {
+		for _, st := range statuses {
+			for _, noRetry := range []bool{false, true} {
+				ctx := context.Background()
+				want := int32(cmn.BackendMaxAttempts)
+				if noRetry {
+					ctx = cmn.WithNoRetry(ctx)
+					want = 1
+				}
+				// HEAD response has no body: bare 429 (no error code) is not retryable for the SDK
+				if op.name == "head" && st.status == http.StatusTooManyRequests {
+					want = 1
+				}
+				transport := &retryS3Transport{status: st.status, code: st.code}
+				svc := newRetryS3Client(transport)
+
+				err := op.call(ctx, svc)
+				tassert.Fatalf(t, err != nil, "%s(%d, no-retry=%t): expected error", op.name, st.status, noRetry)
+				n := transport.n.Load()
+				tassert.Fatalf(t, n == want, "%s(%d, no-retry=%t): expected %d request(s), got %d",
+					op.name, st.status, noRetry, want, n)
+			}
+		}
+	}
+}
+
+// AWS_MAX_ATTEMPTS and profile's max_attempts: take precedence over the client default
+// but not over cmn.WithNoRetry
+func TestAWSRetryMaxAttemptsPrecedence(t *testing.T) {
+	orig := sdkRetryDflt
+	sdkRetryDflt.noBackoff = true
+	t.Cleanup(func() { sdkRetryDflt = orig })
+
+	tests := []struct {
+		name         string
+		env, profile string
+		wantUnmarked int32
+	}{
+		{"default", "", "", cmn.BackendMaxAttempts},
+		{"env", "4", "", 4},
+		{"profile", "", "3", 3},
+		{"env-over-profile", "4", "3", 4},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			conf := "[default]\nregion = us-east-1\n"
+			if tc.profile != "" {
+				conf += "max_attempts = " + tc.profile + "\n"
+			}
+			confFile := filepath.Join(dir, "config")
+			tassert.CheckFatal(t, os.WriteFile(confFile, []byte(conf), 0o600))
+			// isolate from ambient AWS configuration
+			t.Setenv("AWS_CONFIG_FILE", confFile)
+			t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(dir, "credentials"))
+			t.Setenv("AWS_PROFILE", "")
+			t.Setenv("AWS_CA_BUNDLE", "")
+			t.Setenv("AWS_ACCESS_KEY_ID", "fake")
+			t.Setenv("AWS_SECRET_ACCESS_KEY", "fake")
+			t.Setenv("AWS_MAX_ATTEMPTS", tc.env)
+
+			for _, noRetry := range []bool{false, true} {
+				cfg, err := (&sessConf{}).awsLoadConfig()
+				tassert.CheckFatal(t, err)
+				transport := &retryS3Transport{status: http.StatusServiceUnavailable, code: "SlowDown"}
+				cfg.HTTPClient = transport
+				svc := s3.NewFromConfig(cfg, func(o *s3.Options) {
+					o.BaseEndpoint = aws.String("http://s3.invalid")
+					o.UsePathStyle = true
+				})
+				ctx, want := context.Background(), tc.wantUnmarked
+				if noRetry {
+					ctx, want = cmn.WithNoRetry(ctx), 1
+				}
+				_, err = svc.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String("bucket"), Key: aws.String("obj")}, awsCallOpts(ctx)...)
+				tassert.Fatalf(t, err != nil, "no-retry=%t: expected error", noRetry)
+				n := transport.n.Load()
+				tassert.Fatalf(t, n == want, "no-retry=%t: expected %d request(s), got %d", noRetry, want, n)
 			}
 		})
 	}

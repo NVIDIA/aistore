@@ -61,7 +61,7 @@ func (*s3bp) StartMpt(ctx context.Context, lom *core.LOM, oreq *http.Request) (i
 		Key:      aws.String(lom.ObjName),
 		Metadata: metadata,
 	}
-	out, err := svc.CreateMultipartUpload(ctx, &input)
+	out, err := svc.CreateMultipartUpload(ctx, &input, awsCallOpts(ctx)...)
 	if err == nil {
 		id = *out.UploadId
 	} else {
@@ -113,11 +113,9 @@ func (*s3bp) PutMptPart(ctx context.Context, lom *core.LOM, r cos.ReadOpenCloser
 		err         error
 	)
 	if seekable {
-		out, err = svc.UploadPart(ctx, &input)
+		out, err = svc.UploadPart(ctx, &input, awsCallOpts(ctx)...)
 	} else {
-		out, err = svc.UploadPart(ctx, &input, func(o *s3.Options) {
-			o.Retryer = s3NoRetry
-		})
+		out, err = svc.UploadPart(ctx, &input, s3NoRetryOpts...)
 	}
 
 	if err != nil {
@@ -186,7 +184,7 @@ func (*s3bp) CompleteMpt(ctx context.Context, lom *core.LOM, oreq *http.Request,
 	}
 	input.MultipartUpload = &s3parts
 
-	out, err := svc.CompleteMultipartUpload(ctx, &input)
+	out, err := svc.CompleteMultipartUpload(ctx, &input, awsCallOpts(ctx)...)
 	if err != nil {
 		ecode, errV := awsWriteError(err, cloudBck, lom.ObjName, input.IfMatch != nil || input.IfNoneMatch != nil)
 		return "", "", ecode, errV
@@ -223,7 +221,7 @@ func (*s3bp) AbortMpt(ctx context.Context, lom *core.LOM, oreq *http.Request, up
 		Key:      aws.String(lom.ObjName),
 		UploadId: aws.String(uploadID),
 	}
-	if _, err = svc.AbortMultipartUpload(ctx, &input); err != nil {
+	if _, err = svc.AbortMultipartUpload(ctx, &input, awsCallOpts(ctx)...); err != nil {
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName)
 	}
 	return ecode, err

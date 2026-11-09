@@ -160,11 +160,12 @@ func (mpdChild *ociMPDChildStruct) Run() {
 	rangeHeader := cmn.MakeRangeHdr(mpdChild.start, mpdChild.length)
 
 	req := ocios.GetObjectRequest{
-		NamespaceName: &mpdChild.mpd.bp.namespace,
-		BucketName:    &mpdChild.mpd.bucketName,
-		ObjectName:    &mpdChild.mpd.objectName,
-		Range:         &rangeHeader,
-		IfMatch:       &mpdChild.mpd.etag,
+		RequestMetadata: ociReqMeta(mpdChild.mpd.ctx),
+		NamespaceName:   &mpdChild.mpd.bp.namespace,
+		BucketName:      &mpdChild.mpd.bucketName,
+		ObjectName:      &mpdChild.mpd.objectName,
+		Range:           &rangeHeader,
+		IfMatch:         &mpdChild.mpd.etag,
 	}
 
 	resp, err := mpdChild.mpd.client.GetObject(mpdChild.mpd.ctx, req)

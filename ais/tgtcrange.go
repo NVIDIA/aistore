@@ -45,12 +45,12 @@ type (
 )
 
 // initial full read
-// - when parallel and qualified (chunked bucket, etc.), make it cancelable
+// - when qualified for parallel range reads (chunked bucket, etc.), make it cancelable
 // - non-nil stop: the caller must call it
-func (goi *getOI) coldReader(bp core.Backend, parallel bool) (res core.GetReaderResult, stop context.CancelFunc) {
+func (goi *getOI) coldReader(bp core.Backend) (res core.GetReaderResult, stop context.CancelFunc) {
 	ctx := goi.ctx
 	chunks := &goi.lom.Bprops().Chunks
-	if parallel && chunks.AutoEnabled() && chunks.NumColdReaders() > 1 && !goi.lom.ValidateColdGet() &&
+	if chunks.AutoEnabled() && chunks.NumColdReaders() > 1 && !goi.lom.ValidateColdGet() &&
 		!goi.lom.ECEnabled() && bp.Provider() != apc.OCI && !core.RR.BackingOff(goi.lom.Bprops()) {
 		ctx, stop = context.WithCancel(ctx)
 	}

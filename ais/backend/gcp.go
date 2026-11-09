@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -34,6 +35,7 @@ import (
 	"github.com/NVIDIA/aistore/tracing"
 
 	"cloud.google.com/go/storage"
+	gax "github.com/googleapis/gax-go/v2"
 	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
@@ -154,7 +156,7 @@ func (gsbp *gsbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, in
 	if e != nil {
 		return nil, 0, e
 	}
-	if _, err := client.Bucket(cloudBck.Name).Attrs(ctx); err != nil {
+	if _, err := gcsBucket(ctx, client, cloudBck.Name).Attrs(ctx); err != nil {
 		ecode, err := gcpErrorToAISError(err, cloudBck)
 		return nil, ecode, err
 	}
@@ -201,7 +203,7 @@ func (gsbp *gsbp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMs
 	}
 
 	var (
-		it    = client.Bucket(cloudBck.Name).Objects(ctx, query)
+		it    = gcsBucket(ctx, client, cloudBck.Name).Objects(ctx, query)
 		pager = iterator.NewPager(it, int(msg.PageSize), msg.ContinuationToken)
 		objs  = make([]*storage.ObjectAttrs, 0, msg.PageSize)
 	)
@@ -303,7 +305,7 @@ func (gsbp *gsbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (
 	if e != nil {
 		return nil, 0, e
 	}
-	attrs, err := client.Bucket(cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
+	attrs, err := gcsBucket(ctx, client, cloudBck.Name).Object(lom.ObjName).Attrs(ctx)
 	if err != nil {
 		ecode, errV := gcpObjErr(ctx, client, err, cloudBck)
 		return nil, ecode, errV
@@ -380,7 +382,7 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	dl, ctx := newRdl(ctx, &gsbp.base, lom.Bck())
 	defer dl.fini(&res)
 
-	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)
+	o := gcsBucket(ctx, client, cloudBck.Name).Object(lom.ObjName)
 	if length > 0 {
 		if o, res.Err = gcpPin(o, core.RangePin(pin)); res.Err != nil {
 			return res
@@ -433,6 +435,9 @@ func (gsbp *gsbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 	// full read
 	rc, res.Err = o.NewReader(ctx)
 	if res.Err != nil {
+		if _, ok := errors.AsType[*googleapi.Error](res.Err); ok {
+			res.ErrCode, res.Err = gcpErrorToAISError(res.Err, cloudBck)
+		}
 		return res
 	}
 	// custom metadata
@@ -505,8 +510,12 @@ func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, or
 		return 0, e
 	}
 
-	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)
-	wc := o.NewWriter(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	wc := gcsBucket(ctx, client, cloudBck.Name).Object(lom.ObjName).NewWriter(ctx)
+	// single-request upload: resumable (chunked) uploads retry each chunk
+	// until ChunkRetryDeadline, regardless of retry settings
+	wc.ChunkSize = 0
 	wc.Metadata = map[string]string{
 		gcpChecksumType: cksumType,
 		gcpChecksumVal:  cksumVal,
@@ -524,18 +533,16 @@ func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, or
 	cos.Close(r)
 
 	if err != nil {
+		if _, ok := errors.AsType[*googleapi.Error](err); ok {
+			return gcpErrorToAISError(err, cloudBck)
+		}
 		return 0, err
 	}
 	if err := wc.Close(); err != nil {
 		return gcpErrorToAISError(err, cloudBck)
 	}
 
-	attrs, errV := o.Attrs(ctx)
-	if errV != nil {
-		return gcpObjErr(ctx, client, errV, cloudBck)
-	}
-
-	_ = gcpSetCustom(lom, attrs)
+	_ = gcpSetCustom(lom, wc.Attrs())
 	if cmn.Rom.V(5, cos.ModBackend) {
 		nlog.Infof("[put_object] %s, size %d", lom, written)
 	}
@@ -552,7 +559,7 @@ func (gsbp *gsbp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 	if e != nil {
 		return 0, e
 	}
-	o := client.Bucket(cloudBck.Name).Object(lom.ObjName)
+	o := gcsBucket(ctx, client, cloudBck.Name).Object(lom.ObjName)
 	if err := o.Delete(ctx); err != nil {
 		return gcpObjErr(ctx, client, err, cloudBck)
 	}
@@ -618,7 +625,7 @@ func (sess *gcpSess) init(ctx context.Context, opts []option.ClientOption) error
 	opts = append(opts, option.WithHTTPClient(sess.httpClient))
 
 	// cloud.google.com/go/storage client
-	client, err := storage.NewClient(ctx, opts...)
+	client, err := gcsNewClient(ctx, opts)
 	if err != nil {
 		return cmn.NewErrFailedTo(nil, "gcp-backend: create", "client", err)
 	}
@@ -715,12 +722,49 @@ func _gcpErr(gcpError error) error {
 func gcpObjErr(ctx context.Context, gcpClient *storage.Client, objErr error, bck *cmn.Bck) (int, error) {
 	// TODO: consider additionally checking for `*googleapi.Error{Code:404}`
 	if !errors.Is(objErr, storage.ErrObjectNotExist) {
+		if e, ok := errors.AsType[*googleapi.Error](objErr); ok &&
+			(e.Code == http.StatusTooManyRequests || e.Code == http.StatusServiceUnavailable) {
+			return gcpErrorToAISError(objErr, bck)
+		}
 		return http.StatusBadRequest, _gcpErr(objErr)
 	}
 
 	// Object does not exist but in GCP it doesn't necessarily mean that the bucket does.
-	if _, err := gcpClient.Bucket(bck.Name).Attrs(ctx); err != nil {
+	if _, err := gcsBucket(ctx, gcpClient, bck.Name).Attrs(ctx); err != nil {
 		return gcpErrorToAISError(err, bck)
 	}
 	return http.StatusNotFound, cos.NewErrNotFound(nil, _gcpErr(objErr).Error())
+}
+
+//
+// sdkRetry => GCS retry options
+//
+
+// single attempt per API call
+var gcsNoRetryOpts = []storage.RetryOption{storage.WithPolicy(storage.RetryNever)}
+
+func gcsNewClient(ctx context.Context, opts []option.ClientOption) (*storage.Client, error) {
+	client, err := storage.NewClient(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	client.SetRetry(sdkRetryDflt.gcs()...)
+	return client, nil
+}
+
+// bucket handle; object handles and iterators inherit its retry settings
+func gcsBucket(ctx context.Context, client *storage.Client, name string) *storage.BucketHandle {
+	b := client.Bucket(name)
+	if cmn.IsNoRetry(ctx) {
+		b = b.Retryer(gcsNoRetryOpts...)
+	}
+	return b
+}
+
+func (sr *sdkRetry) gcs() []storage.RetryOption {
+	opts := []storage.RetryOption{storage.WithMaxAttempts(sr.maxAttempts)}
+	if sr.noBackoff {
+		opts = append(opts, storage.WithBackoff(gax.Backoff{Initial: time.Nanosecond, Max: time.Nanosecond}))
+	}
+	return opts
 }

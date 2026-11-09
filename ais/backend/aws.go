@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
@@ -80,12 +81,19 @@ var (
 	awsProfile string
 )
 
-// S3 retryer with retries disabled (when reader is not seekable)
+// per call: single attempt (see sdkRetryNone)
 var (
-	s3NoRetry = retry.NewStandard(func(o *retry.StandardOptions) {
-		o.MaxAttempts = 1
-	})
+	s3NoRetry     = sdkRetryNone.s3()
+	s3NoRetryOpts = []func(*s3.Options){noRetryOpt}
 )
+
+// per-call options: single attempt when the caller retries on its own
+func awsCallOpts(ctx context.Context) []func(*s3.Options) {
+	if cmn.IsNoRetry(ctx) {
+		return s3NoRetryOpts
+	}
+	return nil
+}
 
 // interface guard
 var _ core.Backend = (*s3bp)(nil)
@@ -267,7 +275,7 @@ func (*s3bp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, ls
 	}
 	params.MaxKeys = aws.Int32(int32(msg.PageSize))
 
-	resp, err := svc.ListObjectsV2(ctx, params)
+	resp, err := svc.ListObjectsV2(ctx, params, awsCallOpts(ctx)...)
 	if err != nil {
 		if cmn.Rom.V(4, cos.ModBackend) {
 			nlog.Infoln(tag, cloudBck.Name, err)
@@ -330,7 +338,7 @@ func (*s3bp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, ls
 	)
 	for _, en := range lst.Entries {
 		verParams.Prefix = aws.String(en.Name)
-		verResp, err := svc.ListObjectVersions(ctx, verParams)
+		verResp, err := svc.ListObjectVersions(ctx, verParams, awsCallOpts(ctx)...)
 		if err != nil {
 			return awsErrorToAISError(err, cloudBck, "", sessConf.detail())
 		}
@@ -391,7 +399,7 @@ func (*s3bp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, ecode int, _ error) {
 // HEAD OBJECT
 //
 
-func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (*s3bp) HeadObj(ctx context.Context, lom *core.LOM, oreq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	const tag = "[head_object]"
 	var (
 		svc        *s3.Client
@@ -420,10 +428,11 @@ func (*s3bp) HeadObj(_ context.Context, lom *core.LOM, oreq *http.Request) (oa *
 	if err != nil {
 		return nil, 0, err
 	}
+	// (ctx: for call options only)
 	headOutput, err = svc.HeadObject(context.Background(), &s3.HeadObjectInput{
 		Bucket: aws.String(cloudBck.Name),
 		Key:    aws.String(lom.ObjName),
-	})
+	}, awsCallOpts(ctx)...)
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 		return nil, ecode, err
@@ -541,7 +550,7 @@ func (s3bp *s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 				input.VersionId = aws.String(p.Version)
 			}
 		}
-		obj, err = svc.GetObject(ctx, &input)
+		obj, err = svc.GetObject(ctx, &input, awsCallOpts(ctx)...)
 		if err != nil {
 			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 			switch res.ErrCode {
@@ -553,7 +562,7 @@ func (s3bp *s3bp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 			return res
 		}
 	} else {
-		obj, err = svc.GetObject(ctx, &input)
+		obj, err = svc.GetObject(ctx, &input, awsCallOpts(ctx)...)
 		if err != nil {
 			res.ErrCode, res.Err = awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 			return res
@@ -673,6 +682,7 @@ func putUpload(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.R
 	}
 
 	uploader := s3manager.NewUploader(svc)
+	uploader.ClientOptions = append(uploader.ClientOptions, awsCallOpts(ctx)...) // all parts
 	switch partSize := int64(lom.Bprops().Extra.AWS.MultiPartSize); partSize {
 	case -1:
 		uploader.PartSize = lom.Lsize() + 1 // forces single-part upload
@@ -750,7 +760,7 @@ func (*s3bp) DeleteObj(ctx context.Context, lom *core.LOM) (ecode int, err error
 	_, err = svc.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(cloudBck.Name),
 		Key:    aws.String(lom.ObjName),
-	})
+	}, awsCallOpts(ctx)...)
 	if err != nil {
 		ecode, err = awsErrorToAISError(err, cloudBck, lom.ObjName, sessConf.detail())
 		return
@@ -872,11 +882,6 @@ func (sc *sessConf) _cid() string {
 
 // awsLoadConfig create config using default creds from ~/.aws/credentials and environment variables.
 func (sc *sessConf) awsLoadConfig() (aws.Config, error) {
-	// Disable SDK rate limiting to rely on configured backend.rate_limit
-	retryConfig := retry.NewStandard(func(o *retry.StandardOptions) {
-		o.RateLimiter = ratelimit.None
-		o.Retryables = append([]retry.IsErrorRetryable{retry.IsErrorRetryableFunc(noRetryBlockedEgress)}, o.Retryables...)
-	})
 	confFiles, credFiles := getS3ConfFiles()
 	nlog.Infoln("Loading config for profile:", sc.profile, "config files:", confFiles, "credential files:", credFiles)
 
@@ -892,13 +897,13 @@ func (sc *sessConf) awsLoadConfig() (aws.Config, error) {
 		config.WithSharedConfigFiles(confFiles),
 		config.WithSharedCredentialsFiles(credFiles),
 		config.WithSharedConfigProfile(sc.profile),
-		config.WithRetryer(func() aws.Retryer {
-			return retryConfig
-		}),
 	)
 	if err != nil {
 		return cfg, err
 	}
+	// not using config.WithRetryer: it disables AWS_MAX_ATTEMPTS and profile's max_attempts
+	// (when defined, cfg.RetryMaxAttempts takes precedence over sdkRetryDflt)
+	cfg.Retryer = sdkRetryDflt.s3
 	if sc.endpoint != "" {
 		cfg.BaseEndpoint = aws.String(sc.endpoint)
 	}
@@ -911,6 +916,28 @@ func (sc *sessConf) awsLoadConfig() (aws.Config, error) {
 	}
 	return cfg, nil
 }
+
+//
+// sdkRetry => S3 retryer
+//
+
+type s3NoBackoff struct{}
+
+func (s3NoBackoff) BackoffDelay(int, error) (time.Duration, error) { return 0, nil }
+
+func (sr *sdkRetry) s3() aws.Retryer { return retry.NewStandard(sr.s3std) }
+
+// no SDK rate limiting: rely on configured backend.rate_limit
+func (sr *sdkRetry) s3std(o *retry.StandardOptions) {
+	o.MaxAttempts = sr.maxAttempts
+	o.RateLimiter = ratelimit.None
+	o.Retryables = append([]retry.IsErrorRetryable{retry.IsErrorRetryableFunc(noRetryBlockedEgress)}, o.Retryables...)
+	if sr.noBackoff {
+		o.Backoff = s3NoBackoff{}
+	}
+}
+
+func noRetryOpt(o *s3.Options) { o.Retryer = s3NoRetry }
 
 func noRetryBlockedEgress(err error) aws.Ternary {
 	if errors.Is(err, cmn.ErrBlockedEgress) {

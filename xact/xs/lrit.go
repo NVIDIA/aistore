@@ -373,6 +373,7 @@ func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (eco
 		total   time.Duration
 		now     = mono.NanoTime()
 		sleep   = remPageSleepIni
+		nctx    = cmn.WithNoRetry(ctx)
 	)
 	for retries = 1; retries < remPageRetriesMax; retries++ {
 		sleep = hk.Jitter(sleep+sleep/2, now+int64(sleep))
@@ -383,7 +384,7 @@ func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (eco
 		}
 		total += sleep
 
-		ecode, err = bp.ListObjects(ctx, r.bck, lsmsg, lst)
+		ecode, err = bp.ListObjects(nctx, r.bck, lsmsg, lst)
 		if err == nil {
 			if cmn.Rom.V(4, cos.ModXs) {
 				nlog.Warningln(r.bck.Cname(""), "list-objects: recovered after", retries, "retries, waited", total)

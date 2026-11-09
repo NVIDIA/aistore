@@ -6,13 +6,16 @@ package ais
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
@@ -38,6 +41,8 @@ import (
 // - proactive: acquire (i.e., shape) before every call
 // - reactive:  on 429/503 only, and only where the call is safely repeatable;
 //   PutObj requires a replayable (re-openable) body
+// - each reactive retry is a single attempt: the backend (SDK client) must not
+//   retry on its own (see cmn.WithNoRetry)
 
 // stats:
 // - not counting proactive delay    - only (reactive) retries
@@ -60,7 +65,7 @@ func (bp *rlbackend) HeadObj(ctx context.Context, lom *core.LOM, origReq *http.R
 		return
 	}
 
-	cb := func() (int, error) {
+	cb := func(ctx context.Context) (int, error) {
 		oa, ecode, err = bp.Backend.HeadObj(ctx, lom, origReq)
 		return ecode, err
 	}
@@ -83,7 +88,7 @@ func (bp *rlbackend) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.Ls
 		return
 	}
 
-	cb := func() (int, error) {
+	cb := func(ctx context.Context) (int, error) {
 		return bp.Backend.ListObjects(ctx, bck, msg, lst)
 	}
 	_, ecode, err = bp.retry(ctx, arl, ecode, err, cb)
@@ -98,7 +103,7 @@ func (bp *rlbackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, ori
 		return ecode, err
 	}
 
-	cb := func() (int, error) {
+	cb := func(ctx context.Context) (int, error) {
 		return bp.Backend.GetObj(ctx, lom, owt, origReq)
 	}
 	total, code, e := bp.retry(ctx, arl, ecode, err, cb)
@@ -124,7 +129,7 @@ func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, le
 	}
 	closeErrReader()
 
-	cb := func() (int, error) {
+	cb := func(ctx context.Context) (int, error) {
 		res = bp.Backend.GetObjReader(ctx, lom, offset, length, pin...)
 		closeErrReader()
 		return res.ErrCode, res.Err
@@ -158,23 +163,19 @@ func (bp *rlbackend) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM,
 	// typecast above is not ideal, strictly speaking
 	// nopOpener would be a no-op; ReaderWithArgs would panic (see cmn/cos/io.go)
 
-	var roc cos.ReadOpenCloser
-	cb := func() (int, error) {
-		if roc != nil {
-			cos.Close(roc)
-			roc = nil
+	cb := func(ctx context.Context) (int, error) {
+		next, err := opener.Open()
+		if err != nil {
+			return 0, err
 		}
-		next, errO := opener.Open()
-		if errO != nil {
-			return 0, errO
+		code, err := bp.Backend.PutObj(ctx, next, lom, origReq)
+		// release the reopened file even if the backend returns before consuming it
+		if closeErr := next.Close(); !errors.Is(closeErr, os.ErrClosed) {
+			debug.AssertNoErr(closeErr)
 		}
-		roc = next
-		return bp.Backend.PutObj(ctx, next, lom, origReq)
+		return code, err
 	}
 	total, code, e := bp.retry(ctx, arl, ecode, err, cb)
-	if roc != nil {
-		cos.Close(roc)
-	}
 
 	bp.stats(ctx, lom.Bck(), stats.RatelimPutRetryCount, stats.RatelimPutRetryLatencyTotal, total)
 	return code, e
@@ -189,7 +190,7 @@ func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) 
 		return ecode, err
 	}
 
-	cb := func() (int, error) {
+	cb := func(ctx context.Context) (int, error) {
 		return bp.Backend.DeleteObj(ctx, lom)
 	}
 	_, code, e := bp.retry(ctx, arl, ecode, err, cb)
@@ -222,16 +223,20 @@ func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim)
 // reactive: back off and repeat `cb` while the remote keeps responding 429/503
 // - (ecode, err) on entry: the failed attempt that brought us here
 // - bounded by both `num_retries` and DfltRateMaxWait
+// - `cb` gets no-retry context: one attempt per SDK request
 func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, ecode int, err error,
-	cb func() (int, error)) (total time.Duration, _ int, _ error) {
-	var retries int
+	cb func(context.Context) (int, error)) (total time.Duration, _ int, _ error) {
+	var (
+		retries int
+		nctx    = cmn.WithNoRetry(ctx)
+	)
 	for retries < arl.NumRetries() && total < cos.DfltRateMaxWait {
 		sleep := arl.OnErr()
 		total += sleep
 		if cerr := ctx.Err(); cerr != nil {
 			return total, 0, cerr
 		}
-		ecode, err = cb()
+		ecode, err = cb(nctx)
 		retries++
 		if err == nil || !cmn.IsErrTooManyRequests(err) {
 			break

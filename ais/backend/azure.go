@@ -28,8 +28,10 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
@@ -216,11 +218,12 @@ func _azureErr(azureError error, stgErr *azcore.ResponseError) (int, error) {
 //
 
 func (azbp *azbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, int, error) {
+	ctx = azCtx(ctx)
 	var (
 		cloudBck = bck.RemoteBck()
 		cntURL   = azbp.u + "/" + cloudBck.Name
 	)
-	client, err := container.NewClientWithSharedKeyCredential(cntURL, azbp.creds, nil)
+	client, err := container.NewClientWithSharedKeyCredential(cntURL, azbp.creds, (*container.ClientOptions)(azOpts()))
 	if err != nil {
 		status, err := azureErrorToAISError(err, cloudBck, "")
 		return nil, status, err
@@ -252,6 +255,7 @@ func (azbp *azbp) HeadBucket(ctx context.Context, bck *meta.Bck) (cos.StrKVs, in
 // TODO: research "hierarchical namespaces"
 // See also: aws.go, gcp.go
 func (azbp *azbp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+	ctx = azCtx(ctx)
 	msg.PageSize = calcPageSize(msg.PageSize, bck.MaxPageSize())
 	var (
 		h        = cmn.BackendHelpers.Azure
@@ -262,7 +266,7 @@ func (azbp *azbp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMs
 	)
 	lst.ContinuationToken = ""
 
-	client, err := container.NewClientWithSharedKeyCredential(cntURL, azbp.creds, nil)
+	client, err := container.NewClientWithSharedKeyCredential(cntURL, azbp.creds, (*container.ClientOptions)(azOpts()))
 	if err != nil {
 		return azureErrorToAISError(err, cloudBck, "")
 	}
@@ -332,7 +336,7 @@ func (azbp *azbp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMs
 //
 
 func (azbp *azbp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, _ int, _ error) {
-	serviceClient, err := service.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, nil)
+	serviceClient, err := service.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, (*service.ClientOptions)(azOpts()))
 	if err != nil {
 		status, err := azureErrorToAISError(err, &cmn.Bck{Provider: apc.Azure}, "")
 		return nil, status, err
@@ -362,12 +366,13 @@ func (azbp *azbp) ListBuckets(cmn.QueryBcks) (bcks cmn.Bcks, _ int, _ error) {
 //
 
 func (azbp *azbp) HeadObj(ctx context.Context, lom *core.LOM, _ *http.Request) (*cmn.ObjAttrs, int, error) {
+	ctx = azCtx(ctx)
 	var (
 		h        = cmn.BackendHelpers.Azure
 		cloudBck = lom.Bucket().RemoteBck()
 		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName
 	)
-	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, nil)
+	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, (*blockblob.ClientOptions)(azOpts()))
 	if err != nil {
 		status, err := azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return nil, status, err
@@ -429,6 +434,7 @@ func (azbp *azbp) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, _ *htt
 
 func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) (res core.GetReaderResult) {
 	dl, ctx := newRdl(ctx, &azbp.base, lom.Bck()) // read deadline (see rdl.go)
+	ctx = azCtx(ctx)
 	defer dl.fini(&res)
 
 	var (
@@ -436,7 +442,7 @@ func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 		cloudBck = lom.Bucket().RemoteBck()
 		blURL    = azbp.u + "/" + cloudBck.Name + "/" + lom.ObjName
 	)
-	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, nil)
+	client, err := blockblob.NewClientWithSharedKeyCredential(blURL, azbp.creds, (*blockblob.ClientOptions)(azOpts()))
 	if err != nil {
 		res.ErrCode, res.Err = azureErrorToAISError(err, cloudBck, lom.ObjName)
 		return res
@@ -505,9 +511,10 @@ func (azbp *azbp) GetObjReader(ctx context.Context, lom *core.LOM, offset, lengt
 //
 
 func (azbp *azbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ *http.Request) (int, error) {
+	ctx = azCtx(ctx)
 	defer cos.Close(r)
 
-	client, err := azblob.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, nil)
+	client, err := azblob.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, azOpts())
 	if err != nil {
 		return azureErrorToAISError(err, &cmn.Bck{Provider: apc.Azure}, "")
 	}
@@ -544,7 +551,8 @@ func (azbp *azbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, _ 
 //
 
 func (azbp *azbp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
-	client, err := azblob.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, nil)
+	ctx = azCtx(ctx)
+	client, err := azblob.NewClientWithSharedKeyCredential(azbp.u, azbp.creds, azOpts())
 	if err != nil {
 		return azureErrorToAISError(err, &cmn.Bck{Provider: apc.Azure}, "")
 	}
@@ -555,4 +563,35 @@ func (azbp *azbp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 		return azureErrorToAISError(err, cloudBck, lom.ObjName)
 	}
 	return http.StatusOK, nil
+}
+
+//
+// sdkRetry => Azure retry options
+//
+
+// client options: retries per sdkRetryDflt
+func azOpts() *azblob.ClientOptions {
+	o := &azblob.ClientOptions{}
+	o.Retry = sdkRetryDflt.azure()
+	return o
+}
+
+// per call: single attempt (see sdkRetryNone); overrides client options
+func azCtx(ctx context.Context) context.Context {
+	if cmn.IsNoRetry(ctx) {
+		return policy.WithRetryOptions(ctx, sdkRetryNone.azure())
+	}
+	return ctx
+}
+
+func (sr *sdkRetry) azure() policy.RetryOptions {
+	o := policy.RetryOptions{MaxRetries: int32(sr.maxAttempts - 1)}
+	if o.MaxRetries == 0 {
+		o.MaxRetries = -1 // (zero means SDK default)
+	}
+	if sr.noBackoff {
+		// (not -1: zero delay reads as overflow in azcore calcDelay => MaxRetryDelay)
+		o.RetryDelay, o.MaxRetryDelay = time.Nanosecond, time.Nanosecond
+	}
+	return o
 }

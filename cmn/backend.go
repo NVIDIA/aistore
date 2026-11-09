@@ -6,6 +6,7 @@
 package cmn
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"io"
@@ -41,6 +42,9 @@ const (
 	// (same as S3 error code, see https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html)
 	TcodeCondWriteConflict = "ConditionalRequestConflict"
 )
+
+// default attempt limit per backend SDK request, including the first
+const BackendMaxAttempts = 2
 
 type backendFuncs struct {
 	EncodeVersion  func(v any) (version string, isSet bool)
@@ -374,4 +378,28 @@ func CloseRemote(r io.ReadCloser, tag any, verbosity, mod int) {
 	if Rom.V(verbosity, mod) {
 		nlog.Warningln(tag, "close remote:", err)
 	}
+}
+
+//
+// no-retry: the caller retries on its own and requires a single attempt
+// from the backend (SDK client)
+//
+
+type ctxNoRetry struct{}
+
+func WithNoRetry(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	} else if IsNoRetry(ctx) {
+		return ctx
+	}
+	return context.WithValue(ctx, ctxNoRetry{}, true)
+}
+
+func IsNoRetry(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(ctxNoRetry{}).(bool)
+	return v
 }
