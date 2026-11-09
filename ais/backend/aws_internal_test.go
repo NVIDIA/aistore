@@ -9,7 +9,6 @@ package backend
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -29,48 +28,26 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-func TestAWSWriteConditionsSDKEndpoint(t *testing.T) {
-	const endpoint = "https://s3.example.invalid"
-	// isolate from ambient AWS configuration (CA bundle, profile, shared files)
-	dir := t.TempDir()
-	t.Setenv("AWS_CONFIG_FILE", filepath.Join(dir, "config"))
-	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(dir, "credentials"))
-	t.Setenv("AWS_PROFILE", "")
-	t.Setenv("AWS_CA_BUNDLE", "")
-	t.Setenv("AWS_ENDPOINT_URL_S3", endpoint)
-	t.Setenv("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "false")
-	t.Setenv("AWS_ACCESS_KEY_ID", "fake")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "fake")
-	sc := sessConf{}
-	cfg, err := sc.awsLoadConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	svc := s3.NewFromConfig(cfg)
-	if got := aws.ToString(svc.Options().BaseEndpoint); got != endpoint || awsSupportsCondWrite(svc) {
-		t.Fatalf("SDK endpoint %q must disable conditional writes", got)
-	}
-	r := &http.Request{Header: http.Header{cos.HdrIfNoneMatch: {"*"}}}
-	match, none, ecode, err := awsWriteConditions(svc, r)
-	var unsupported *cmn.ErrUnsupp
-	if match != nil || none != nil || ecode != http.StatusNotImplemented || !errors.As(err, &unsupported) {
-		t.Fatalf("expected unsupported conditional write, got status %d and error %v", ecode, err)
-	}
-}
-
-// default endpoint: forward conditions, quoted If-Match
-func TestAWSWriteConditionsQuoting(t *testing.T) {
-	svc := s3.New(s3.Options{Region: "us-east-1"})
+// quote a single If-Match ETag and preserve other forms
+func TestAWSWriteConditions(t *testing.T) {
 	for _, tc := range []struct{ key, value, match, none string }{
 		{cos.HdrIfMatch, `"etag-1"`, `"etag-1"`, ""},
 		{cos.HdrIfMatch, "etag-1", `"etag-1"`, ""},
+		{cos.HdrIfMatch, "*", "*", ""},
+		{cos.HdrIfMatch, `"*"`, `"*"`, ""},
+		{cos.HdrIfMatch, `"one", "two"`, `"one", "two"`, ""},
+		{cos.HdrIfMatch, `"one,two"`, `"one,two"`, ""},
 		{cos.HdrIfNoneMatch, "*", "", "*"},
 	} {
 		r := &http.Request{Header: http.Header{tc.key: {tc.value}}}
-		match, none, ecode, err := awsWriteConditions(svc, r)
+		match, none, ecode, err := awsWriteConditions(r)
 		if err != nil || ecode != 0 || aws.ToString(match) != tc.match || aws.ToString(none) != tc.none {
 			t.Fatalf("%s=%q: match=%q none=%q ecode=%d err=%v", tc.key, tc.value, aws.ToString(match), aws.ToString(none), ecode, err)
 		}
+	}
+	r := &http.Request{Header: http.Header{cos.HdrIfMatch: {`""`}}}
+	if _, _, ecode, err := awsWriteConditions(r); err == nil || ecode != http.StatusBadRequest {
+		t.Fatalf("empty If-Match: expected 400, got %d %v", ecode, err)
 	}
 }
 

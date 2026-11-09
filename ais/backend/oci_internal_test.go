@@ -336,10 +336,9 @@ func TestOCIConditionalMultipartCommit(t *testing.T) {
 }
 
 func TestOCIConditionalInvalidHeader(t *testing.T) {
+	// (other values are forwarded as is: the remote store decides)
 	for _, tc := range []struct{ key, value string }{
-		{"If-None-Match", `"etag"`}, {"If-Match", `W/"weak"`},
-		{"If-Match", `"one", "two"`}, {"If-Match", ""}, {"If-Match", `""`},
-		{"If-Match", "*"}, {"If-Match", "one,two"},
+		{"If-Match", ""}, {"If-Match", `""`}, {"If-None-Match", " "},
 	} {
 		bp, transport := conditionalOCIBackend(t)
 		code, err := bp.PutObj(context.Background(), io.NopCloser(strings.NewReader("must-not-write")), conditionalLOM(), conditionalRequest(tc.key, tc.value))

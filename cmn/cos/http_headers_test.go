@@ -44,22 +44,24 @@ func TestParseCondWrite(t *testing.T) {
 		fail   bool
 	}{
 		{"none", http.Header{}, cos.CondWrite{}, false},
-		{"quoted", http.Header{"If-Match": {`"etag-1"`}}, cos.CondWrite{IfMatch: "etag-1"}, false},
-		{"bare", http.Header{"If-Match": {"etag-1"}}, cos.CondWrite{IfMatch: "etag-1"}, false},
-		{"bare-trimmed", http.Header{"If-Match": {"  etag-1 "}}, cos.CondWrite{IfMatch: "etag-1"}, false},
-		{"multipart", http.Header{"If-Match": {`"d41d8cd98f00b204e9800998ecf8427e-3"`}}, cos.CondWrite{IfMatch: "d41d8cd98f00b204e9800998ecf8427e-3"}, false},
-		{"create-only", http.Header{"If-None-Match": {"*"}}, cos.CondWrite{IfNoneMatch: true}, false},
-		{"weak", http.Header{"If-Match": {`W/"etag"`}}, cos.CondWrite{}, true},
-		{"wildcard-match", http.Header{"If-Match": {"*"}}, cos.CondWrite{}, true},
-		{"list", http.Header{"If-Match": {`"one", "two"`}}, cos.CondWrite{}, true},
-		{"bare-list", http.Header{"If-Match": {"one,two"}}, cos.CondWrite{}, true},
-		{"inner-space", http.Header{"If-Match": {`"et ag"`}}, cos.CondWrite{}, true},
-		{"unbalanced", http.Header{"If-Match": {`"etag`}}, cos.CondWrite{}, true},
+		{"quoted", http.Header{"If-Match": {`"etag-1"`}}, cos.CondWrite{IfMatch: "etag-1", MatchETag: true}, false},
+		{"bare", http.Header{"If-Match": {"etag-1"}}, cos.CondWrite{IfMatch: "etag-1", MatchETag: true}, false},
+		{"bare-trimmed", http.Header{"If-Match": {"  etag-1 "}}, cos.CondWrite{IfMatch: "etag-1", MatchETag: true}, false},
+		{"multipart", http.Header{"If-Match": {`"d41d8cd98f00b204e9800998ecf8427e-3"`}}, cos.CondWrite{IfMatch: "d41d8cd98f00b204e9800998ecf8427e-3", MatchETag: true}, false},
+		{"create-only", http.Header{"If-None-Match": {"*"}}, cos.CondWrite{IfNoneMatch: "*"}, false},
+		{"quoted-comma", http.Header{"If-Match": {`"one,two"`}}, cos.CondWrite{IfMatch: "one,two", MatchETag: true}, false},
+		// forwarded as is: the remote store decides
+		{"wildcard", http.Header{"If-Match": {"*"}}, cos.CondWrite{IfMatch: "*"}, false},
+		{"quoted-star", http.Header{"If-Match": {`"*"`}}, cos.CondWrite{IfMatch: `"*"`}, false},
+		{"list", http.Header{"If-Match": {`"one", "two"`}}, cos.CondWrite{IfMatch: `"one", "two"`}, false},
+		{"bare-list", http.Header{"If-Match": {"one,two"}}, cos.CondWrite{IfMatch: "one,two"}, false},
+		{"weak", http.Header{"If-Match": {`W/"etag"`}}, cos.CondWrite{IfMatch: `W/"etag"`}, false},
+		{"none-match-etag", http.Header{"If-None-Match": {`"etag"`}}, cos.CondWrite{IfNoneMatch: `"etag"`}, false},
+		{"both", http.Header{"If-Match": {`"etag"`}, "If-None-Match": {"*"}}, cos.CondWrite{IfMatch: "etag", IfNoneMatch: "*", MatchETag: true}, false},
+		// rejected
 		{"empty-quoted", http.Header{"If-Match": {`""`}}, cos.CondWrite{}, true},
 		{"empty", http.Header{"If-Match": {""}}, cos.CondWrite{}, true},
 		{"multiple-values", http.Header{"If-Match": {`"one"`, `"two"`}}, cos.CondWrite{}, true},
-		{"none-match-etag", http.Header{"If-None-Match": {`"etag"`}}, cos.CondWrite{}, true},
-		{"both", http.Header{"If-Match": {`"etag"`}, "If-None-Match": {"*"}}, cos.CondWrite{}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cw, err := cos.ParseCondWrite(tc.header)

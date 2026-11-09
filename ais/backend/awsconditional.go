@@ -15,49 +15,29 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 )
 
-// forward write conditions to the SDK's default S3 endpoint
-func (*s3bp) CondWrite(bck *meta.Bck) bool {
-	if bck == nil {
-		return false
-	}
-	svc, err := getS3Svc(bck.RemoteBck(), "")
-	return err == nil && awsSupportsCondWrite(svc)
-}
+// forward write conditions to any S3 endpoint; the endpoint decides
+func (*s3bp) CondWrite(*meta.Bck) bool { return true }
 
-func awsSupportsCondWrite(svc *s3.Client) bool {
-	return aws.ToString(svc.Options().BaseEndpoint) == ""
-}
-
-// return bucket-configured endpoint, if any, or the default (see env.AWSEndpoint)
-func awsEndpoint(bck *cmn.Bck) string {
-	if bck != nil && bck.Props != nil && bck.Props.Extra.AWS.Endpoint != "" {
-		return bck.Props.Extra.AWS.Endpoint
-	}
-	return s3Endpoint
-}
-
-// translate write conditions (see cos.ParseCondWrite) to S3 request fields;
-// S3 expects quoted If-Match ETag
-func awsWriteConditions(svc *s3.Client, r *http.Request) (match, none *string, ecode int, err error) {
-	if r == nil || !cos.IsCondWrite(r.Header) {
+// quote a single If-Match ETag; forward other forms for the endpoint to evaluate
+func awsWriteConditions(r *http.Request) (match, none *string, ecode int, err error) {
+	if r == nil {
 		return nil, nil, 0, nil
-	}
-	if !awsSupportsCondWrite(svc) {
-		return nil, nil, http.StatusNotImplemented, cmn.NewErrUnsupp("conditionally write to", "this S3 endpoint")
 	}
 	cw, err := cos.ParseCondWrite(r.Header)
 	if err != nil {
 		return nil, nil, http.StatusBadRequest, err
 	}
 	if cw.IfMatch != "" {
-		match = aws.String(cmn.QuoteETag(cw.IfMatch))
+		if cw.MatchETag {
+			cw.IfMatch = `"` + cw.IfMatch + `"`
+		}
+		match = aws.String(cw.IfMatch)
 	}
-	if cw.IfNoneMatch {
-		none = aws.String("*")
+	if cw.IfNoneMatch != "" {
+		none = aws.String(cw.IfNoneMatch)
 	}
 	return match, none, 0, nil
 }
@@ -74,9 +54,7 @@ func awsWriteError(err error, bck *cmn.Bck, objName string, cond bool, details .
 	case http.StatusConflict:
 		var apiErr smithy.APIError
 		if errors.As(err, &apiErr) && apiErr.ErrorCode() == cmn.TcodeCondWriteConflict {
-			herr := cmn.NewErrHTTP(nil, errV, ecode)
-			herr.TypeCode = cmn.TcodeCondWriteConflict
-			return ecode, herr
+			return ecode, errCondConflict(errV, ecode)
 		}
 	}
 	return ecode, errV

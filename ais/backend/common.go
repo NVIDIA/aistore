@@ -235,6 +235,13 @@ func (b *base) Provider() string { return b.provider }
 
 func (*base) CondWrite(*meta.Bck) bool { return false }
 
+// conditional write lost to a concurrent update (409); S3 clients may retry
+func errCondConflict(err error, status int) error {
+	herr := cmn.NewErrHTTP(nil, err, status)
+	herr.TypeCode = cmn.TcodeCondWriteConflict
+	return herr
+}
+
 func (b *base) MetricName(name string) string {
 	out, ok := b.metrics[name]
 	debug.Assert(ok && out != "", name)

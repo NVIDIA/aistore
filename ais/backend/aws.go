@@ -641,6 +641,7 @@ func (*s3bp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *h
 func putPresigned(oreq *http.Request, lom *core.LOM, r io.ReadCloser) (*s3manager.UploadOutput, int, error) {
 	pts, ecode, err := newPresignedReq(oreq, lom, r)
 	if err != nil {
+		cos.Close(r)
 		return nil, ecode, err
 	}
 	resp, err := pts.Do(core.T.DataClient())
@@ -668,7 +669,7 @@ func putUpload(ctx context.Context, r io.ReadCloser, lom *core.LOM, oreq *http.R
 	if err != nil {
 		return nil, 0, err
 	}
-	match, none, ecode, err := awsWriteConditions(svc, oreq)
+	match, none, ecode, err := awsWriteConditions(oreq)
 	if err != nil {
 		cos.Close(r)
 		return nil, ecode, err
@@ -785,6 +786,14 @@ func newPresignedReq(oreq *http.Request, lom *core.LOM, body io.ReadCloser) (*ai
 		return nil, http.StatusBadRequest, err
 	}
 	return pts, 0, nil
+}
+
+// return bucket-configured endpoint, if any, or the default (see env.AWSEndpoint)
+func awsEndpoint(bck *cmn.Bck) string {
+	if bck != nil && bck.Props != nil && bck.Props.Extra.AWS.Endpoint != "" {
+		return bck.Props.Extra.AWS.Endpoint
+	}
+	return s3Endpoint
 }
 
 // s3client creates or loads an existing S3 client for each triplet of profile/region/endpoint.

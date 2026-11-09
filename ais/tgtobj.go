@@ -71,7 +71,6 @@ type (
 		skipBackend bool          // don't write to backend (e.g., cold-GET caching, rechunk)
 		locked      bool          // true if the LOM is already locked by the caller
 		remoteErr   bool          // to exclude `putRemote` errors when counting soft IO errors
-		condWrite   bool          // forwarding client write conditions to the backend (see core.Backend.CondWrite)
 	}
 
 	getOI struct {
@@ -150,24 +149,6 @@ type (
 // PUT(object)
 //
 
-// validate client write conditions to be forwarded to the remote backend;
-// return true if forwarding
-func (t *target) condWrite(bck *meta.Bck, r *http.Request) (bool, int, error) {
-	if r == nil || !cos.IsCondWrite(r.Header) || !bck.IsRemote() {
-		return false, 0, nil
-	}
-	if !t.Backend(bck).CondWrite(bck) {
-		if bck.IsRemoteS3() {
-			return false, http.StatusNotImplemented, cmn.NewErrUnsupp("conditionally write to", bck.Cname(""))
-		}
-		return false, 0, nil
-	}
-	if _, err := cos.ParseCondWrite(r.Header); err != nil {
-		return false, http.StatusBadRequest, err
-	}
-	return true, 0, nil
-}
-
 // poi.restful entry point
 func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (ecode int, err error) {
 	poi.oreq = r
@@ -175,11 +156,6 @@ func (poi *putOI) do(resphdr http.Header, r *http.Request, dpq *dpq) (ecode int,
 	poi.resphdr = resphdr
 	poi.workFQN = poi.lom.GenFQN(fs.WorkCT, fs.WorkfilePut)
 	poi.owt = cmn.OwtPut // default
-
-	// validate before receiving the body
-	if poi.condWrite, ecode, err = poi.t.condWrite(poi.lom.Bck(), r); err != nil {
-		return ecode, err
-	}
 
 	oah := poi.lom.ObjAttrs()
 	if poi.cksumToUse, err = oah.FromHeader(r.Header); err != nil {
@@ -321,6 +297,19 @@ func (poi *putOI) chunk(chunkSize int64) (ecode int, err error) {
 	return ecode, err
 }
 
+// true when the backend must evaluate client write conditions (and the PUT cannot be a no-op);
+// backends that don't support conditional writes: no-op
+//
+// rejected conditions (412) leave the in-cluster copy as is, possibly stale; for read-modify-write
+// with If-Match, see versioning.validate_warm_get, apc.QparamLatestVer, and (batch) LatestVer
+func (poi *putOI) condWrite() bool {
+	if poi.oreq == nil || !cos.IsCondWrite(poi.oreq.Header) {
+		return false
+	}
+	bck := poi.lom.Bck()
+	return bck.IsRemote() && poi.t.Backend(bck).CondWrite(bck)
+}
+
 func (poi *putOI) putObject() (ecode int, err error) {
 	chunkSize := poi.lom.Bprops().Chunks.ChunkSizeFor(poi.size)
 	// TODO: validate cksumToUse while chunking before completing the internal upload
@@ -335,15 +324,13 @@ func (poi *putOI) putObject() (ecode int, err error) {
 
 	// if checksums match PUT is a no-op
 	// (unless the backend must evaluate write conditions)
-	if !poi.skipVC && !poi.skipBackend && !poi.condWrite {
-		if poi.lom.EqCksum(poi.cksumToUse) {
-			if cmn.Rom.V(4, cos.ModAIS) {
-				nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")
-			}
-			cos.DrainReader(poi.r)
-			cmn.CloseRemote(poi.r, poi.lom, 4, cos.ModAIS)
-			return 0, nil
+	if !poi.skipVC && !poi.skipBackend && poi.lom.EqCksum(poi.cksumToUse) && !poi.condWrite() {
+		if cmn.Rom.V(4, cos.ModAIS) {
+			nlog.Infoln(poi.lom.String(), "has identical", poi.cksumToUse.String(), "- PUT is a no-op")
 		}
+		cos.DrainReader(poi.r)
+		cmn.CloseRemote(poi.r, poi.lom, 4, cos.ModAIS)
+		return 0, nil
 	}
 
 	buf, slab, lmfh, erw := poi.write()

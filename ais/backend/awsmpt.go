@@ -157,7 +157,7 @@ func (*s3bp) CompleteMpt(ctx context.Context, lom *core.LOM, oreq *http.Request,
 	if errN != nil {
 		return "", "", http.StatusInternalServerError, errN
 	}
-	match, none, ecode, err := awsWriteConditions(svc, oreq)
+	match, none, ecode, err := awsWriteConditions(oreq)
 	if err != nil {
 		return "", "", ecode, err
 	}

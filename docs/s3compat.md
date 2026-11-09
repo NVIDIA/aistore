@@ -48,6 +48,7 @@ AIS exposes a *pure* S3 surface for seamless compatibility and a *native* API fo
   * [JWT authentication](#authentication-jwt-tips)
 * [Supported Operations](#supported-operations)
   * [PUT / GET / HEAD](#put--get--head)
+  * [Conditional writes](#conditional-writes)
   * [Range reads](#range-reads)
   * [Multipart uploads (aws CLI)](#multipart-uploads-with-aws-cli)
   * [Presigned requests](#presigned-s3-requests)
@@ -347,6 +348,22 @@ ais put file.txt ais://demo/obj
 ais get ais://demo/obj output.txt
 ais object show ais://demo/obj
 ```
+
+### Conditional writes
+
+AIStore forwards `If-Match` and `If-None-Match` on PUT and multipart completion to Amazon S3, S3-compatible endpoints, and OCI. The remote store evaluates the conditions. For a custom S3 endpoint, enforcement depends on that endpoint's support for conditional writes.
+
+A failed precondition typically returns HTTP 412. A concurrent write can cause HTTP 409 (`ConditionalRequestConflict`).
+
+Other buckets - GCP, Azure, remote AIS, and `ais://` buckets without a backend - ignore write conditions.
+
+A rejected condition leaves the in-cluster copy of the object as is. If that copy is stale - the remote object was updated out of band - a read-modify-write loop through AIS keeps reading the same stale ETag, and each conditional PUT fails again. To read the current version:
+
+- per bucket: enable `versioning.validate_warm_get` - see [Out-of-band updates](/docs/out_of_band.md#out-of-band-updates);
+- per request: GET with the latest-version option - see [GET latest version](/docs/out_of_band.md#get-latest-version);
+- per batch: prefetch or copy with `--latest` - see [Lesser scope](/docs/out_of_band.md#lesser-scope).
+
+Conditional PUTs to S3 and OCI always reach the remote store. Any other PUT that supplies a checksum matching the in-cluster object is a no-op, unless the bucket's chunking policy applies to the object.
 
 ### Range reads
 

@@ -5,7 +5,6 @@
 package cos
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -127,49 +126,51 @@ func AcceptsMsgPack(hdr http.Header) bool {
 // conditional write
 //
 
+// write conditions, forwarded as is to backends that support them
+// (see core.Backend.CondWrite); the remote store evaluates and validates
 type CondWrite struct {
-	IfMatch     string // single strong ETag, unquoted
-	IfNoneMatch bool   // create-only ("*")
+	IfMatch     string // single ETag unquoted; other forms as supplied
+	IfNoneMatch string // e.g., "*"
+	MatchETag   bool   // IfMatch is a single ETag that can be re-quoted
 }
 
-// detect write conditions, including empty values that require validation
+// direct map lookup: net/http canonicalizes request header keys (and both constants are canonical)
 func IsCondWrite(hdr http.Header) bool {
-	return len(hdr.Values(HdrIfMatch)) != 0 || len(hdr.Values(HdrIfNoneMatch)) != 0
+	return len(hdr[HdrIfMatch]) != 0 || len(hdr[HdrIfNoneMatch]) != 0
 }
 
-// parse and validate write conditions:
-// - If-Match: single strong ETag, quoted or bare
-// - If-None-Match: "*" only
-// - not both
-func ParseCondWrite(hdr http.Header) (cw CondWrite, err error) {
-	var match, none string
-	if match, err = condValue(hdr, HdrIfMatch); err != nil {
-		return cw, err
+func ParseCondWrite(hdr http.Header) (CondWrite, error) {
+	match, none := hdr[HdrIfMatch], hdr[HdrIfNoneMatch]
+	if len(match) == 0 && len(none) == 0 {
+		return CondWrite{}, nil
 	}
-	if none, err = condValue(hdr, HdrIfNoneMatch); err != nil {
-		return cw, err
-	}
-	switch {
-	case match != "" && none != "":
-		return cw, errors.New("combined " + HdrIfMatch + " and " + HdrIfNoneMatch + " not supported")
-	case none != "":
-		if none != "*" {
-			return cw, fmt.Errorf("invalid %s %q (expecting \"*\")", HdrIfNoneMatch, none)
-		}
-		cw.IfNoneMatch = true
-	case match != "":
-		etag, ok := strongETag(match)
-		if !ok {
-			return cw, fmt.Errorf("invalid %s %q (expecting single strong ETag)", HdrIfMatch, match)
-		}
-		cw.IfMatch = etag
-	}
-	return cw, nil
+	return parseCondWrite(match, none)
 }
 
-// return the single (trimmed) value, if present; reject multiple and empty
-func condValue(hdr http.Header, key string) (string, error) {
-	vals := hdr.Values(key)
+// trim both values; normalize only a single If-Match ETag
+func parseCondWrite(match, none []string) (cw CondWrite, err error) {
+	if cw.IfMatch, err = condValue(match, HdrIfMatch); err != nil {
+		return cw, err
+	}
+	if etag := cw.IfMatch; etag != "" {
+		quoted := len(etag) >= 2 && etag[0] == '"' && etag[len(etag)-1] == '"'
+		if quoted {
+			etag = etag[1 : len(etag)-1]
+			if etag == "" {
+				return cw, fmt.Errorf("invalid %s (empty ETag)", HdrIfMatch)
+			}
+		}
+		// single ETag: not a wildcard, no inner quotes or spaces, and not a bare (unquoted) list
+		if etag != "*" && !strings.ContainsAny(etag, "\" \t") && (quoted || !strings.ContainsRune(etag, ',')) {
+			cw.IfMatch, cw.MatchETag = etag, true
+		}
+	}
+	cw.IfNoneMatch, err = condValue(none, HdrIfNoneMatch)
+	return cw, err
+}
+
+// return the single (trimmed) value, if present
+func condValue(vals []string, key string) (string, error) {
 	switch len(vals) {
 	case 0:
 		return "", nil
@@ -179,20 +180,4 @@ func condValue(hdr http.Header, key string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("invalid %s %q", key, vals)
-}
-
-// strip outer quotes, if any; reject weak, wildcard, lists, and control characters
-func strongETag(v string) (string, bool) {
-	if len(v) >= 2 && v[0] == '"' && v[len(v)-1] == '"' {
-		v = v[1 : len(v)-1]
-	}
-	if v == "" || v == "*" || strings.HasPrefix(v, "W/") {
-		return "", false
-	}
-	for i := range len(v) {
-		if c := v[i]; c <= ' ' || c == '"' || c == ',' || c == 0x7f {
-			return "", false
-		}
-	}
-	return v, true
 }

@@ -10,7 +10,6 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 
@@ -33,9 +32,8 @@ func ociWriteConditions(r *http.Request) (match, none *string, err error) {
 	if cw.IfMatch != "" {
 		match = &cw.IfMatch
 	}
-	if cw.IfNoneMatch {
-		v := "*"
-		none = &v
+	if cw.IfNoneMatch != "" {
+		none = &cw.IfNoneMatch
 	}
 	return match, none, nil
 }
@@ -46,9 +44,7 @@ func ociWriteError(op, bucket, object string, err error, response any, match, no
 	var serviceErr ocicmn.ServiceError
 	if status == http.StatusConflict && (match != nil || none != nil) &&
 		errors.As(err, &serviceErr) && serviceErr.GetCode() == "ConcurrentObjectUpdate" {
-		wire := cmn.NewErrHTTP(nil, mapped, status)
-		wire.TypeCode = cmn.TcodeCondWriteConflict
-		return status, wire
+		return status, errCondConflict(mapped, status)
 	}
 	return status, mapped
 }
