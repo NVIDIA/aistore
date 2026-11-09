@@ -155,7 +155,7 @@ func mptPutHandler(c *cli.Context) error {
 
 	err = api.UploadPart(putPartArgs)
 	if err != nil {
-		return fmt.Errorf("failed to upload part %d: %v", partNumber, err)
+		return fmt.Errorf("failed to upload part %d: %w", partNumber, err)
 	}
 
 	actionDonef(c, "Uploaded part %d for %s (upload ID: %s)", partNumber, bck.Cname(objName), uploadID)
@@ -230,7 +230,7 @@ func mptCompleteHandler(c *cli.Context) error {
 		PartNumbers: partNumbers,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to complete multipart upload: %v", err)
+		return fmt.Errorf("failed to complete multipart upload: %w", err)
 	}
 
 	actionDone(c, "Successfully completed multipart upload for "+bck.Cname(objName))
@@ -279,7 +279,7 @@ func mptAbortHandler(c *cli.Context) error {
 		UploadID: uploadID,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to abort multipart upload: %v", err)
+		return fmt.Errorf("failed to abort multipart upload: %w", err)
 	}
 
 	actionDone(c, "Successfully aborted multipart upload for %s"+bck.Cname(objName))

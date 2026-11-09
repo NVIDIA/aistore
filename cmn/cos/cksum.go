@@ -11,12 +11,12 @@ import (
 	"encoding"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"hash/crc32"
 	"io"
 	"sort"
-	"strings"
 
 	onexxh "github.com/OneOfOne/xxhash"
 	cesxxh "github.com/cespare/xxhash/v2"
@@ -459,8 +459,6 @@ func (e *ErrBadCksum) Error() string {
 }
 
 func IsErrBadCksum(err error) bool {
-	if _, ok := err.(*ErrBadCksum); ok {
-		return true
-	}
-	return err != nil && (strings.Contains(err.Error(), badDataCksumPrefix) || strings.Contains(err.Error(), badMetaCksumPrefix))
+	_, ok := errors.AsType[*ErrBadCksum](err)
+	return ok
 }

@@ -6,7 +6,6 @@
 package cli
 
 import (
-	"strings"
 	"sync"
 	"time"
 
@@ -125,8 +124,6 @@ func _addStatus(node *meta.Snode, ctx *nodeStatusCtx, out teb.NodeStatusMap) {
 		if herr := cmn.AsErrHTTP(err); herr != nil && herr.TypeCode != "" {
 			// TODO: show a meaningful network failure in the STATUS col (see related `bab474d19ccc`)
 			ds.Status = herr.TypeCode
-		} else if strings.HasPrefix(err.Error(), "errNodeNotFound") {
-			ds.Status = "[errNodeNotFound]"
 		} else {
 			ds.Status = "[" + err.Error() + "]"
 		}

@@ -25,10 +25,7 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-const (
-	errNilCksum     = "nil checksum"
-	errNilCksumType = "checksum is empty (checksum type %q) - cannot validate"
-)
+const errNilCksumType = "checksum is empty (checksum type %q) - cannot validate"
 
 // request
 type (
@@ -76,6 +73,8 @@ type (
 		n int64 // num bytes read from `resp.Body`
 	}
 )
+
+var errNilCksum = errors.New("nil checksum")
 
 // HTTPStatus returns HTTP status or (-1) for non-HTTP error.
 func HTTPStatus(err error) int {
@@ -359,7 +358,7 @@ func (reqParams *ReqParams) readValidate(resp *http.Response, w io.Writer) (*wra
 	}
 	if cksum == nil {
 		if cksumType == "" {
-			return nil, errors.New(errNilCksum) // e.g., after fast-appending to a TAR
+			return nil, errNilCksum // e.g., after fast-appending to a TAR
 		}
 		return nil, fmt.Errorf(errNilCksumType, cksumType)
 	}

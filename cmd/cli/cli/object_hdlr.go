@@ -461,7 +461,7 @@ func putHandler(c *cli.Context) error {
 		}
 		if err := putRegular(c, a.dst.bck, a.dst.oname, a.src.abspath, a.src.finfo); err != nil {
 			e := stripErr(err)
-			return fmt.Errorf("failed to %s %s => %s: %v", a.verb(), a.src.abspath, a.dst.bck.Cname(a.dst.oname), e)
+			return fmt.Errorf("failed to %s %s => %s: %w", a.verb(), a.src.abspath, a.dst.bck.Cname(a.dst.oname), e)
 		}
 		return nil
 	}

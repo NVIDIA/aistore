@@ -192,7 +192,7 @@ func CleanPathErr(err error) {
 	// replace
 	pathErr.Path = parsed.Bck.Cname(parsed.ObjName)
 	pathErr.Op = "[fs-path]"
-	if strings.Contains(pathErr.Err.Error(), "no such file") {
+	if cos.IsNotExist(pathErr.Err) {
 		var what string
 		switch parsed.ContentType {
 		case ObjCT:

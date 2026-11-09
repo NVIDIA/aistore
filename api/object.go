@@ -7,6 +7,7 @@ package api
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -303,7 +304,7 @@ func GetObjectWithValidation(bp BaseParams, bck cmn.Bck, objName string, args *G
 	FreeRp(reqParams)
 	if err == nil {
 		oah.wrespHeader, oah.n = wresp.Header, wresp.n
-	} else if err.Error() == errNilCksum {
+	} else if errors.Is(err, errNilCksum) {
 		err = fmt.Errorf("%s is not checksummed, cannot validate", bck.Cname(objName))
 	}
 	return oah, err

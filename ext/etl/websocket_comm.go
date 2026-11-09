@@ -11,10 +11,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -405,7 +405,7 @@ func (wctx *wsConnCtx) readLoop() (err error) {
 				// Handle benign errors that occur when the connection is closed by the ETL server
 				// These errors indicate normal closure or server shutdown and should exit the read loop without reporting the error
 				if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway, websocket.CloseServiceRestart) ||
-					cos.IsErrRetriableConn(err) || strings.Contains(err.Error(), "use of closed network connection") { // common errors
+					cos.IsErrRetriableConn(err) || errors.Is(err, net.ErrClosed) { // common errors
 					return nil
 				}
 				// For other errors, log and propagate them as they indicate unexpected issues during message reading

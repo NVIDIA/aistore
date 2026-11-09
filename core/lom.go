@@ -603,11 +603,11 @@ func (lom *LOM) ComputeCksum(cksumType string, locked bool) (cksum *cos.CksumHas
 		defer lom.Unlock(false)
 	}
 	if err := lom.Load(false, true); err != nil {
-		return nil, fmt.Errorf("compute-checksum -- load: %v", err)
+		return nil, fmt.Errorf("compute-checksum -- load: %w", err)
 	}
 	lmfh, err := lom.Open()
 	if err != nil {
-		return nil, fmt.Errorf("compute-checksum -- open: %v", err)
+		return nil, fmt.Errorf("compute-checksum -- open: %w", err)
 	}
 
 	_, cksum, err = cos.ChecksumReader(lmfh, cksumType)

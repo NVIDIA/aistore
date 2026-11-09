@@ -419,6 +419,9 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.Bprops, err error) {
 		return
 	}
 	if herr, ok := err.(*cmn.ErrHTTP); ok {
+		if isUnreachableHerr(herr) {
+			return nil, herr // keep the type (see formatErr)
+		}
 		switch {
 		case cliConfVerbose():
 			herr.Message = herr.StringEx()
@@ -431,10 +434,7 @@ func headBucket(bck cmn.Bck, dontAddBckMD bool) (p *cmn.Bprops, err error) {
 			err = fmt.Errorf("failed to HEAD bucket %q: %s", bck.String(), herr.Message)
 		}
 	} else {
-		msg := strings.ToLower(err.Error())
-		if !strings.HasPrefix(msg, "head \"http") && !strings.HasPrefix(msg, "head http") {
-			err = fmt.Errorf("failed to HEAD bucket %q: %v", bck.String(), err)
-		}
+		err = fmt.Errorf("failed to HEAD bucket %q: %w", bck.String(), err)
 	}
 	return
 }

@@ -237,7 +237,7 @@ func IsPathErr(err error) bool {
 // - len(pathname) > PATH_MAX = 4096
 // - len(basename) > 255
 func IsErrFntl(err error) bool {
-	return strings.Contains(err.Error(), "too long") && errors.Is(err, syscall.ENAMETOOLONG)
+	return errors.Is(err, syscall.ENAMETOOLONG)
 }
 
 // likely out of socket descriptors

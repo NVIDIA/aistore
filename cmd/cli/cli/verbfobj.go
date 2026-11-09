@@ -378,7 +378,7 @@ func (u *uctx) do(c *cli.Context, p *uparams, fobj fobj, fh *cos.FileHandle, upd
 					break
 				}
 				countReader = newRocCb(ffh, updateBar /*progress callback*/, 0)
-				isTout = isTimeout(e)
+				isTout = cos.IsErrClientTimeout(err)
 			}
 		}
 	case "APPEND":
@@ -515,10 +515,10 @@ func putRegular(c *cli.Context, bck cmn.Bck, objName, path string, finfo os.File
 			fmt.Fprintln(c.App.ErrWriter, s)
 			briefPause(1)
 
-			putArgs.Reader, err = fh.Open()
-			if isTimeout(e) {
+			if cos.IsErrClientTimeout(err) {
 				putArgs.BaseParams.Client.Timeout = longClientTimeout
 			}
+			putArgs.Reader, err = fh.Open()
 		}
 	}
 	if progress != nil {

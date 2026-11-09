@@ -209,7 +209,7 @@ func concatObject(c *cli.Context, bck cmn.Bck, objName string, fileNames []strin
 			}
 			handle, err = api.AppendObject(&appendArgs)
 			if err != nil {
-				return fmt.Errorf("%v. Object not created", err)
+				return fmt.Errorf("%w. Object not created", err)
 			}
 			if bar != nil {
 				bar.IncrInt64(sizes[f.path])

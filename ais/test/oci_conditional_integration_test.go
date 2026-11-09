@@ -216,7 +216,8 @@ func TestNativeOCIConditionalWrites(t *testing.T) {
 					Context: t.Context(), BaseParams: baseParams, Bck: cliBck, ObjName: name,
 					Reader: cos.NewByteReader(changed), Size: uint64(len(changed)), Cksum: &expected.Cksum, Header: headers,
 				})
-				tassert.Fatalf(t, cos.IsErrBadCksum(err), "expected checksum rejection, got %v", err)
+				herr := cmn.AsErrHTTP(err)
+				tassert.Fatalf(t, herr != nil && herr.TypeCode == "ErrBadCksum", "expected checksum rejection, got %v", err)
 				if replace {
 					tassert.CheckFatal(t, api.EvictObject(baseParams, cliBck, name))
 					var got bytes.Buffer

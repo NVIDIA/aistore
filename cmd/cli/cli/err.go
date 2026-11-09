@@ -49,6 +49,10 @@ type (
 		name   string
 		suffix string
 	}
+	errStripped struct {
+		err error
+		msg string
+	}
 )
 
 var (
@@ -139,13 +143,8 @@ func isUnreachableError(err error) (msg string, unreachable bool) {
 		msg = err.Error()
 		if herr := cmn.AsErrHTTP(err); herr != nil {
 			unreachable = isUnreachableHerr(herr)
-		} else {
-			regx := regexp.MustCompile("dial.*(timeout|refused)")
-			if unreachable = regx.MatchString(msg); unreachable {
-				i := strings.Index(msg, "dial")
-				debug.Assert(i >= 0)
-				msg = msg[i:]
-			}
+		} else if oerr, ok := errors.AsType[*net.OpError](err); ok && oerr.Op == "dial" {
+			unreachable, msg = true, oerr.Error()
 		}
 	}
 	return
@@ -479,13 +478,11 @@ func stripErr(err error) error {
 	if k < 0 || len(s) < i+l+k+5 {
 		return err
 	}
-	return errors.New(s[i+l+k+1:])
+	return &errStripped{err: err, msg: s[i+l+k+1:]}
 }
 
-func isTimeout(err error) bool {
-	s := strings.ToLower(err.Error())
-	return strings.Contains(s, "timeout") || strings.Contains(s, "deadline")
-}
+func (e *errStripped) Error() string { return e.msg }
+func (e *errStripped) Unwrap() error { return e.err }
 
 func isStartingUp(err error) bool {
 	if herr, ok := err.(*cmn.ErrHTTP); ok {
