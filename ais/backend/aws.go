@@ -821,6 +821,10 @@ func (sc *sessConf) s3client(tag string) (*s3.Client, error) {
 		return nil, errV
 	}
 
+	// a negative limit leaves SDK retries unbounded
+	if limit := cfg.RetryMaxAttempts; limit < 0 {
+		return nil, fmt.Errorf("invalid AWS retry attempt limit %d (AWS_MAX_ATTEMPTS or profile max_attempts)", limit)
+	}
 	svc := s3.NewFromConfig(cfg, sc.options)
 
 	if sc.region == "" {

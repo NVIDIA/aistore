@@ -326,12 +326,14 @@ func TestAWSRetryMaxAttemptsPrecedence(t *testing.T) {
 	tests := []struct {
 		name         string
 		env, profile string
-		wantUnmarked int32
+		wantUnmarked int32 // zero for invalid settings
 	}{
 		{"default", "", "", cmn.BackendMaxAttempts},
 		{"env", "4", "", 4},
 		{"profile", "", "3", 3},
 		{"env-over-profile", "4", "3", 4},
+		{"negative-env", "-1", "3", 0},
+		{"negative-profile", "", "-1", 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -351,9 +353,15 @@ func TestAWSRetryMaxAttemptsPrecedence(t *testing.T) {
 			t.Setenv("AWS_SECRET_ACCESS_KEY", "fake")
 			t.Setenv("AWS_MAX_ATTEMPTS", tc.env)
 
+			if tc.wantUnmarked == 0 {
+				_, err := (&sessConf{}).s3client("")
+				tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), "invalid AWS retry attempt limit"),
+					"expected invalid attempt limit error, got %v", err)
+				return
+			}
+			cfg, err := (&sessConf{}).awsLoadConfig()
+			tassert.CheckFatal(t, err)
 			for _, noRetry := range []bool{false, true} {
-				cfg, err := (&sessConf{}).awsLoadConfig()
-				tassert.CheckFatal(t, err)
 				transport := &retryS3Transport{status: http.StatusServiceUnavailable, code: "SlowDown"}
 				cfg.HTTPClient = transport
 				svc := s3.NewFromConfig(cfg, func(o *s3.Options) {

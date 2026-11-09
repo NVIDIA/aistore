@@ -9,6 +9,7 @@ package backend
 import (
 	"container/list"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 
@@ -87,6 +89,8 @@ func (mpu *ociMPUStruct) abort() {
 // the MPU operation is aborted.
 func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, oreq *http.Request, ifMatch, ifNoneMatch *string,
 	md ocicmn.RequestMetadata) (int, error) {
+	defer cos.Close(r)
+
 	var (
 		cloudBck   = lom.Bck().RemoteBck()
 		err        error
@@ -144,8 +148,27 @@ func (bp *ocibp) putObjViaMPU(r io.ReadCloser, lom *core.LOM, objectSize int64, 
 
 	if len(mpu.err) > 0 {
 		mpu.abort()
-		err = fmt.Errorf("%v of %v part uploads failed", len(mpu.err), totalParts)
-		return ociErrorToAISError("UploadPart", mpu.bucketName, mpu.objectName, "", err, nil)
+
+		// replay the upload only when all failures were throttling
+		status, cause := 0, mpu.err[0]
+		for _, partErr := range mpu.err {
+			var (
+				code int
+				se   ocicmn.ServiceError // (not an error: errors.AsType does not apply)
+			)
+			if errors.As(partErr, &se) {
+				code = se.GetHTTPStatusCode()
+			}
+			if code != http.StatusTooManyRequests && code != http.StatusServiceUnavailable {
+				status, cause = 0, partErr
+				break
+			}
+			if code > status {
+				status, cause = code, partErr
+			}
+		}
+		err = fmt.Errorf("%d of %d part uploads failed: %w", len(mpu.err), totalParts, cause)
+		return ociErrorToAISError("UploadPart", mpu.bucketName, mpu.objectName, "", err, status)
 	}
 
 	commitReq := ocios.CommitMultipartUploadRequest{
@@ -257,7 +280,7 @@ func (mpuChild *ociMPUChildStruct) Run() {
 	if err == nil {
 		mpuChild.eTag = *resp.ETag
 	} else {
-		err = fmt.Errorf("[%d] %s", mpuChild.partNum, err)
+		err = fmt.Errorf("[%d] %w", mpuChild.partNum, err)
 		mpuChild.mpu.err = append(mpuChild.mpu.err, err)
 		mpuChild.mpu.abortInProgress = true
 	}

@@ -512,10 +512,7 @@ func (gsbp *gsbp) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, or
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	wc := gcsBucket(ctx, client, cloudBck.Name).Object(lom.ObjName).NewWriter(ctx)
-	// single-request upload: resumable (chunked) uploads retry each chunk
-	// until ChunkRetryDeadline, regardless of retry settings
-	wc.ChunkSize = 0
+	wc := client.Bucket(cloudBck.Name).Object(lom.ObjName).Retryer(gcsWriteRetryOpts...).NewWriter(ctx)
 	wc.Metadata = map[string]string{
 		gcpChecksumType: cksumType,
 		gcpChecksumVal:  cksumVal,
@@ -742,6 +739,13 @@ func gcpObjErr(ctx context.Context, gcpClient *storage.Client, objErr error, bck
 
 // single attempt per API call
 var gcsNoRetryOpts = []storage.RetryOption{storage.WithPolicy(storage.RetryNever)}
+
+// pass the error predicate to the JSON upload client, including resumable chunks
+// (RetryNever leaves the chunk uploader's default retry policy in place)
+var gcsWriteRetryOpts = []storage.RetryOption{
+	storage.WithPolicy(storage.RetryAlways),
+	storage.WithErrorFunc(func(error) bool { return false }),
+}
 
 func gcsNewClient(ctx context.Context, opts []option.ClientOption) (*storage.Client, error) {
 	client, err := storage.NewClient(ctx, opts...)

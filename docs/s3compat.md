@@ -474,7 +474,7 @@ object is an intentional semantic choice for consistency with the rest of AIS.
 
 ## S3 backend: SDK retries
 
-AIS makes at most two attempts per S3 request (the initial request and one retry), unless `max_attempts` in the AWS profile or `AWS_MAX_ATTEMPTS` sets a different number. Each bucket can select its own profile with `extra.aws.profile`, so a named profile sets the limit per bucket. Set the profile in the AWS config file on every target:
+AIS makes at most two attempts per S3 request (the initial request and one retry), unless `max_attempts` in the AWS profile or `AWS_MAX_ATTEMPTS` sets a different positive limit. AIS rejects negative values. Each bucket can select its own profile with `extra.aws.profile`, so a named profile sets the limit per bucket. Set the profile in the AWS config file on every target.
 
 ```ini
 [profile prod-account]

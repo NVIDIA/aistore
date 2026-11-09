@@ -10,8 +10,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"hash/crc32"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -105,37 +109,75 @@ func TestGCPRetryAttempts(t *testing.T) {
 
 func TestGCPBackendPutRetry(t *testing.T) {
 	for _, tc := range []struct {
-		name    string
-		size    int
-		noRetry bool
-		status  int
+		name         string
+		size         int
+		noRetry      bool
+		failAt       int32
+		status       int
+		wantRequests int32
 	}{
-		{name: "committed-metadata", size: 1024, status: http.StatusOK},
-		{name: "single-attempt", size: 17 * cos.MiB, noRetry: true, status: http.StatusServiceUnavailable},
-		// unconditional (non-idempotent) writes: no SDK retries; > default ChunkSize: still a single request
-		{name: "single-request", size: 17 * cos.MiB, status: http.StatusServiceUnavailable},
+		{name: "multipart-crc", size: 1024, wantRequests: 1},
+		{name: "resumable-crc", size: 17 * cos.MiB, wantRequests: 3},
+		{name: "multipart-throttled", size: 1024, failAt: 1, status: http.StatusServiceUnavailable, wantRequests: 1},
+		{name: "session-throttled", size: 17 * cos.MiB, failAt: 1, status: http.StatusTooManyRequests, wantRequests: 1},
+		{name: "chunk-throttled", size: 17 * cos.MiB, failAt: 2, status: http.StatusServiceUnavailable, wantRequests: 2},
+		{name: "chunk-throttled-on-reissue", size: 17 * cos.MiB, noRetry: true, failAt: 3, status: http.StatusServiceUnavailable, wantRequests: 3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			data := strings.Repeat("x", tc.size)
+			var crc [4]byte
+			binary.BigEndian.PutUint32(crc[:], crc32.Checksum([]byte(data), crc32.MakeTable(crc32.Castagnoli)))
+			wantCRC := base64.StdEncoding.EncodeToString(crc[:])
 			var requests atomic.Int32
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requests.Add(1)
-				_, _ = io.Copy(io.Discard, r.Body)
+				n := requests.Add(1)
 				w.Header().Set(cos.HdrContentType, "application/json")
-				if r.Method != http.MethodPost || r.URL.Query().Get("uploadType") != "multipart" {
-					t.Errorf("unexpected request: %s %s", r.Method, r.URL)
+				if r.Method != http.MethodPost || n > tc.wantRequests {
+					t.Errorf("unexpected request %d: %s %s", n, r.Method, r.URL)
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
-				w.WriteHeader(tc.status)
-				if tc.status == http.StatusOK {
-					// single-request upload: the SDK validates CRC32C (Castagnoli, big-endian, base64)
-					var crc [4]byte
-					binary.BigEndian.PutUint32(crc[:], crc32.Checksum([]byte(strings.Repeat("x", tc.size)), crc32.MakeTable(crc32.Castagnoli)))
-					_, _ = io.WriteString(w, `{"name":"obj","generation":"42","etag":"uploaded","crc32c":"`+
-						base64.StdEncoding.EncodeToString(crc[:])+`"}`)
-				} else {
-					_, _ = io.WriteString(w, `{"error":{"code":503,"message":"retry test"}}`)
+				if n == tc.failAt {
+					_, _ = io.Copy(io.Discard, r.Body)
+					w.WriteHeader(tc.status)
+					_, _ = fmt.Fprintf(w, `{"error":{"code":%d,"message":"retry test"}}`, tc.status)
+					return
 				}
+				switch {
+				case r.URL.Query().Get("uploadType") == "resumable":
+					_, _ = io.Copy(io.Discard, r.Body)
+					w.Header().Set("Location", "http://"+r.Host+"/session")
+					return
+				case r.URL.Path == "/session":
+					_, _ = io.Copy(io.Discard, r.Body)
+					if strings.HasSuffix(r.Header.Get("Content-Range"), "/*") {
+						w.Header().Set("X-Http-Status-Code-Override", "308")
+						return
+					}
+					if got := r.Header.Get("X-Goog-Hash"); got != "crc32c="+wantCRC {
+						t.Errorf("final chunk checksum = %q, want crc32c=%s", got, wantCRC)
+					}
+				case r.URL.Query().Get("uploadType") == "multipart":
+					_, params, err := mime.ParseMediaType(r.Header.Get(cos.HdrContentType))
+					if err != nil {
+						t.Errorf("parse multipart content type: %v", err)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					part, err := multipart.NewReader(r.Body, params["boundary"]).NextPart()
+					var metadata struct {
+						CRC string `json:"crc32c"`
+					}
+					if err != nil || json.NewDecoder(part).Decode(&metadata) != nil || metadata.CRC != wantCRC {
+						t.Errorf("multipart checksum = %q, want %s", metadata.CRC, wantCRC)
+					}
+					_, _ = io.Copy(io.Discard, r.Body)
+				default:
+					t.Errorf("unexpected upload request: %s", r.URL)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				_, _ = fmt.Fprintf(w, `{"name":"obj","generation":"42","etag":"uploaded","crc32c":%q}`, wantCRC)
 			}))
 			t.Cleanup(srv.Close)
 
@@ -154,9 +196,9 @@ func TestGCPBackendPutRetry(t *testing.T) {
 			if tc.noRetry {
 				ctx = cmn.WithNoRetry(ctx)
 			}
-			body := io.NopCloser(strings.NewReader(strings.Repeat("x", tc.size)))
+			body := io.NopCloser(strings.NewReader(data))
 			code, err := bp.PutObj(ctx, body, lom, nil)
-			if tc.status == http.StatusOK {
+			if tc.failAt == 0 {
 				tassert.CheckFatal(t, err)
 				if version := lom.ObjAttrs().Version(); version != "42" {
 					t.Errorf("committed version = %q, want 42", version)
@@ -164,8 +206,8 @@ func TestGCPBackendPutRetry(t *testing.T) {
 			} else if code != tc.status || !cmn.IsErrTooManyRequests(err) {
 				t.Errorf("PUT returned (%d, %v), want throttling error %d", code, err, tc.status)
 			}
-			if got := requests.Load(); got != 1 {
-				t.Errorf("got %d requests, want 1", got)
+			if got := requests.Load(); got != tc.wantRequests {
+				t.Errorf("got %d requests, want %d", got, tc.wantRequests)
 			}
 		})
 	}

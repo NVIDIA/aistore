@@ -205,29 +205,20 @@ func TestOCIClientCreatesRegionClientOnce(t *testing.T) {
 	}
 }
 
-// Regression test: a 429 from OCI must yield an ErrTooManyRequests that carries
-// the SDK error. Previously the OCI backend passed nil to NewErrTooManyRequests,
-// so the first Error() call (e.g. xaction AddErr on the prefetch path) panicked
-// with a nil-pointer dereference and crashed the target.
-func TestOCIErrorToAISError429(t *testing.T) {
-	errSDK := errors.New("Error returned by OCI (429, TooManyRequests)")
-	resp := ocios.GetObjectResponse{
-		RawResponse: &http.Response{StatusCode: http.StatusTooManyRequests},
-	}
-
-	ecode, err := ociErrorToAISError("GetObj", "test-bucket", "test/object", "", errSDK, resp)
-	if ecode != http.StatusTooManyRequests {
-		t.Fatalf("expected status %d, got %d", http.StatusTooManyRequests, ecode)
-	}
-	if err == nil {
-		t.Fatal("expected a non-nil error")
-	}
-	if !cmn.IsErrTooManyRequests(err) {
-		t.Fatalf("expected ErrTooManyRequests, got %T (%v)", err, err)
-	}
-	// must not panic, and must carry the SDK error text
-	if msg := err.Error(); !strings.Contains(msg, "429") {
-		t.Fatalf("error text should carry the SDK message, got %q", msg)
+// preserve the SDK error when classifying 429 and 503 for AIS retries
+func TestOCIErrorToAISErrorThrottling(t *testing.T) {
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			errSDK := errors.New(http.StatusText(status))
+			resp := ocios.GetObjectResponse{RawResponse: &http.Response{StatusCode: status}}
+			code, err := ociErrorToAISError("GetObj", "test-bucket", "test/object", "", errSDK, resp)
+			if code != status || err == nil || !cmn.IsErrTooManyRequests(err) {
+				t.Fatalf("code=%d err=%v, want throttling error %d", code, err, status)
+			}
+			if msg := err.Error(); msg != errSDK.Error() {
+				t.Fatalf("error text should carry the SDK message, got %q", msg)
+			}
+		})
 	}
 }
 
@@ -501,25 +492,38 @@ func TestOCIConditionalAutomaticMultipart(t *testing.T) {
 	}
 }
 
-// preserve the existing abort when uploading a part fails.
+// abort the upload and preserve throttling errors from failed parts
 func TestOCIAutomaticMultipartPartFailure(t *testing.T) {
-	bp, _ := conditionalOCIBackend(t)
-	bp.mpuThreshold, bp.mpuSegmentMaxSize, bp.mpuMaxThreads, bp.mpThreadPoolSize = 4, 16, 1, 1
-	bp.mpChildPendingList = list.New()
-	lom := conditionalLOM()
-	lom.SetSize(8)
-	client, _, err := bp.ociClient(lom.Bck().RemoteBck())
-	if err != nil {
-		t.Fatal(err)
-	}
-	transport := &failingOCIWriteTransport{status: http.StatusBadRequest, failPart: true}
-	client.HTTPClient = transport
-	code, err := bp.PutObj(t.Context(), io.NopCloser(strings.NewReader("original")), lom, conditionalRequest("If-None-Match", "*"))
-	if err == nil || transport.aborts != 1 {
-		t.Fatalf("code=%d err=%v aborts=%d, want failed upload and one abort", code, err, transport.aborts)
-	}
-	if transport.match != "" || transport.none != "" {
-		t.Fatal("failed part upload reached multipart completion")
+	for _, tc := range []struct {
+		status, wantCode int
+		errorCode        string
+	}{
+		{http.StatusBadRequest, 0, "InvalidParameter"},
+		{http.StatusTooManyRequests, http.StatusTooManyRequests, "TooManyRequests"},
+		{http.StatusServiceUnavailable, http.StatusServiceUnavailable, "ServiceUnavailable"},
+	} {
+		t.Run(strconv.Itoa(tc.status), func(t *testing.T) {
+			bp, _ := conditionalOCIBackend(t)
+			bp.mpuThreshold, bp.mpuSegmentMaxSize, bp.mpuMaxThreads, bp.mpThreadPoolSize = 4, 16, 1, 1
+			bp.mpChildPendingList = list.New()
+			lom := conditionalLOM()
+			lom.SetSize(8)
+			client, _, err := bp.ociClient(lom.Bck().RemoteBck())
+			tassert.CheckFatal(t, err)
+			transport := &failingOCIWriteTransport{status: tc.status, errorCode: tc.errorCode, failPart: true}
+			client.HTTPClient = transport
+			ctx := cmn.WithNoRetry(t.Context())
+			code, err := bp.PutObj(ctx, io.NopCloser(strings.NewReader("original")), lom, conditionalRequest("If-None-Match", "*"))
+			if err == nil || transport.aborts != 1 {
+				t.Fatalf("code=%d err=%v aborts=%d, want failed upload and one abort", code, err, transport.aborts)
+			}
+			if code != tc.wantCode || cmn.IsErrTooManyRequests(err) != (tc.wantCode != 0) {
+				t.Fatalf("code=%d err=%v, want code %d", code, err, tc.wantCode)
+			}
+			if transport.match != "" || transport.none != "" {
+				t.Fatal("failed part upload reached multipart completion")
+			}
+		})
 	}
 }
 

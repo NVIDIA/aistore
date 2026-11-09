@@ -395,7 +395,7 @@ func ociErrorToAISError(op, bucketName, objectPath, byteRange string, errIn erro
 		errOut = cos.NewErrRangeNotSatisfiable(errIn, []string{byteRange}, 0)
 	case http.StatusPreconditionFailed:
 		errOut = cos.NewErrPreconditionFailed(errIn)
-	case http.StatusTooManyRequests:
+	case http.StatusTooManyRequests, http.StatusServiceUnavailable:
 		errOut = cmn.NewErrTooManyRequests(errIn, statusCode)
 	default:
 		if bucketName == "" {
