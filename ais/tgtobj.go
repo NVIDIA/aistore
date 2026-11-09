@@ -738,10 +738,13 @@ func (poi *putOI) validateCksum(c *cmn.CksumConf) (v bool) {
 func (goi *getOI) getObject() (ecode int, err error) {
 	debug.Assert(!goi.unlocked)
 	goi.lom.Lock(false)
+	defer func() {
+		if !goi.unlocked {
+			goi.lom.Unlock(false)
+		}
+	}()
 	ecode, err = goi.get()
-	if !goi.unlocked {
-		goi.lom.Unlock(false)
-	}
+
 	return ecode, err
 }
 
@@ -777,6 +780,7 @@ do: // retry uplock or ec-recovery, the latter only once
 	case cold && goi.lom.Bck().IsAIS():
 		// ais bucket with no backend - try recover
 		goi.lom.Unlock(false)
+		goi.unlocked = true
 		doubleCheck, ecode, err = goi.restoreFromAny(false /*skipLomRestore*/)
 		if doubleCheck && err != nil {
 			lom2 := core.AllocLOM(goi.lom.ObjName)
@@ -794,10 +798,10 @@ do: // retry uplock or ec-recovery, the latter only once
 			}
 		}
 		if err != nil {
-			goi.unlocked = true
 			return ecode, err
 		}
 		goi.lom.Lock(false)
+		goi.unlocked = false
 		if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
 			goi.isIOErr = true
 			return 0, err
@@ -854,8 +858,8 @@ do: // retry uplock or ec-recovery, the latter only once
 			cold = false
 			goto do // repeat
 		}
-
-		if ecode, err = goi.coldGet(bp, config); err != nil || goi.unlocked {
+		var streamed bool
+		if streamed, ecode, err = goi.coldGet(bp, config); err != nil || streamed {
 			return ecode, err
 		}
 	}
@@ -923,9 +927,12 @@ func (goi *getOI) isStreamingColdGet() bool {
 	return true
 }
 
-// enter with the write lock; return with a read lock, or unlocked on error or after streaming
+// enter with the write lock; always downgrade to a read lock, including on error or panic
 // - user GET only (native and S3); jobs (prefetch, copy, ETL) choose their own: blob download or sequential
-func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (int, error) {
+// - streamed reports that the streaming path handled the request; do not transmit again
+func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (streamed bool, ecode int, err error) {
+	defer goi.lom.DowngradeLock()
+
 	goi.lom.SetAtimeUnix(goi.atime)
 	// zero-out prev. version custom metadata, if any
 	goi.lom.SetCustomMD(nil)
@@ -941,7 +948,7 @@ func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (int, error) {
 			switch {
 			case !used:
 			case er == nil:
-				return 0, nil
+				return false, 0, nil
 			case cos.IsErrPreconditionFailed(er):
 				// remote object changed and nothing has been sent: refetch it sequentially
 				nlog.Warningln(goi.lom.Cname(), "changed during parallel cold GET, refetching:", er)
@@ -951,36 +958,27 @@ func (goi *getOI) coldGet(bp core.Backend, config *cmn.Config) (int, error) {
 				nlog.Warningln(goi.lom.Cname(), "throttled during parallel cold GET, refetching sequentially:", er)
 				res = goi.coldRefetch(bp)
 			default:
-				goi.lom.Unlock(true)
-				goi.unlocked = true
-				return code, er
+				return false, code, er
 			}
 		}
 	}
 	if res.Err != nil {
-		goi.lom.Unlock(true)
-		goi.unlocked = true
 		if !cos.IsNotExist(res.Err, res.ErrCode) {
 			core.RR.Throttle(goi.lom.Bprops(), config, res.ErrCode, res.Err)
 			nlog.Infoln(ftcg, "(read)", goi.lom.Cname(), res.Err, res.ErrCode)
 		}
-		return res.ErrCode, res.Err
+		return false, res.ErrCode, res.Err
 	}
 	goi.cold = true
 
 	if goi.isStreamingColdGet() {
 		err := goi.coldStream(&res)
-		goi.unlocked = true
-		return 0, err
+		return true, 0, err
 	}
 
 	// regular path
-	code, err := goi.coldPut(&res, config)
-	if err != nil {
-		goi.unlocked = true
-		return code, err
-	}
-	return code, nil
+	ecode, err = goi.coldPut(&res, config)
+	return false, ecode, err
 }
 
 // drop the previous attempt's metadata (as in the initial cold GET) and read sequentially
@@ -1013,20 +1011,17 @@ func (goi *getOI) coldPut(res *core.GetReaderResult, config *cmn.Config) (int, e
 	freePOI(poi)
 
 	if err != nil {
-		lom.Unlock(true)
 		nlog.Infoln(ftcg, "(put)", lom.Cname(), err)
 		return code, err
 	}
 
-	// load, downgrade lock, inc stats
+	// reload metadata for local transmission; coldGet owns the write lock
 	if err = lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-		lom.Unlock(true)
 		err = fmt.Errorf("unexpected failure to load %s: %w", lom, err) // (unlikely)
 		nlog.Errorln(err)
 		return http.StatusInternalServerError, err
 	}
 
-	lom.DowngradeLock()
 	return 0, nil
 }
 
@@ -1076,9 +1071,11 @@ validate:
 	if lom.HasCopies() {
 		retried = true
 		goi.lom.Unlock(false)
+		goi.unlocked = true
 		// lookup and restore the object from local replicas
 		restored := lom.RestoreToLocation()
 		goi.lom.Lock(false)
+		goi.unlocked = false
 		if restored {
 			nlog.Warningf("%s: recovered corrupted %s from local replica", goi.t, lom)
 			goto validate
@@ -1087,9 +1084,11 @@ validate:
 	if lom.ECEnabled() {
 		retried = true
 		goi.lom.Unlock(false)
+		goi.unlocked = true
 		lom.RemoveMain()
 		_, ecode, err = goi.restoreFromAny(true /*skipLomRestore*/)
 		goi.lom.Lock(false)
+		goi.unlocked = false
 		if err == nil {
 			nlog.Warningf("%s: recovered corrupted %s from EC slices", goi.t, lom)
 			goto validate
@@ -1865,20 +1864,14 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, err error) {
 	if workFQN == "" {
 		a.hdl.tie = cos.GenTie()
 		workFQN = a.lom.GenFQN(fs.WorkCT, fs.WorkfileAppend, a.hdl.tie)
-		a.lom.Lock(false)
-		if a.lom.Load(false /*cache it*/, false /*locked*/) == nil {
-			var reader cos.LomReader
-			if reader, err = a.lom.Open(); err == nil {
-				_, a.hdl.partialCksum, err = cos.CopyReader(reader, workFQN, buf, a.lom.CksumType())
-				cos.Close(reader)
-			}
-			a.lom.Unlock(false)
-			if err != nil {
-				return "", err
-			}
+		var exists bool
+		exists, err = a.copySource(workFQN, buf)
+		if err != nil {
+			return "", err
+		}
+		if exists {
 			fh, err = a.lom.AppendWork(workFQN)
 		} else {
-			a.lom.Unlock(false)
 			a.hdl.partialCksum = cos.NewCksumHash(a.lom.CksumType())
 			fh, err = a.lom.CreateWork(workFQN)
 		}
@@ -1910,6 +1903,22 @@ func (a *apndOI) apnd(buf []byte) (packedHdl string, err error) {
 		nlog.Infoln("APPEND", a.lom.String(), time.Duration(lat))
 	}
 	return packedHdl, nil
+}
+
+// copy the existing object under a read lock, released before appending client data
+func (a *apndOI) copySource(workFQN string, buf []byte) (bool, error) {
+	a.lom.Lock(false)
+	defer a.lom.Unlock(false)
+	if a.lom.Load(false /*cache it*/, true /*locked*/) != nil {
+		return false, nil
+	}
+	reader, err := a.lom.Open()
+	if err != nil {
+		return true, err
+	}
+	defer cos.Close(reader)
+	_, a.hdl.partialCksum, err = cos.CopyReader(reader, workFQN, buf, a.lom.CksumType())
+	return true, err
 }
 
 func (a *apndOI) flush() (int, error) {
@@ -2111,16 +2120,12 @@ func (coi *coi) isNOP(lom, dst *core.LOM, dm *bundle.DM) bool {
 	if owt != cmn.OwtCopy {
 		return false
 	}
-	lom.Lock(false)
-	err := lom.Load(true, true /*locked*/)
-	lom.Unlock(false)
-	if err != nil {
-		return false
+	load := func(lom *core.LOM) error {
+		lom.Lock(false)
+		defer lom.Unlock(false)
+		return lom.Load(true /*cache it*/, true /*locked*/)
 	}
-	dst.Lock(false)
-	err = dst.Load(true, true /*locked*/)
-	dst.Unlock(false)
-	if err != nil {
+	if load(lom) != nil || load(dst) != nil {
 		return false
 	}
 	if lom.CheckEq(dst) != nil {
@@ -2224,8 +2229,13 @@ func (coi *coi) _reader(t *target, dm *bundle.DM, lom, dst *core.LOM, args *core
 
 func (coi *coi) _regular(t *target, lom, dst *core.LOM, lcopy bool) (res xs.CoiRes) {
 	lom.Lock(lcopy)
+	locked := true
+	defer func() {
+		if locked {
+			lom.Unlock(lcopy)
+		}
+	}()
 	if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-		lom.Unlock(lcopy)
 		if !cos.IsNotExist(err) {
 			err = cmn.NewErrFailedTo(t, "coi-load", lom.Cname(), err)
 		}
@@ -2236,11 +2246,10 @@ func (coi *coi) _regular(t *target, lom, dst *core.LOM, lcopy bool) (res xs.CoiR
 	if !lcopy && !lom.IsChunked() {
 		if chunkSize := dst.Bprops().Chunks.ChunkSizeFor(lom.Lsize()); chunkSize > 0 {
 			lom.Unlock(lcopy) // _chunk acquires its own read lock via GetROC
+			locked = false
 			return coi._chunk(t, lom, dst, chunkSize)
 		}
 	}
-
-	defer lom.Unlock(lcopy)
 
 	// w-lock the destination unless already locked (above)
 	if !lcopy {
@@ -2332,12 +2341,20 @@ func (coi *coi) _send(t *target, lom *core.LOM, sargs *sendArgs) (res xs.CoiRes)
 
 	if sargs.reader == nil {
 		// migrate/replicate in-cluster lom
-		lom.Lock(false)
-		if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
-			lom.Unlock(false)
-			return xs.CoiRes{Err: err}
-		}
-		reader, err := lom.NewDeferROC(true /*loaded*/)
+		reader, err := func() (cos.ReadOpenCloser, error) {
+			lom.Lock(false)
+			transferred := false
+			defer func() {
+				if !transferred {
+					lom.Unlock(false)
+				}
+			}()
+			if err := lom.Load(false /*cache it*/, true /*locked*/); err != nil {
+				return nil, err
+			}
+			transferred = true // NewDeferROC owns the lock, including on failure
+			return lom.NewDeferROC(true /*loaded*/)
+		}()
 		if err != nil {
 			return xs.CoiRes{Err: err}
 		}

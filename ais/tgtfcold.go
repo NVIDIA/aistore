@@ -20,7 +20,7 @@ import (
 
 const ftcg = "Warning: failed to cold-GET"
 
-// stats and redundancy (compare w/ goi.txfini)
+// stats and redundancy under coldGet's write lock (compare w/ goi.txfini)
 func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
 	lom := goi.lom
 	if revert != "" {
@@ -37,18 +37,17 @@ func (goi *getOI) _fini(revert string, fullSize, txSize int64) error {
 
 	// load
 	if err := lom.Load(true /*cache it*/, true /*locked*/); err != nil {
-		goi.lom.Unlock(true)
 		nlog.InfoDepth(1, ftcg, "(load)", lom, err) // (unlikely)
 		return cmn.ErrGetTxBenign
 	}
 	debug.AssertFunc(func() bool { return lom.Lsize() == fullSize })
-	goi.lom.Unlock(true)
 
 	// regular get stats
 	goi.stats(txSize)
 	return nil
 }
 
+// clean streaming resources while retaining coldGet's write lock
 func (goi *getOI) _cleanup(revert string, lmfh io.Closer, buf []byte, slab *memsys.Slab, err error, tag string) {
 	if lmfh != nil {
 		lmfh.Close()
@@ -57,7 +56,6 @@ func (goi *getOI) _cleanup(revert string, lmfh io.Closer, buf []byte, slab *mems
 		slab.Free(buf)
 	}
 	if err == nil {
-		goi.lom.Unlock(true)
 		return
 	}
 
@@ -77,8 +75,6 @@ func (goi *getOI) _cleanup(revert string, lmfh io.Closer, buf []byte, slab *mems
 			nlog.Infoln("reverted", cname)
 		}
 	}
-	lom.Unlock(true)
-
 	s := err.Error()
 	if cos.IsClientGone(err) {
 		s = "[client gone]" // EPIPE, et al.
@@ -89,7 +85,7 @@ func (goi *getOI) _cleanup(revert string, lmfh io.Closer, buf []byte, slab *mems
 // NOTE:
 // Streaming cold GET feature (`feat.StreamingColdGET`) puts response header on the wire _prior_
 // to finalizing in-cluster object. Use it at your own risk.
-// (under wlock)
+// (under coldGet's write lock, retained on return)
 func (goi *getOI) coldStream(res *core.GetReaderResult) error {
 	var (
 		t, lom = goi.t, goi.lom

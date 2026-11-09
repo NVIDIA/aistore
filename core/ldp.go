@@ -62,19 +62,22 @@ type (
 )
 
 func (r *deferROC) Close() (err error) {
-	err = r.ReadOpenCloser.Close()
-	r.lif.Unlock(false)
-	return
+	defer r.lif.Unlock(false)
+	return r.ReadOpenCloser.Close()
 }
 
-// is called under rlock; unlocks on fail
+// is called under rlock; unlocks on failure or panic
 // NOTE: compare w/ lom.Open() returning cos.LomReader
-func (lom *LOM) NewDeferROC(loaded bool) (cos.ReadOpenCloser, error) {
+func (lom *LOM) NewDeferROC(loaded bool) (roc cos.ReadOpenCloser, err error) {
+	defer func() {
+		if roc == nil {
+			lom.Unlock(false)
+		}
+	}()
 	lh, err := lom.NewHandle(loaded)
 	if err == nil {
 		return &deferROC{lh, lom.LIF()}, nil
 	}
-	lom.Unlock(false)
 	return nil, cmn.NewErrFailedTo(T, "open", lom.Cname(), err)
 }
 

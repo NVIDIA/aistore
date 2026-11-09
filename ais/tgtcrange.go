@@ -59,7 +59,7 @@ func (goi *getOI) coldReader(bp core.Backend, parallel bool) (res core.GetReader
 }
 
 // check before allocating workers; false leaves the initial reader untouched
-// - retain goi's write lock through completion, then downgrade for local transmission
+// - retain goi's write lock through completion; coldGet downgrades before local transmission
 func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, stopFirst context.CancelFunc) (bool, int, error) {
 	if first.Size < core.ColdRangeMinSize || first.Pin == (core.ObjPin{}) {
 		return false, 0, nil
@@ -105,7 +105,10 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 		checksum: goi.lom.CksumType() != cos.ChecksumNone,
 	}
 	r.ctx, r.cancel = context.WithCancel(goi.ctx)
-	defer r.cancel()
+	defer func() {
+		r.cancel()
+		r.wg.Wait() // a panic must not release the object lock while workers still write
+	}()
 	r.next.Store(chunkSize)
 
 	// the caller handles chunk zero while the other readers run concurrently
@@ -147,7 +150,6 @@ func (goi *getOI) coldRangePut(bp core.Backend, first *core.GetReaderResult, sto
 	if err = goi.lom.Load(true /*cache it*/, true /*locked*/); err != nil {
 		return true, http.StatusInternalServerError, err
 	}
-	goi.lom.DowngradeLock()
 	return true, 0, nil
 }
 
