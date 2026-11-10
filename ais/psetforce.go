@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -217,7 +216,7 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	// 2. the first inter-cluster network call:
 	// get and validate destination Smap, henceforth nsmap
 	nsmap, ern := p._getSmapCheckReady(nurl)
-	if ern != nil && _destinationNotReady(ern) {
+	if ern != nil && isErrNotReadyToJoin(ern) {
 		p.writeErr(w, r, ern)
 		return
 	}
@@ -409,12 +408,6 @@ func (p *proxy) forceJoin(w http.ResponseWriter, r *http.Request, npid string, q
 	freeCargs(cargs)
 }
 
-// TODO: introduce error code or http status code
-func _destinationNotReady(err error) bool {
-	msg := err.Error()
-	return strings.Contains(msg, "ready") || strings.Contains(msg, "rebalance")
-}
-
 func (p *proxy) _getSmapCheckReady(baseURL string) (smap *smapX, err error) {
 	cargs := allocCargs()
 	{
@@ -431,7 +424,7 @@ func (p *proxy) _getSmapCheckReady(baseURL string) (smap *smapX, err error) {
 	res := p.call(cargs, p.owner.smap.get())
 	if res.err != nil {
 		err = res.err
-		if !_destinationNotReady(err) {
+		if !isErrNotReadyToJoin(err) {
 			err = res.errorf("failed to get Smap from %s", baseURL)
 		}
 	} else {

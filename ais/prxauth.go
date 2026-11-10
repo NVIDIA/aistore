@@ -255,7 +255,8 @@ func (p *proxy) validateRequireClientAuth(r *http.Request, clone *cmn.AuthConf, 
 
 	claims, err := p.validateToken(r.Context(), r.Header)
 	if err != nil {
-		return http.StatusUnauthorized, fmt.Errorf("enabling client authentication requires a valid token [err: %v]", err)
+		err = fmt.Errorf("enabling client authentication requires a valid token [err: %w]", err)
+		return http.StatusUnauthorized, tok.NoTokenToHTTP(r, err)
 	}
 	if !claims.IsAdmin {
 		return http.StatusUnauthorized, errors.New("enabling client authentication requires a token with an 'admin' claim")
@@ -292,7 +293,7 @@ func (p *proxy) validateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := p.validateToken(r.Context(), r.Header); err != nil {
-		p.writeErr(w, r, err, http.StatusUnauthorized)
+		p.writeErr(w, r, tok.NoTokenToHTTP(r, err), http.StatusUnauthorized)
 	}
 }
 
@@ -362,6 +363,10 @@ func (p *proxy) extractAndValidate(ctx context.Context, hdr http.Header) (*tok.A
 // Wraps the access check with an HTTP error message
 func (p *proxy) checkAccess(w http.ResponseWriter, r *http.Request, bck *meta.Bck, ace apc.AccessAttrs) (err error) {
 	if err = p.access(r, bck, ace); err != nil {
+		if errors.Is(err, tok.ErrNoToken) {
+			p.writeErr(w, r, tok.NoTokenToHTTP(r, err))
+			return
+		}
 		// Use writeErrMsg (with the combined message from wrapped errors) instead of writeErr
 		// aceErrToCode parses code from the type so additional status code parsing is not necessary
 		p.writeErrMsg(w, r, err.Error(), aceErrToCode(err))

@@ -66,6 +66,8 @@ var (
 
 	currSmap *meta.Smap
 
+	errAISUnreachable = errors.New("AIS is unreachable")
+
 	restoreNodesOnce sync.Once             // Ensures that the initialization happens only once.
 	restoreNodes     map[string]RestoreCmd // initial proxy and target nodes => command to restore them
 
@@ -172,10 +174,10 @@ func InitLocalCluster() {
 	tlog.Logfln("Error: %s\n", strings.TrimSuffix(err.Error(), "\n"))
 
 	switch {
-	case strings.Contains(err.Error(), "token"):
+	case api.HTTPStatus(err) == http.StatusUnauthorized:
 		tlog.Logfln("Hint: make sure to provide access token via %s environment or the default config location",
 			env.AisAuthTokenFile)
-	case strings.Contains(err.Error(), "unreachable"):
+	case errors.Is(err, errAISUnreachable):
 		tlog.Logfln("Hint: make sure that cluster is running and/or specify its endpoint via %s environment",
 			env.AisEndpoint)
 	default:
@@ -212,13 +214,8 @@ func initProxyURL() error {
 		Action:   "reach AIS at " + proxyURLReadOnly,
 		IsClient: true,
 	}
-	ecode, err := args.Do()
-	if err != nil {
-		err = errors.New("AIS is unreachable at " + proxyURLReadOnly)
-		if ecode != 0 {
-			err = fmt.Errorf("%v (%d)", err, ecode)
-		}
-		return err
+	if _, err := args.Do(); err != nil {
+		return fmt.Errorf("%w at %s", errAISUnreachable, proxyURLReadOnly)
 	}
 
 	if testClusterType == ClusterTypeK8s {
@@ -232,7 +229,7 @@ func initProxyURL() error {
 	// Find the current primary.
 	primary, err := GetPrimaryProxy(proxyURLReadOnly)
 	if err != nil {
-		err = fmt.Errorf("failed to get primary proxy info from %s; err %v", proxyURLReadOnly, err)
+		err = fmt.Errorf("failed to get primary proxy info from %s; err %w", proxyURLReadOnly, err)
 		return err
 	}
 	proxyURLReadOnly = primary.URL(cmn.NetPublic)

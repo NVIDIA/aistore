@@ -298,7 +298,7 @@ func (h *hserv) httpUserGet(w http.ResponseWriter, r *http.Request) {
 	}
 	claims, err := h.getClaims(r)
 	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
+		cmn.WriteErr(w, r, tok.NoTokenToHTTP(r, err), http.StatusUnauthorized)
 		return
 	}
 	reqUser := items[0]
@@ -336,7 +336,7 @@ func (h *hserv) getClaims(r *http.Request) (*tok.AISClaims, error) {
 func (h *hserv) validateAdminPerms(w http.ResponseWriter, r *http.Request) error {
 	claims, err := h.getClaims(r)
 	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
+		cmn.WriteErr(w, r, tok.NoTokenToHTTP(r, err), http.StatusUnauthorized)
 		return err
 	}
 	if !claims.IsAdmin {
@@ -350,7 +350,7 @@ func (h *hserv) validateAdminPerms(w http.ResponseWriter, r *http.Request) error
 func (h *hserv) validateUpdatePerms(w http.ResponseWriter, r *http.Request, userID string, updateReq *authn.User) error {
 	claims, err := h.getClaims(r)
 	if err != nil {
-		cmn.WriteErr(w, r, err, http.StatusUnauthorized)
+		cmn.WriteErr(w, r, tok.NoTokenToHTTP(r, err), http.StatusUnauthorized)
 		return err
 	}
 	if claims.IsAdmin {

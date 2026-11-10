@@ -22,6 +22,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/api/env"
+	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/atomic"
@@ -1127,7 +1128,7 @@ func (p *proxy) httpbckdelete(w http.ResponseWriter, r *http.Request, apireq *ap
 		ecode, e = bckArgs.init()
 		if e != nil {
 			if ecode != http.StatusNotFound && !cmn.IsErrRemoteBckNotFound(e) {
-				p.writeErr(w, r, e, ecode)
+				p.writeErr(w, r, tok.NoTokenToHTTP(r, e), ecode)
 			}
 		}
 	} else {
@@ -2823,7 +2824,7 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if checkReady := r.Header.Get(apc.HdrReadyToJoinClu); checkReady != "" {
-			if err := p.readyToJoinClu(smap); err != nil {
+			if err := p.readyToJoinClu(r, smap); err != nil {
 				p.writeErr(w, r, err)
 				return
 			}
@@ -2834,17 +2835,20 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxy) readyToJoinClu(smap *smapX) error {
+func (p *proxy) readyToJoinClu(r *http.Request, smap *smapX) error {
 	switch {
 	case !smap.IsPrimary(p.si):
 		return newErrNotPrimary(p.si, smap)
 	case cmn.GCO.Get().Rebalance.Enabled && smap.CountTargets() > 1:
-		return errors.New(p.String() +
-			": destination cluster has rebalance enabled; disable global rebalance on the destination cluster for the duration of the critical force-join operation")
+		return newErrNotReadyToJoin(r, errors.New(p.String()+
+			": destination cluster has rebalance enabled; disable global rebalance on the destination cluster for the duration of the critical force-join operation"))
 	case nlog.Stopping():
 		return p.errStopping()
 	}
-	return p.pready(smap, true)
+	if err := p.pready(smap, true); err != nil {
+		return newErrNotReadyToJoin(r, err)
+	}
+	return nil
 }
 
 // +gen:endpoint PUT /v1/daemon[apc.QparamForce=bool]

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"sync/atomic"
 	"testing"
 
@@ -57,6 +58,33 @@ func TestForceJoinRequiresPrimary(t *testing.T) {
 		}
 		testForceJoinAttack(t, tsi, hdr)
 	})
+}
+
+func TestForceJoinNotReadyTcode(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+
+	bp := tools.BaseAPIParams(tools.GetPrimaryURL())
+	config, err := api.GetClusterConfig(bp)
+	tassert.CheckFatal(t, err)
+	if !config.Rebalance.Enabled {
+		tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": "true"})
+		t.Cleanup(func() {
+			tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": strconv.FormatBool(config.Rebalance.Enabled)})
+		})
+	}
+
+	bp.Method = http.MethodGet
+	req := api.AllocRp()
+	req.BaseParams = bp
+	req.Path = apc.URLPathDae.S
+	req.Query = url.Values{apc.QparamWhat: []string{apc.WhatSmap}}
+	req.Header = http.Header{apc.HdrReadyToJoinClu: []string{"true"}}
+	_, err = req.DoReqAny(&meta.Smap{})
+	api.FreeRp(req)
+
+	expectStatus(t, err, http.StatusBadRequest)
+	herr := cmn.AsErrHTTP(err)
+	tassert.Fatalf(t, herr.TypeCode == "ErrNotReadyToJoin", "expected tcode %q, got %q", "ErrNotReadyToJoin", herr.TypeCode)
 }
 
 func testForceJoinAttack(t *testing.T, victim *meta.Snode, hdr http.Header) {

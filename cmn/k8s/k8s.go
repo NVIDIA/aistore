@@ -37,6 +37,8 @@ const (
 	missingK8sEnv = "K8s environment variable not found"
 )
 
+const TcodeRequiresK8s = "ErrRequiresK8s"
+
 var (
 	NodeName string // assign upon successful initialization
 

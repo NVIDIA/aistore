@@ -1591,8 +1591,8 @@ func (r *UfestReader) Read(p []byte) (n int, err error) {
 		switch err {
 		case io.EOF:
 			if r.coff < c.size {
-				return n, fmt.Errorf("%s: chunk (%d/%d) appears to be truncated (%d/%d): %v",
-					r.u._rtag(), r.cidx+1, u.count, r.coff, c.size, io.ErrUnexpectedEOF)
+				return n, cmn.NewErrChunkTruncated(fmt.Sprintf("%s: chunk (%d/%d) appears to be truncated (%d/%d): %v",
+					r.u._rtag(), r.cidx+1, u.count, r.coff, c.size, io.ErrUnexpectedEOF))
 			}
 			err = nil
 		case nil:
@@ -1708,6 +1708,10 @@ func (r *UfestReader) ReadAt(p []byte, off int64) (n int, err error) {
 
 		n += m
 		if err != nil {
+			if err == io.EOF {
+				return n, cmn.NewErrChunkTruncated(fmt.Sprintf("%s: chunk (%d/%d) appears to be truncated (%d/%d): %v",
+					r.u._rtag(), idx+1, u.count, coff+int64(m), c.size, io.ErrUnexpectedEOF))
+			}
 			return n, fmt.Errorf("%s: failed to read chunk (%d/%d) at offset %d: %v",
 				r.u._rtag(), idx+1, u.count, coff, err)
 		}

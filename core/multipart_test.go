@@ -7,6 +7,7 @@ package core_test
 import (
 	"bytes"
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -280,10 +281,14 @@ var _ = Describe("MPU-UfestRead", func() {
 				Expect(reader.Close()).NotTo(HaveOccurred())
 			}()
 
-			// Reading should fail with unexpected EOF
+			// Reading should fail as the chunk is shorter than the manifest says
 			buffer := make([]byte, 300)
 			_, err = reader.Read(buffer)
-			Expect(err).To(MatchError(ContainSubstring("truncated")))
+			var terr *cmn.ErrChunkTruncated
+			Expect(errors.As(err, &terr)).To(BeTrue(), "expected ErrChunkTruncated, got %v", err)
+
+			_, err = reader.ReadAt(buffer[:200], 0)
+			Expect(errors.As(err, &terr)).To(BeTrue(), "expected ErrChunkTruncated, got %v", err)
 		})
 
 		It("should handle multiple small chunks", func() {

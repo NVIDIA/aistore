@@ -2608,11 +2608,6 @@ func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (str
 		return pid, 0, nil
 	}
 
-	s := res.err.Error()
-	if strings.Contains(s, ciePrefix) {
-		cos.ExitLog(res.err) // FATAL: cluster integrity error (cie)
-	}
-
 	if isErrKaliveRejected(res.err) || psi == nil || pid == "" || psi.PubNet.Hostname == psi.ControlNet.Hostname {
 		status, err := res.status, res.err
 		freeCR(res)
@@ -2622,7 +2617,7 @@ func (h *htrun) slowKalive(smap *smapX, htext htext, timeout time.Duration) (str
 	// intermittent DNS failure? (compare with h.reqHealth)
 	if psi.PubNet.Hostname != psi.ControlNet.Hostname {
 		primaryURL = psi.URL(cmn.NetPublic)
-		nlog.Warningln("retrying via pub addr", primaryURL, "[", s, pid, "]")
+		nlog.Warningln("retrying via pub addr", primaryURL, "[", res.err, pid, "]")
 
 		freeCR(res)
 		res = h.regTo(primaryURL, psi, timeout, htext, true /*keepalive*/)

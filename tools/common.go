@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/fname"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -194,8 +195,7 @@ func isClusterK8s() (isK8s bool, err error) {
 	// NOTE: The test suite doesn't have to be deployed on K8s, the cluster has to be.
 	_, err = api.ETLList(BaseAPIParams(GetPrimaryURL()))
 	isK8s = err == nil
-	// HACK: Check based on error message. Unfortunately, there is no relevant HTTP code.
-	if err != nil && strings.Contains(err.Error(), "requires Kubernetes") {
+	if herr := cmn.AsErrHTTP(err); herr != nil && herr.TypeCode == k8s.TcodeRequiresK8s {
 		err = nil
 	}
 	return

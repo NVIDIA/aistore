@@ -16,7 +16,6 @@ import (
 	"strings"
 
 	"github.com/NVIDIA/aistore/api/apc"
-	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmd/cli/config"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
@@ -411,7 +410,7 @@ func V(err error) error {
 }
 
 func hintForTokenRequired(herr *cmn.ErrHTTP) string {
-	if herr.Status == http.StatusUnauthorized && strings.Contains(herr.Message, authn.ErrNoToken.Error()) {
+	if herr.Status == http.StatusUnauthorized && herr.TypeCode == "ErrNoToken" {
 		return fmt.Sprintf(
 			"\n(Hint: log in with AuthN (i.e. '%s %s %s %s -p %s') or provide a JWT using '%s' or '%s')",
 			cliName, commandAuth, cmdAuthLogin, userLoginArgument, userPassArgument,

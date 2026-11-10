@@ -6,6 +6,9 @@ package authn
 
 import "errors"
 
+// type code (tcode) of ErrNoToken in the error reply
+const TcodeNoToken = "ErrNoToken"
+
 // Auth-related errors shared by AuthN server, AIS gateways, and clients (e.g. CLI).
 var (
 	ErrNoPermissions = errors.New("insufficient permissions")

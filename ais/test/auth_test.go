@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/api/authn"
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
@@ -49,6 +50,13 @@ func expectStatus(t *testing.T, err error, status int) {
 	var herr *cmn.ErrHTTP
 	tassert.Fatalf(t, errors.As(err, &herr), "expected ErrHTTP, got %v", err)
 	tassert.Fatalf(t, herr.Status == status, "expected %d, got %d", status, herr.Status)
+}
+
+func expectNoTokenTcode(t *testing.T, err error) {
+	t.Helper()
+	expectStatus(t, err, http.StatusUnauthorized)
+	herr := cmn.AsErrHTTP(err)
+	tassert.Fatalf(t, herr.TypeCode == authn.TcodeNoToken, "expected tcode %q, got %q", authn.TcodeNoToken, herr.TypeCode)
 }
 
 // promoteTestDir returns a writable directory under the hard-coded promote root.
@@ -486,4 +494,65 @@ func daeGetWhat(bp api.BaseParams, what string) error {
 		reqParams.Query = url.Values{apc.QparamWhat: []string{what}}
 	}
 	return reqParams.DoRequest()
+}
+
+func TestAuthNoTokenTcode(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresAuth: true})
+
+	var (
+		bp      = tools.BaseAPIParams()
+		noToken = tools.BaseAPIParams()
+		bck     = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+	)
+	noToken.Token = ""
+	noTokenAuthN := authNBP()
+	noTokenAuthN.Token = ""
+
+	tassert.CheckFatal(t, api.CreateBucket(bp, bck, nil))
+	t.Cleanup(func() { api.DestroyBucket(bp, bck) })
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{"create-bucket", func() error { return createBckNoToken(t, bp, noToken) }},
+		{"get-object", func() error { _, err := api.GetObject(noToken, bck, trand.String(8), nil); return err }},
+		{"download-new-bucket", func() error { return downloadNoToken(t, bp, noToken) }},
+		{"evict-bucket", func() error { return api.EvictRemoteBucket(noToken, bck, false) }},
+		{"authn-list-users", func() error { _, err := authn.GetAllUsers(noTokenAuthN); return err }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) { expectNoTokenTcode(t, test.run()) })
+	}
+}
+
+func TestAuthRequireNoTokenTcode(t *testing.T) {
+	noToken := tools.BaseAPIParams(tools.GetPrimaryURL())
+	noToken.Token = ""
+
+	err := api.SetClusterConfig(noToken, cos.StrKVs{"auth.client_auth_required": "true"}, false /*transient*/)
+	if err == nil {
+		tools.SetClusterConfig(t, cos.StrKVs{"auth.client_auth_required": "false"})
+	}
+	expectNoTokenTcode(t, err)
+}
+
+// create a bucket with no token (cleanup if it succeeds)
+func createBckNoToken(t *testing.T, bp, noToken api.BaseParams) error {
+	nbck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+	err := api.CreateBucket(noToken, nbck, nil)
+	if err == nil {
+		t.Cleanup(func() { api.DestroyBucket(bp, nbck) })
+	}
+	return err
+}
+
+// download into a new bucket with no token (cleanup if it starts)
+func downloadNoToken(t *testing.T, bp, noToken api.BaseParams) error {
+	nbck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+	_, err := api.DownloadSingle(noToken, "", nbck, trand.String(8), "http://localhost:1/obj")
+	if err == nil {
+		t.Cleanup(func() { api.DestroyBucket(bp, nbck) })
+	}
+	return err
 }

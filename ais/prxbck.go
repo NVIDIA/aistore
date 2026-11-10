@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/cmd/authn/tok"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -172,15 +173,16 @@ func (bctx *bctx) initAndTry() (bck *meta.Bck, err error) {
 		return bck, nil
 	}
 	if ecode != http.StatusNotFound {
+		werr := tok.NoTokenToHTTP(bctx.r, err)
 		// user GET and PUT requests: making a _silent_ exception for assorted error codes
 		// (counting them via stats.Inc though)
 		if bctx.perms == apc.AceGET || bctx.perms == apc.AcePUT {
 			if ecode == http.StatusUnauthorized || ecode == http.StatusForbidden {
-				p.writeErr(bctx.w, bctx.r, err, ecode, Silent)
+				p.writeErr(bctx.w, bctx.r, werr, ecode, Silent)
 				return nil, err
 			}
 		}
-		p.writeErr(bctx.w, bctx.r, err, ecode)
+		p.writeErr(bctx.w, bctx.r, werr, ecode)
 		return nil, err
 	}
 	// 2. handle two specific errors
@@ -249,11 +251,12 @@ func (bctx *bctx) try() (bck *meta.Bck, _ error) {
 		}
 		return bck, errN
 	default:
+		werr := tok.NoTokenToHTTP(bctx.r, err)
 		if bctx.perms == apc.AceBckHEAD {
-			p.writeErr(bctx.w, bctx.r, err, ecode, Silent)
+			p.writeErr(bctx.w, bctx.r, werr, ecode, Silent)
 		} else {
 			// likely, apc.AceObjLIST
-			p.writeErr(bctx.w, bctx.r, err, ecode)
+			p.writeErr(bctx.w, bctx.r, werr, ecode)
 		}
 		return bck, err
 	}

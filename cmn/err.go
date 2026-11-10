@@ -47,6 +47,8 @@ const (
 	StartupMayTimeout = "cluster startup is taking unusually long time..." // related ErrStartupTimeout
 
 	FmtErrNewHTTPReq = "failed to create HTTP request %s %s: %v"
+
+	TcodeChunkTruncated = "ErrChunkTruncated" // type code (tcode) of ErrChunkTruncated in the error reply
 )
 
 // ErrHTTP is the wire error type crossing HTTP boundaries. Its Status field
@@ -184,6 +186,9 @@ type (
 	}
 	ErrXactNotFound struct {
 		cause string
+	}
+	ErrChunkTruncated struct {
+		detail string
 	}
 	ErrObjDefunct struct {
 		name   string // object's name
@@ -790,6 +795,14 @@ func IsErrXactNotFound(err error) bool {
 	_, ok := err.(*ErrXactNotFound)
 	return ok
 }
+
+// ErrChunkTruncated
+
+func NewErrChunkTruncated(detail string) *ErrChunkTruncated {
+	return &ErrChunkTruncated{detail: detail}
+}
+
+func (e *ErrChunkTruncated) Error() string { return e.detail }
 
 // ErrObjDefunct
 

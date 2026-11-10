@@ -117,6 +117,18 @@ func ExtractToken(hdr http.Header) (*TokenHdr, error) {
 	return nil, ErrNoToken
 }
 
+// NoTokenToHTTP converts ErrNoToken to cmn.ErrHTTP (401) with the tcode authn.TcodeNoToken,
+// so that a client can tell it from other 401s (e.g., invalid or expired token).
+// It returns any other error unchanged.
+func NoTokenToHTTP(r *http.Request, err error) error {
+	if !errors.Is(err, ErrNoToken) {
+		return err
+	}
+	herr := cmn.NewErrHTTP(r, err, http.StatusUnauthorized)
+	herr.TypeCode = authn.TcodeNoToken
+	return herr
+}
+
 /////////////////
 // TokenParser //
 /////////////////

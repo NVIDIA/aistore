@@ -25,13 +25,19 @@ import (
 	"github.com/NVIDIA/aistore/stats"
 )
 
+func newErrK8sRequired(r *http.Request) *cmn.ErrHTTP {
+	herr := cmn.NewErrHTTP(r, k8s.ErrK8sRequired, http.StatusBadRequest)
+	herr.TypeCode = k8s.TcodeRequiresK8s
+	return herr
+}
+
 // [METHOD] /v1/etl
 func (t *target) etlHandler(w http.ResponseWriter, r *http.Request) {
 	if !t.ensureIntraControl(w, r, nil /*smap*/, true /* from primary */) {
 		return
 	}
 	if !k8s.IsK8s() {
-		t.writeErr(w, r, k8s.ErrK8sRequired, 0, Silent)
+		t.writeErr(w, r, newErrK8sRequired(r), 0, Silent)
 		return
 	}
 	switch r.Method {
@@ -274,7 +280,7 @@ func etlParseObjectReq(r *http.Request) (etlName, secret string, bck *meta.Bck, 
 func (t *target) etlObjHandler(w http.ResponseWriter, r *http.Request) {
 	// 1. K8s only
 	if !k8s.IsK8s() {
-		t.writeErr(w, r, k8s.ErrK8sRequired, 0, Silent)
+		t.writeErr(w, r, newErrK8sRequired(r), 0, Silent)
 		return
 	}
 	// 2. parse the (fixed-shape) path; authorize via per-ETL secret

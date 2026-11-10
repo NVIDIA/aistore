@@ -2280,7 +2280,7 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 	switch {
 	case herr == nil:
 		t.Error("Error is nil, expected internal server error on a GET for an object")
-	case isChunked && !strings.Contains(herr.Message, "truncated"): // TODO: create a new error type for it and replace it with generic `IsErr*` check
+	case isChunked && herr.TypeCode != cmn.TcodeChunkTruncated:
 		t.Errorf("Expected chunk truncated error on a GET for a corrupted object, got [%v]", herr)
 	case !isChunked && herr.TypeCode != "ErrBadCksum":
 		t.Errorf("Expected bad checksum error on a GET for a corrupted object, got [%v]", herr)
@@ -2292,7 +2292,7 @@ func executeTwoGETsForChecksumValidation(proxyURL string, bck cmn.Bck, objName s
 	switch {
 	case herr == nil:
 		t.Error("Error is nil, expected not found on a second GET for a corrupted object")
-	case isChunked && !strings.Contains(herr.Message, "truncated"):
+	case isChunked && herr.TypeCode != cmn.TcodeChunkTruncated:
 		t.Errorf("Expected chunk truncated error on a GET for a corrupted object, got [%v]", herr)
 	case !isChunked && !isErrNotFound(herr):
 		t.Errorf("Expected Not Found on a second GET for a corrupted object, got [%v]", herr)
