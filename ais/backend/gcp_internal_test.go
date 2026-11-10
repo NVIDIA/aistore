@@ -18,8 +18,11 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -27,11 +30,144 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	coremock "github.com/NVIDIA/aistore/core/mock"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/tassert"
 
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
+
+func TestGCPParseCreds(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		json     string
+		wantType option.CredentialsType
+		wantProj string
+		wantErr  bool
+	}{
+		{"service-account", `{"type":"service_account","project_id":"p1"}`, option.ServiceAccount, "p1", false},
+		{"service-account-no-project", `{"type":"service_account"}`, option.ServiceAccount, "", false},
+		{"external-account-no-project", extAcct(`{"file":"t","format":{"type":"text"}}`), option.ExternalAccount, "", false},
+		{"unsupported-type", `{"type":"authorized_user"}`, "", "", true},
+		{"bad-project-type", `{"private_key":"SECRET","type":"service_account","project_id":1}`, "", "", true},
+		{"not-json", "SECRET_TOKEN=abc\n", "", "", true},
+		{"external-account-no-source", extAcct(`null`), "", "", true},
+		{"external-account-file-and-url", extAcct(`{"file":"t","url":"http://x"}`), "", "", true},
+		{"external-account-file-and-executable", extAcct(`{"file":"t","executable":{"command":"x"}}`), "", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			creds, err := gcpParseCreds([]byte(tc.json))
+			if tc.wantErr {
+				tassert.Fatalf(t, err != nil, "expected error")
+				tassert.Fatalf(t, !strings.Contains(err.Error(), "SECRET"), "error leaks file content: %v", err)
+				return
+			}
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, creds.credType == tc.wantType && creds.projectID == tc.wantProj,
+				"got (%q, %q), want (%q, %q)", creds.credType, creds.projectID, tc.wantType, tc.wantProj)
+		})
+	}
+}
+
+func TestGCPLoadCredsRejectsNonRegularOrOversized(t *testing.T) {
+	dir := t.TempDir()
+	fifo := filepath.Join(dir, "fifo")
+	tassert.CheckFatal(t, syscall.Mkfifo(fifo, 0o600))
+	big := writeTestFile(t, dir, "big.json", `{"type":"service_account","pad":"`+strings.Repeat("x", gcpMaxCredsSize)+`"}`)
+
+	for _, path := range []string{fifo, big} {
+		_, err := gcpLoadCreds(path)
+		tassert.Fatalf(t, err != nil, "%s: expected error", path)
+	}
+}
+
+func TestGCPCreateSessExternalAccount(t *testing.T) {
+	fs.NewTestMFS(nil)
+	mpath := t.TempDir()
+	_, err := fs.AddTestMpath(mpath, "t1")
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { fs.Remove(mpath) })
+
+	const (
+		subjectToken = "subject-token"
+		accessToken  = "exchanged-access-token"
+	)
+	tokenFile := writeTestFile(t, t.TempDir(), "token", subjectToken)
+
+	// "/token": STS endpoint that exchanges the subject token for an access token
+	// "/": resource server that records the credentials of the authenticated request
+	var gotSubject, gotAuth atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/token" {
+			gotAuth.Store(r.Header.Get("Authorization"))
+			return
+		}
+		_ = r.ParseForm()
+		gotSubject.Store(r.PostForm.Get("subject_token"))
+		w.Header().Set(cos.HdrContentType, "application/json")
+		fmt.Fprintf(w, `{"access_token":%q,"issued_token_type":"urn:ietf:params:oauth:token-type:access_token","token_type":"Bearer","expires_in":3600}`, accessToken)
+	}))
+	t.Cleanup(srv.Close)
+
+	creds := wifJSON(srv.URL+"/token", tokenFile)
+	outside := writeTestFile(t, t.TempDir(), "wif.json", creds)
+	sess, err := gcpCreateSess(t.Context(), outside, nil)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { sess.client.Close() })
+	tassert.Fatalf(t, sess.projectID == "", "unexpected project ID %q", sess.projectID)
+
+	resp, err := sess.httpClient.Get(srv.URL)
+	tassert.CheckFatal(t, err)
+	resp.Body.Close()
+	tassert.Fatalf(t, resp.StatusCode == http.StatusOK, "unexpected status %d", resp.StatusCode)
+	tassert.Fatalf(t, gotSubject.Load() == subjectToken, "STS got subject token %v", gotSubject.Load())
+	tassert.Fatalf(t, gotAuth.Load() == "Bearer "+accessToken, "request got Authorization %q", gotAuth.Load())
+
+	// credentials stored under a mountpath (directly or via symlink) are rejected
+	inside := writeTestFile(t, mpath, "wif.json", creds)
+	link := filepath.Join(t.TempDir(), "link.json")
+	tassert.CheckFatal(t, os.Symlink(inside, link))
+	for _, path := range []string{inside, link} {
+		_, err = gcpCreateSess(t.Context(), path, nil)
+		tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), "mountpath"), "%s: got %v, want mountpath error", path, err)
+	}
+}
+
+// credentials file without project_id: GOOGLE_CLOUD_PROJECT is the fallback;
+// when neither is set, ListBuckets fails with 400
+func TestGCPDefaultSessProjectID(t *testing.T) {
+	t.Setenv(credPathEnvVar, writeTestFile(t, t.TempDir(), "wif.json", wifJSON("https://sts.googleapis.com/v1/token", "/var/gcp/token")))
+
+	for _, envProject := range []string{"env-project", ""} {
+		t.Setenv(projectIDEnvVar, envProject)
+		bp := &gsbp{t: &coremock.TargetMock{}}
+		sess, err := bp.getDfltSess()
+		tassert.CheckFatal(t, err)
+		t.Cleanup(func() { sess.client.Close() })
+		tassert.Fatalf(t, sess.projectID == envProject, "project ID %q, want %q", sess.projectID, envProject)
+
+		if envProject == "" {
+			_, code, err := bp.ListBuckets(cmn.QueryBcks{})
+			tassert.Fatalf(t, err != nil && code == http.StatusBadRequest, "got (%d, %v), want (%d, error)", code, err, http.StatusBadRequest)
+		}
+	}
+}
+
+func writeTestFile(t *testing.T, dir, name, content string) string {
+	path := filepath.Join(dir, name)
+	tassert.CheckFatal(t, os.WriteFile(path, []byte(content), 0o600))
+	return path
+}
+
+// external_account credentials with the given "credential_source" JSON
+func extAcct(source string) string {
+	return `{"type":"external_account","credential_source":` + source + `}`
+}
+
+func wifJSON(tokenURL, tokenFile string) string {
+	return fmt.Sprintf(`{"type":"external_account","audience":"//iam.googleapis.com/x","subject_token_type":"urn:ietf:params:oauth:token-type:jwt",`+
+		`"token_url":%q,"credential_source":{"file":%q}}`, tokenURL, tokenFile)
+}
 
 // client: at most cmn.BackendMaxAttempts; with cmn.WithNoRetry: exactly one
 func TestGCPRetryAttempts(t *testing.T) {

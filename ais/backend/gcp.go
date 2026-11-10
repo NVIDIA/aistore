@@ -13,12 +13,14 @@ package backend
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,12 +33,12 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tracing"
 
 	"cloud.google.com/go/storage"
 	gax "github.com/googleapis/gax-go/v2"
-	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -51,6 +53,12 @@ const (
 	projectIDField  = "project_id"
 	projectIDEnvVar = "GOOGLE_CLOUD_PROJECT"
 	credPathEnvVar  = "GOOGLE_APPLICATION_CREDENTIALS" //nolint:gosec // false positive G101
+
+	gcpMaxCredsSize = cos.MiB
+
+	// external_account "credential_source" keys
+	credSrcFile   = "file"
+	credSrcFormat = "format"
 )
 
 const (
@@ -64,6 +72,12 @@ type (
 		dfltOnce sync.Once
 		dfltErr  error
 		base
+	}
+	// validated credentials file
+	gcpCreds struct {
+		json      []byte
+		credType  option.CredentialsType
+		projectID string // may be empty
 	}
 	gcpSess struct {
 		client     *storage.Client
@@ -105,12 +119,13 @@ func (gsbp *gsbp) initDfltSess() {
 	)
 	credPath := os.Getenv(credPathEnvVar)
 	if credPath != "" {
-		var err error
-		if credProjectID, err = gcpLoadCreds(credPath); err != nil {
+		creds, err := gcpLoadCreds(credPath)
+		if err != nil {
 			gsbp.dfltErr = fmt.Errorf("%s '%s=%s': %v", fmtErrLoadCreds, credPathEnvVar, credPath, err)
 			return
 		}
-		opts = append(opts, option.WithAuthCredentialsFile(option.ServiceAccount, credPath))
+		credProjectID = creds.projectID
+		opts = append(opts, option.WithAuthCredentialsJSON(creds.credType, creds.json))
 	}
 	if credProjectID != "" && envProjectID != "" && credProjectID != envProjectID {
 		gsbp.dfltErr = fmt.Errorf("both %q and %q env vars cannot be defined (and not equal %s)",
@@ -570,31 +585,103 @@ func (gsbp *gsbp) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
 // session management & static helpers
 //
 
-func gcpLoadCreds(path string) (string, error) {
-	fh, e := os.Open(path)
-	if e != nil {
-		return "", e
+func gcpLoadCreds(path string) (*gcpCreds, error) {
+	// stat first: opening a FIFO would block
+	if finfo, err := os.Stat(path); err != nil {
+		return nil, err
+	} else if !finfo.Mode().IsRegular() {
+		return nil, errors.New("not a regular file")
 	}
-	b, err := cos.ReadAll(fh)
-	fh.Close()
+	fh, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer fh.Close()
+	// recheck via descriptor
+	if finfo, err := fh.Stat(); err != nil {
+		return nil, err
+	} else if !finfo.Mode().IsRegular() {
+		return nil, errors.New("not a regular file")
+	}
+	b, err := cos.ReadAll(io.LimitReader(fh, gcpMaxCredsSize+1)) // +1 detects overflow
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > gcpMaxCredsSize {
+		return nil, fmt.Errorf("file exceeds %d bytes", gcpMaxCredsSize)
+	}
+	return gcpParseCreds(b)
+}
+
+// Object content is user-writable and lives under mountpaths: it must never be read as credentials.
+// Returns the path with symlinks resolved.
+func gcpResolveCredPath(path string) (string, error) {
+	// follow symlinks: projected K8s Secret files are symlinks
+	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return "", err
 	}
-	v := jsoniter.Get(b, projectIDField).GetInterface()
-	projectID, ok := v.(string)
-	if !ok {
-		return "", fmt.Errorf("unexpected projectID type (%T)", v)
+	avail, disabled := fs.Get()
+	for _, mpis := range []fs.MPI{avail, disabled} {
+		for mpath := range mpis {
+			mp, err := filepath.EvalSymlinks(mpath)
+			if err != nil {
+				mp = mpath
+			}
+			if resolved == mp || strings.HasPrefix(resolved, mp+string(filepath.Separator)) {
+				return "", fmt.Errorf("credentials file inside mountpath %q", mpath)
+			}
+		}
 	}
-	debug.Assert(projectID != "")
-	return projectID, nil
+	return resolved, nil
+}
+
+func gcpParseCreds(b []byte) (*gcpCreds, error) {
+	var parsed struct {
+		Type             string         `json:"type"`
+		ProjectID        string         `json:"project_id"`
+		CredentialSource map[string]any `json:"credential_source"`
+	}
+	// encoding/json, not jsoniter: jsoniter errors quote the surrounding file content
+	if err := json.Unmarshal(b, &parsed); err != nil {
+		return nil, fmt.Errorf("invalid credentials JSON file: %v", err)
+	}
+	creds := &gcpCreds{json: b, credType: option.CredentialsType(parsed.Type), projectID: parsed.ProjectID}
+	if creds.credType == option.ServiceAccount {
+		return creds, nil
+	}
+	if creds.credType == option.ExternalAccount {
+		// never run executables or fetch tokens from URLs on behalf of a credentials file
+		file, _ := parsed.CredentialSource[credSrcFile].(string)
+		if file == "" {
+			return nil, fmt.Errorf("external_account: only \"credential_source.%s\" is supported", credSrcFile)
+		}
+		for k := range parsed.CredentialSource {
+			if k != credSrcFile && k != credSrcFormat {
+				return nil, fmt.Errorf("external_account: unsupported \"credential_source.%s\"", k)
+			}
+		}
+		return creds, nil
+	}
+	return nil, fmt.Errorf("unsupported credentials type %q (expecting %q or %q)",
+		parsed.Type, option.ServiceAccount, option.ExternalAccount)
+}
+
+// loads credentials from a user-supplied path (bucket property)
+func gcpLoadUserCreds(path string) (*gcpCreds, error) {
+	resolved, err := gcpResolveCredPath(path)
+	if err != nil {
+		return nil, err
+	}
+	return gcpLoadCreds(resolved)
 }
 
 // once (on demand), via bprops "extra.gcp.application_creds"
 func gcpCreateSess(ctx context.Context, credPath string, bck *cmn.Bck) (*gcpSess, error) {
 	debug.Assert(credPath != "")
 
-	projectID, err := gcpLoadCreds(credPath)
-	if projectID == "" {
+	creds, err := gcpLoadUserCreds(credPath)
+	if err != nil {
 		var s string
 		if bck != nil {
 			s = " for bucket " + bck.Cname("")
@@ -604,9 +691,9 @@ func gcpCreateSess(ctx context.Context, credPath string, bck *cmn.Bck) (*gcpSess
 
 	opts := []option.ClientOption{
 		option.WithScopes(storage.ScopeFullControl),
-		option.WithAuthCredentialsFile(option.ServiceAccount, credPath),
+		option.WithAuthCredentialsJSON(creds.credType, creds.json),
 	}
-	sess := &gcpSess{projectID: projectID}
+	sess := &gcpSess{projectID: creds.projectID}
 	return sess, sess.init(ctx, opts)
 }
 

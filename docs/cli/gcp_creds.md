@@ -62,6 +62,12 @@ cluster-wide default.
 
 The path must be **absolute and clean** (no `..` components). AIS validates this when the
 property is set and returns an error if the path is relative or malformed.
+The file must also be outside every AIS data mountpath.
+
+A target rejects paths inside its own mountpaths to prevent a stored object from serving as a credential.
+When targets share a filesystem (for example, the local playground or a shared volume), a user can store an object through one target and set this property to the path of that object.
+Another target then reads the object as credentials.
+Do not share a filesystem between targets in production, and restrict who can change bucket properties.
 
 ### Example: validate per-bucket credentials on first access
 
@@ -92,7 +98,10 @@ Error: gcp: failed to load application creds from ... for bucket ...
 
 ## Credentials file format
 
-The value is a file path to a standard GCP service-account JSON key:
+The value is a file path to a GCP credentials JSON file.
+The `type` field must be either `service_account` or `external_account` (Workload Identity Federation).
+
+Service-account key:
 
 ```json
 {
@@ -105,11 +114,26 @@ The value is a file path to a standard GCP service-account JSON key:
 }
 ```
 
-AIS reads the `project_id` from the file at the time the session is first established.
-The file path - not the credentials themselves - is what is stored in the bucket's BMD
-entry, so secrets never leave the node's filesystem.
-> The JSON key file itself is never replicated across nodes or transmitted over the network.
-> Each AIS target must have access to the specified path locally.
+External account (Workload Identity Federation):
+
+```json
+{
+  "type": "external_account",
+  "audience": "//iam.googleapis.com/projects/.../providers/...",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
+  "token_url": "https://sts.googleapis.com/v1/token",
+  "credential_source": {"file": "/var/gcp/token"}
+}
+```
+
+Only `credential_source.file` (optionally with `format`) is accepted.
+Other sources such as `url` or `executable` are rejected.
+Each AIS target must have access to the specified token file locally.
+
+For both types, `project_id` is optional.
+AIS reads it from the file when present; otherwise the default session uses the `GOOGLE_CLOUD_PROJECT` environment variable.
+The project ID is needed only to list buckets.
+Listing fails with "empty project ID" when neither is set.
 
 In Kubernetes, service-account keys are typically mounted as files via a Secret volume:
 
