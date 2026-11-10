@@ -163,10 +163,8 @@ func (u *rmbcks) f(hkey, value any) bool {
 		if !rmb.Eq(&b) {
 			continue
 		}
-		lmd2, _ := u.cache.LoadAndDelete(hkey)
-		if lmd2 == lmd {
-			*lmd = lom0.md
-		}
+		// remove the cache reference without changing metadata held by readers
+		u.cache.Delete(hkey)
 		u.pace()
 		break
 	}
@@ -388,16 +386,14 @@ func (evct *evct) f(hkey, value any) bool {
 		_flushAtime(md, atime, mdTime)
 	}
 
-	// evict
-	lmd2, _ := evct.cache.LoadAndDelete(hkey)
-	if lmd2 == md {
-		*md = lom0.md // zero out
-	}
-	T.StatsUpdater().Inc(LcacheEvictedCount)
+	// evict only this entry; readers may still hold its metadata
+	if evct.cache.CompareAndDelete(hkey, md) {
+		T.StatsUpdater().Inc(LcacheEvictedCount)
 
-	// throttle
-	evct.evicted++
-	evct.adv.Throttle(evct.evicted, true /*yield*/)
+		// throttle
+		evct.evicted++
+		evct.adv.Throttle(evct.evicted, true /*yield*/)
+	}
 	return evct.parent.rc.Load() == 0
 }
 
