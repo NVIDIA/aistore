@@ -484,28 +484,6 @@ Done:
 	finalizeStats(statsWriter)
 	err = errors.Join(err, output.closeAndUpload(runParams.bp))
 
-	// Verify chunked objects if multipart upload was used
-	if runParams.multipartChunks > 0 && runParams.putPct > 0 {
-		lsmsg := &apc.LsoMsg{Props: apc.GetPropsChunked}
-		if runParams.useNBI {
-			lsmsg.Flags |= apc.LsNBI
-		}
-		chunkedLs, err := api.ListObjects(runParams.bp, runParams.bck, lsmsg, api.ListArgs{})
-		if err != nil {
-			fmt.Println("failed to list chunked objects: ", err)
-		} else {
-			var actualChunked int64
-			for _, entry := range chunkedLs.Entries {
-				if entry.Flags&apc.EntryIsChunked != 0 {
-					actualChunked++
-				}
-			}
-			if actualChunked != accumulatedStats.putMPU.Total() {
-				fmt.Fprintf(os.Stderr, "Warning: Expected %d chunked objects but found %d\n", accumulatedStats.putMPU.Total(), actualChunked)
-			}
-		}
-	}
-
 	if runParams.cleanUp.Val {
 		cleanup()
 	}
