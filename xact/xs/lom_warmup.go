@@ -74,17 +74,14 @@ func newXactLLC(uuid string, bck *meta.Bck) (r *xactLLC) {
 	return
 }
 
+// cache HRW replicas only (lookups never reach the other mountpaths)
 func (*xactLLC) visitObj(lom *core.LOM, _ []byte) error {
-	if err := lom.Load(false /*cache*/, false); err != nil {
+	if err := lom.Load(lom.IsHRW() /*cache it*/, false /*locked*/); err != nil {
 		if cos.IsNotExist(err) {
 			return nil
 		}
 		return err
 	}
-	if lom.IsCopy() {
-		return nil
-	}
-	lom.Recache()
 	return nil
 }
 

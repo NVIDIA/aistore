@@ -6,6 +6,7 @@ package core
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"runtime"
@@ -616,11 +617,12 @@ func (lom *LOM) ComputeCksum(cksumType string, locked bool) (cksum *cos.CksumHas
 }
 
 // no lock is taken when locked by an immediate caller, or otherwise is known to be locked
-// otherwise, try Rlock temporarily _if and only when_ reading from fs
+// otherwise, try a temporary read lock on a cache miss
 //
 // (compare w/ LoadUnsafe() below)
 func (lom *LOM) Load(cacheit, locked bool) error {
 	debug.Func(func() { debug.Assert(lom.Bprops() != nil, lom.Cname()) }) // must be InitBck/InitFQN'ed
+lookup:
 	var (
 		lcache, lmd = lom.fromCache()
 	)
@@ -628,6 +630,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	if lmd != nil {
 		hrw := lom.IsHRW()
 		lom.md = *lmd
+		lom.md.cloneDirtyMaps()
 		lom.md.setHRW(hrw)
 
 		if lom.IsFntl() {
@@ -640,8 +643,13 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	}
 
 	// slow path
-	if !locked && lom.TryLock(false) {
-		defer lom.Unlock(false)
+	if !locked {
+		if lom.TryLock(false) {
+			defer lom.Unlock(false)
+			locked = true
+			goto lookup
+		}
+		cacheit = false
 	}
 	if err := lom.FromFS(); err != nil {
 		return err
@@ -656,7 +664,7 @@ func (lom *LOM) Load(cacheit, locked bool) error {
 	if cacheit {
 		debug.AssertFunc(func() bool { return lom.bid() != 0 })
 		md := lom.md
-		lcache.Store(lom.digest, &md)
+		lcache.LoadOrStore(lom.digest, &md) // (in the unlikely case of uname collision - see also Recache)
 	}
 	return nil
 }
@@ -690,19 +698,30 @@ func (lom *LOM) Recache() {
 	debug.AssertFunc(func() bool { return !lom.IsCopy() })
 	lom.setbid(lom.Bprops().BID)
 
-	md := lom.md
-
 	lcache := lom.lcache()
-	val, ok := lcache.Swap(lom.digest, &md)
+	val, ok := lcache.Load(lom.digest)
+
+	md := lom.md
+	md.cloneDirtyMaps()
 	if !ok {
+		lcache.Store(lom.digest, &md)
 		return
 	}
 	lmd := val.(*lmeta)
-	if *lmd.uname != *lom.md.uname {
-		lom._collide(lmd)
-	} else {
-		// updating the value that's already in the map (race extremely unlikely, benign anyway)
+
+	if *lmd.uname == *lom.md.uname {
 		md.cpAtime(lmd)
+		lcache.Swap(lom.digest, &md)
+	} else {
+		lom._collide(lmd)
+	}
+}
+
+// keep maps in dirty cache entries private for writeback
+func (md *lmeta) cloneDirtyMaps() {
+	if md.isDirty() {
+		md.copies = maps.Clone(md.copies)
+		md.CustomMD = maps.Clone(md.CustomMD)
 	}
 }
 
@@ -744,7 +763,7 @@ func (lom *LOM) UncacheUnless() {
 	}
 	if !lmd.isDirty() {
 		lom.md.cpAtime(lmd)
-		lcache.Delete(lom.md.uname)
+		lcache.Delete(lom.digest)
 	}
 }
 
@@ -757,6 +776,7 @@ func (lom *LOM) fromCache() (lcache *sync.Map, lmd *lmeta) {
 		lmd = md.(*lmeta)
 		if *lmd.uname != *lom.md.uname {
 			lom._collide(lmd)
+			lmd = nil
 		}
 	}
 	return

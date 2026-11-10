@@ -23,7 +23,7 @@ import (
 type (
 	// g.lchk
 	lchk struct {
-		last    time.Time
+		last    atomic.Int64
 		timeout time.Duration
 		total   atomic.Int64
 		rc      atomic.Int32
@@ -42,8 +42,9 @@ type (
 	}
 	// termination
 	term struct {
-		mi *fs.Mountpath
-		wg *sync.WaitGroup
+		mi    *fs.Mountpath
+		wg    *sync.WaitGroup
+		cache *sync.Map
 	}
 	// uncache buckets
 	rmbcks struct {
@@ -65,9 +66,11 @@ type (
 //
 
 func LcacheClear() {
-	avail := fs.GetAvail()
-	for _, mi := range avail {
-		LcacheClearMpath(mi)
+	for _, mi := range fs.GetAvail() {
+		for idx := range cos.MultiHashMapCount {
+			_clearCleanLmeta(mi.LomCaches.Get(idx))
+			mi.SidxCaches.Get(idx).Clear()
+		}
 	}
 }
 
@@ -84,7 +87,7 @@ func LcacheClearBcks(wg *sync.WaitGroup, bcks ...*meta.Bck) {
 
 	memLoad := load.Mem() // may trigger free-to-OS
 	if memLoad == load.Critical {
-		g.lchk.dropAll()
+		g.lchk.dropClean()
 	}
 
 	config := cmn.GCO.Get()
@@ -127,7 +130,7 @@ func (lchk *lchk) init(config *cmn.Config) {
 	lchk.running.Store(false)
 	lchk.timeout = cos.NonZero(config.Timeout.ObjectMD.D(), cmn.LcacheEvictDflt)
 
-	lchk.last = time.Now()
+	lchk.last.Store(mono.NanoTime())
 	hk.Reg("lcache"+hk.NameSuffix, lchk.housekeep, lchk.timeout)
 }
 
@@ -163,7 +166,6 @@ func (u *rmbcks) f(hkey, value any) bool {
 		if !rmb.Eq(&b) {
 			continue
 		}
-		// remove the cache reference without changing metadata held by readers
 		u.cache.Delete(hkey)
 		u.pace()
 		break
@@ -219,32 +221,15 @@ func (lchk *lchk) term() {
 func (term *term) do() {
 	defer term.wg.Done()
 	for idx := range cos.MultiHashMapCount {
-		cache := term.mi.LomCaches.Get(idx)
-		cache.Range(term.f)
+		term.cache = term.mi.LomCaches.Get(idx)
+		term.cache.Range(term.f)
 	}
 }
 
-func (*term) f(_, value any) bool {
+func (term *term) f(hkey, value any) bool {
 	md := value.(*lmeta)
-	if md.uname == nil {
-		return true
-	}
-	lif := LIF{Uname: *md.uname, BID: md.lid.bid()}
-	lom, err := lif.LOM()
-	if err != nil {
-		return true
-	}
-	if lom.WritePolicy() == apc.WriteNever {
-		return true
-	}
-	if md.Atime < 0 {
-		// prefetched, not yet accessed
-		mdTime := -md.Atime
-		_flushAtime(md, time.Unix(0, mdTime), mdTime)
-		return true
-	}
 	if md.isDirty() || md.atimefs != uint64(md.Atime) {
-		_flushAtime(md, time.Unix(0, md.Atime), md.Atime)
+		_flushCached(term.mi, term.cache, hkey, md)
 	}
 	return true
 }
@@ -253,14 +238,29 @@ func (*term) f(_, value any) bool {
 // HK evict
 //
 
-func (lchk *lchk) dropAll() {
-	nlog.WarningDepth(1, "dropping LOM cache")
+func (lchk *lchk) dropClean() {
+	var n int
 	for _, mi := range fs.GetAvail() {
 		for idx := range cos.MultiHashMapCount {
-			mi.LomCaches.Get(idx).Clear()
+			n += _clearCleanLmeta(mi.LomCaches.Get(idx))
 		}
 	}
-	lchk.last = time.Now()
+	lchk.last.Store(mono.NanoTime())
+	if n > 1000 {
+		nlog.WarningDepth(1, "dropping clean LOM cache entries:", n)
+	}
+}
+
+func _clearCleanLmeta(cache *sync.Map) (n int) {
+	cache.Range(func(key, value any) bool {
+		if !value.(*lmeta).isDirty() {
+			if cache.CompareAndDelete(key, value) {
+				n++
+			}
+		}
+		return true
+	})
+	return n
 }
 
 func _log(tag string, memLoad, cpuLoad, dskLoad load.Load) {
@@ -282,7 +282,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 
 	memLoad := load.Mem() // may trigger free-to-OS
 	if memLoad == load.Critical {
-		lchk.dropAll()
+		lchk.dropClean()
 		return lchk.timeout
 	}
 
@@ -301,7 +301,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 
 	// soft skip: memory is OK, CPU/disk are high, and we ran recently
 	if !memBad && (cpuLoad == load.High || dskLoad == load.High) {
-		if elapsed := now.Sub(lchk.last); elapsed < min(cmn.LcacheEvictMax, max(lchk.timeout, time.Hour)*8) {
+		if elapsed := mono.Since(lchk.last.Load()); elapsed < min(cmn.LcacheEvictMax, max(lchk.timeout, time.Hour)*8) {
 			nlog.Warningln("hk: high load, elapsed:", elapsed, "- not running")
 			return min(lchk.timeout>>1, cmn.LcacheEvictDflt>>1)
 		}
@@ -315,8 +315,8 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 
 	// finally, run
 	nlog.Infoln("hk begin")
-	lchk.last = now
-	go lchk.evict(lchk.timeout, now) // note: evict signature drops 'pct'
+	lchk.last.Store(mono.NanoTime())
+	go lchk.evict(lchk.timeout, now)
 
 	return hk.Jitter(lchk.timeout, now.UnixNano())
 }
@@ -375,18 +375,18 @@ func (evct *evct) f(hkey, value any) bool {
 		mdTime = -mdTime
 	}
 
-	atime := time.Unix(0, mdTime)
-	elapsed := evct.now.Sub(atime)
+	elapsed := evct.now.Sub(time.Unix(0, mdTime))
 	if elapsed < evct.d {
 		return evct.parent.rc.Load() == 0
 	}
 
 	// flush
 	if md.isDirty() || md.atimefs != uint64(md.Atime) {
-		_flushAtime(md, atime, mdTime)
+		if !_flushCached(evct.mi, evct.cache, hkey, md) {
+			return evct.parent.rc.Load() == 0
+		}
 	}
 
-	// evict only this entry; readers may still hold its metadata
 	if evct.cache.CompareAndDelete(hkey, md) {
 		T.StatsUpdater().Inc(LcacheEvictedCount)
 
@@ -397,58 +397,89 @@ func (evct *evct) f(hkey, value any) bool {
 	return evct.parent.rc.Load() == 0
 }
 
-func _flushAtime(md *lmeta, atime time.Time, mdTime int64) {
+// whether the entry can be evicted
+func _flushCached(mi *fs.Mountpath, cache *sync.Map, hkey any, md *lmeta) bool {
+	dirty := md.isDirty()
 	if md.uname == nil {
-		return
+		return !dirty
 	}
 	lif := LIF{Uname: *md.uname, BID: md.lid.bid()}
 	lom, err := lif.LOM()
 	if err != nil {
-		return
+		return !dirty || cmn.IsErrObjDefunct(err)
 	}
-	if lom.WritePolicy() == apc.WriteNever {
-		return
+	defer FreeLOM(lom)
+	if lom.mi != mi || lom.digest != hkey || lom.Uname() != lif.Uname {
+		return !dirty
+	}
+	if md.lid.haslmfl(lmflFntl) {
+		lom.fixupFntl()
+	}
+	if dirty {
+		// this path tries to take a lock
+		if !_flushDirty(lom, cache, hkey, md) {
+			return false
+		}
+	} else if lom.WritePolicy() == apc.WriteNever {
+		return true
 	}
 
+	// atime is best effort (not taking lock)
+	mdTime := md.Atime
+	if mdTime < 0 {
+		mdTime = -mdTime
+	}
+	_flushAtime(lom, time.Unix(0, mdTime))
+	return true
+}
+
+func _flushAtime(lom *LOM, atime time.Time) {
 	tstats := T.StatsUpdater()
-	if err = lom.flushAtime(atime); err != nil {
+	if err := lom.flushAtime(atime); err != nil {
 		if !cos.IsNotExist(err) {
 			tstats.Inc(LcacheErrCount)
 			T.FSHC(err, lom.Mountpath(), lom.FQN)
 		}
 		return
 	}
-
-	// stats
 	tstats.Inc(LcacheFlushColdCount)
+}
 
-	if !md.isDirty() {
-		return
+func _flushDirty(lom *LOM, cache *sync.Map, hkey any, md *lmeta) bool {
+	if !lom.TryLock(true) {
+		return false
+	}
+	defer lom.Unlock(true)
+
+	// recheck identity after taking the lock and before touching xattrs
+	if current, _ := cache.Load(hkey); current != md {
+		return false
+	}
+	bprops, present := T.Bowner().Get().Get(lom.Bck())
+	if !present || bprops.BID != md.lid.bid() || bprops.WritePolicy.MD == apc.WriteNever {
+		return false
+	}
+	if mi := lom.Mountpath(); fs.GetAvail()[mi.Path] != mi || mi.IsAnySet(fs.FlagWaitingDD) {
+		return false
 	}
 
-	// special [dirty] case: clear and flush
-	md.Atime = mdTime
-	md.atimefs = uint64(mdTime)
-
-	hrw := lom.IsHRW() // (the bit is not needed here - pack() strips it - but consistency)
+	// pack a private copy without changing the published entry
 	lom.md = *md
-	lom.md.setHRW(hrw)
-
 	buf := lom.pack()
-	if err = lom.SetXattr(buf); err != nil {
+	defer g.smm.Free(buf)
+	if err := lom.SetXattr(buf); err != nil {
 		T.FSHC(err, lom.Mountpath(), lom.FQN)
-	} else {
-		for copyFQN := range lom.md.copies {
-			if copyFQN == lom.FQN {
-				continue
-			}
-			if err = fs.SetXattr(copyFQN, fs.XattrLOM, buf); err != nil {
-				tstats.Inc(LcacheErrCount)
-				nlog.Errorln("set-xattr [", copyFQN, err, "]")
-				break
-			}
+		return false
+	}
+	for copyFQN := range lom.md.copies {
+		if copyFQN == lom.FQN {
+			continue
+		}
+		if err := fs.SetXattr(copyFQN, fs.XattrLOM, buf); err != nil {
+			T.StatsUpdater().Inc(LcacheErrCount)
+			nlog.Errorln("set-xattr [", copyFQN, err, "]")
+			return false
 		}
 	}
-	g.smm.Free(buf)
-	FreeLOM(lom)
+	return true
 }

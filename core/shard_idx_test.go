@@ -48,17 +48,22 @@ func siArchLOM(t GinkgoTInterface, name string) *core.LOM {
 
 func siArchLOMInBucket(t GinkgoTInterface, bckName, name string) *core.LOM {
 	t.Helper()
+	const tag = "siArchLOMInBucket"
 	lom := &core.LOM{ObjName: name}
 	if err := lom.InitCmnBck(&cmn.Bck{Name: bckName, Provider: apc.AIS}); err != nil {
-		t.Fatalf("siArchLOMInBucket InitCmnBck: %v", err)
+		t.Fatalf("%s InitCmnBck: %v", tag, err)
 	}
 	// Create a stub shard file so SaveShardIndex can persist xattr on archlom.
 	if err := os.RemoveAll(lom.FQN); err != nil {
-		t.Fatalf("siArchLOMInBucket RemoveAll %s: %v", lom.FQN, err)
+		t.Fatalf("%s RemoveAll %s: %v", tag, lom.FQN, err)
+	}
+	// remove an index left over by a previous run (mountpaths outside TempDir)
+	if err := os.RemoveAll(siIdxPath(t, lom)); err != nil {
+		t.Fatalf("%s RemoveAll index: %v", tag, err)
 	}
 	fh, err := cos.CreateFile(lom.FQN)
 	if err != nil {
-		t.Fatalf("siArchLOMInBucket CreateFile %s: %v", lom.FQN, err)
+		t.Fatalf("%s CreateFile %s: %v", tag, lom.FQN, err)
 	}
 	cos.Close(fh)
 	// Seed minimal metadata that PersistMain validates before writing xattr.
