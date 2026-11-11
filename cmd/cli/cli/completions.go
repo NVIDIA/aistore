@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ext/dload"
-	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/xact"
 
 	"github.com/urfave/cli"
@@ -32,9 +31,6 @@ const (
 	confLogLevel   = "log.level"
 	confLogModules = "log.modules"
 )
-
-// NOTE: duplicated from cmn/dsort_on
-var dsortSupportedReactions = []string{"ignore", "warn", "abort"}
 
 var (
 	supportedBool = []string{"true", "false"}
@@ -49,32 +45,27 @@ var (
 		clusterFeatures: append(feat.Cluster[1:], apc.ResetToken), // bit 0 reserved since v5.1
 		bucketFeatures:  append(feat.Bucket[:], apc.ResetToken),
 		// rest
-		"write_policy.data":                   apc.SupportedWritePolicy[:],
-		"write_policy.md":                     apc.SupportedWritePolicy[:],
-		"ec.compression":                      apc.SupportedCompression[:],
-		"compression.checksum":                apc.SupportedCompression[:],
-		"rebalance.compression":               apc.SupportedCompression[:],
-		"distributed_sort.compression":        apc.SupportedCompression[:],
-		"distributed_sort.duplicated_records": dsortSupportedReactions,
-		"distributed_sort.ekm_malformed_line": dsortSupportedReactions,
-		"distributed_sort.ekm_missing_key":    dsortSupportedReactions,
-		"distributed_sort.missing_shards":     dsortSupportedReactions,
-		"auth.client_auth_required":           supportedBool,
-		"auth.intra_cluster.request_auth":     supportedBool,
-		"checksum.enabl_read_range":           supportedBool,
-		"checksum.validate_cold_get":          supportedBool,
-		"checksum.validate_warm_get":          supportedBool,
-		"checksum.validate_obj_move":          supportedBool,
-		"ec.enabled":                          supportedBool,
-		"fshc.enabled":                        supportedBool,
-		"lru.enabled":                         supportedBool,
-		"mirror.enabled":                      supportedBool,
-		"rebalance.enabled":                   supportedBool,
-		"resilver.enabled":                    supportedBool,
-		"versioning.enabled":                  supportedBool,
-		"replication.on_cold_get":             supportedBool,
-		"replication.on_lru_eviction":         supportedBool,
-		"replication.on_put":                  supportedBool,
+		"write_policy.data":               apc.SupportedWritePolicy[:],
+		"write_policy.md":                 apc.SupportedWritePolicy[:],
+		"ec.compression":                  apc.SupportedCompression[:],
+		"compression.checksum":            apc.SupportedCompression[:],
+		"rebalance.compression":           apc.SupportedCompression[:],
+		"auth.client_auth_required":       supportedBool,
+		"auth.intra_cluster.request_auth": supportedBool,
+		"checksum.enabl_read_range":       supportedBool,
+		"checksum.validate_cold_get":      supportedBool,
+		"checksum.validate_warm_get":      supportedBool,
+		"checksum.validate_obj_move":      supportedBool,
+		"ec.enabled":                      supportedBool,
+		"fshc.enabled":                    supportedBool,
+		"lru.enabled":                     supportedBool,
+		"mirror.enabled":                  supportedBool,
+		"rebalance.enabled":               supportedBool,
+		"resilver.enabled":                supportedBool,
+		"versioning.enabled":              supportedBool,
+		"replication.on_cold_get":         supportedBool,
+		"replication.on_lru_eviction":     supportedBool,
+		"replication.on_put":              supportedBool,
 	}
 )
 
@@ -681,24 +672,12 @@ func runningJobCompletions(c *cli.Context) {
 				already.Set(kind)
 			}
 		}
-		// NOTE: dsort is the only exception - not an xaction
-		list, err := api.ListDsort(apiBP, "", true /*onlyActive*/)
-		if err != nil {
-			completionErr(c, err)
-			return
-		}
-		if len(list) > 0 {
-			fmt.Println(cmdDsort)
-		}
 		return
 	case 1: // ID
 		name := c.Args().Get(0)
 		switch name {
 		case cmdDownload:
 			suggestDownloadID(c, (*dload.Job).JobRunning, 1 /*shift*/)
-			return
-		case cmdDsort:
-			suggestDsortID(c, (*dsort.JobInfo).IsRunning, 1 /*shift*/)
 			return
 		case commandETL:
 			suggestEtlName(c, 1 /*shift*/)
@@ -749,7 +728,7 @@ func rebalanceCompletions(c *cli.Context) {
 }
 
 //
-// Download & dsort
+// Download
 //
 
 func downloadIDFinishedCompletions(c *cli.Context) { suggestDownloadID(c, (*dload.Job).JobFinished, 0) }
@@ -766,20 +745,6 @@ func suggestDownloadID(c *cli.Context, filter func(*dload.Job) bool, shift int) 
 		completionErr(c, err)
 		return
 	}
-	for _, job := range list {
-		if filter(job) {
-			fmt.Println(job.ID)
-		}
-	}
-}
-
-func dsortIDFinishedCompletions(c *cli.Context) { suggestDsortID(c, (*dsort.JobInfo).IsFinished, 0) }
-
-func suggestDsortID(c *cli.Context, filter func(*dsort.JobInfo) bool, shift int) {
-	if c.NArg() > shift {
-		return
-	}
-	list, _ := api.ListDsort(apiBP, "", false /*onlyActive*/)
 	for _, job := range list {
 		if filter(job) {
 			fmt.Println(job.ID)

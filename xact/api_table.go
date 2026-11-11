@@ -190,19 +190,6 @@ var Table = map[string]Descriptor{
 	// target pushes periodic progress (tgtdl.go); also finalizes on term
 	apc.ActDownload: {Access: apc.AccessRW, Scope: ScopeG, Startable: false, Idles: true, AbortByReb: true, ICMode: ICUponTerm | ICUponProgress},
 
-	// in its own class
-	apc.ActDsort: {
-		DisplayName:    "dsort",
-		Scope:          ScopeB,
-		Access:         apc.AccessRW,
-		Startable:      false,
-		RefreshCap:     true,
-		ExtendedStats:  true,
-		ConflictRebRes: true,
-		AbortByReb:     true,
-		// ICMode: ICNone - dsort has its own manager/notification machinery (see ext/dsort)
-	},
-
 	// multi-object
 	apc.ActPromote: {
 		DisplayName: "promote-files",

@@ -156,7 +156,6 @@ cat > ${NODE_CONFIG_DIR}/proxy/ais.json << PROXYEOF
     "fshc": {"test_files": 4, "error_limit": 2, "io_err_limit": 10, "io_err_time": "10s", "enabled": true},
     "auth": {"signature": {"key": "", "method": "HMAC"}, "client_auth_required": false},
     "keepalivetracker": {"proxy": {"interval": "10s", "name": "heartbeat", "factor": 3}, "target": {"interval": "10s", "name": "heartbeat", "factor": 3}, "num_retries": 3, "retry_factor": 4},
-    "distributed_sort": {"duplicated_records": "ignore", "missing_shards": "ignore", "ekm_malformed_line": "abort", "ekm_missing_key": "abort", "default_max_mem_usage": "80%", "call_timeout": "10m", "dsorter_mem_threshold": "100GB", "compression": "never", "bundle_multiplier": 4},
     "features": "0"
 }
 PROXYEOF

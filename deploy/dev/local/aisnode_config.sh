@@ -158,18 +158,7 @@ cat > "$AIS_CONF_FILE" <<EOL
 		},
 		"use_ipv6":          ${AIS_USE_IPv6:-false}
 	},
-	"auth": $(make_auth_conf),
-	"distributed_sort": {
-		"duplicated_records":    "ignore",
-		"missing_shards":        "ignore",
-		"ekm_malformed_line":    "abort",
-		"ekm_missing_key":       "abort",
-		"default_max_mem_usage": "80%",
-		"call_timeout":          "10m",
-		"dsorter_mem_threshold": "100GB",
-		"compression":           "${AIS_DSORT_COMPRESSION:-never}",
-		"bundle_multiplier":	 ${AIS_DSORT_BUNDLE_MULTIPLIER:-4}
-	}
+	"auth": $(make_auth_conf)
 }
 EOL
 

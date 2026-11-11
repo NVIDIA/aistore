@@ -618,6 +618,30 @@ loop:
 	return nil
 }
 
+// create bucket if it does not exist; otherwise, use it as is or,
+// when the cleanup flag is set, destroy and re-create
+func setupBucket(c *cli.Context, bck cmn.Bck) error {
+	exists, err := api.QueryBuckets(apiBP, cmn.QueryBcks(bck), apc.FltPresent)
+	if err != nil {
+		return V(err)
+	}
+
+	cleanup := flagIsSet(c, cleanupFlag)
+	if exists && cleanup {
+		if err := api.DestroyBucket(apiBP, bck); err != nil {
+			return V(err)
+		}
+	}
+
+	if !exists || cleanup {
+		if err := api.CreateBucket(apiBP, bck, nil); err != nil {
+			return V(err)
+		}
+	}
+
+	return nil
+}
+
 func genOne(w io.Writer, shardExt string, start, end, fileCnt, fileSize int, fileExts []string, format tar.Format, outFnameTemplate string) error {
 	var (
 		pt     *cos.ParsedTemplate

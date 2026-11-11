@@ -111,7 +111,6 @@ const (
 
 	cmdBlobDownload    = apc.ActBlobDl   // blob-download
 	cmdDownload        = apc.ActDownload // download
-	cmdDsort           = apc.ActDsort
 	cmdRebalance       = apc.ActRebalance
 	cmdLRU             = apc.ActLRU
 	commandRechunk     = apc.ActRechunk
@@ -306,7 +305,7 @@ const etlPipelineSeparator = ">>"
 
 // `ArgsUsage`: argument placeholders in help messages
 const (
-	// Job IDs (download, dsort)
+	// Job IDs (download)
 	jobIDArgument                 = "JOB_ID"
 	optionalJobIDArgument         = "[JOB_ID]"
 	optionalJobIDDaemonIDArgument = "[JOB_ID [NODE_ID]]"
@@ -348,8 +347,6 @@ const (
 	bucketObjectSrcArgument = "SRC_BUCKET[/OBJECT_NAME_or_TEMPLATE]"
 	bucketDstArgument       = "DST_BUCKET"
 	bucketNewArgument       = "NEW_BUCKET"
-
-	dsortSpecArgument = "[SRC_BUCKET] [DST_BUCKET] --spec [JSON_SPECIFICATION|YAML_SPECIFICATION|-]"
 
 	// Objects
 	objectArgument          = "BUCKET/OBJECT_NAME"
@@ -930,11 +927,9 @@ var (
 		Usage: "TAR file format selection (one of \"" + dfltTform + "\", \"USTAR\", \"PAX\", or \"GNU\")",
 	}
 
-	// (ETL, dSort, get-batch) specification
+	// (ETL, get-batch) specification
 	// see also: lhotseManifestFlag
 	specFlag = cli.StringFlag{Name: "spec,f", Value: "", Usage: "Path to JSON or YAML request specification"}
-
-	dsortLogFlag = cli.StringFlag{Name: "log", Usage: "Filename to log metrics (statistics)"}
 
 	cleanupFlag = cli.BoolFlag{
 		Name:  "cleanup",

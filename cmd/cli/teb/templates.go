@@ -74,7 +74,7 @@ const (
 	FeatTagsDescTmplHdr = "FEATURE\t TAGS\t DESCRIPTION\n"
 )
 
-// extensions: download & dsort
+// extensions: download
 const (
 	downloadListHdr  = "JOB ID\t XACTION\t STATUS\t ERRORS\t DESCRIPTION\n"
 	downloadListBody = "{{$value.ID}}\t " +
@@ -84,26 +84,6 @@ const (
 		"{{end}}\t {{$value.ErrorCnt}}\t {{$value.Description}}\n"
 	DownloadListNoHdrTmpl = "{{ range $key, $value := . }}" + downloadListBody + "{{end}}"
 	DownloadListTmpl      = downloadListHdr + DownloadListNoHdrTmpl
-
-	dsortListHdr  = "JOB ID\t STATUS\t START\t FINISH\t SRC BUCKET\t DST BUCKET\t SRC SHARDS\n"
-	dsortListBody = "{{$value.ID}}\t " +
-		"{{FormatDsortStatus $value}}\t " +
-		"{{FormatStart $value.StartedTime}}\t " +
-		"{{FormatEnd $value.FinishTime}}\t " +
-		"{{FormatBckName $value.SrcBck}}\t " +
-		"{{FormatBckName $value.DstBck}}\t " +
-		"{{if (eq $value.Objs 0) }}-{{else}}{{$value.Objs}}{{end}}\n"
-	DsortListNoHdrTmpl = "{{ range $value := . }}" + dsortListBody + "{{end}}"
-	DsortListTmpl      = dsortListHdr + DsortListNoHdrTmpl
-
-	DsortListVerboseTmpl = dsortListHdr +
-		"{{ range $value := . }}" + dsortListBody +
-		indent1 + "Total Extracted Bytes:\t{{if (eq $value.Bytes 0) }}-{{else}}{{FormatBytesSig $value.Bytes 2}}{{end}}\n" +
-		indent1 + "Extraction Time:\t{{if (eq $value.ExtractedDuration 0) }}-{{else}}{{FormatDuration $value.ExtractedDuration}}{{end}}\n" +
-		indent1 + "Sorting Time:\t{{if (eq $value.SortingDuration 0) }}-{{else}}{{FormatDuration $value.SortingDuration}}{{end}}\n" +
-		indent1 + "Creation Time:\t{{if (eq $value.CreationDuration 0) }}-{{else}}{{FormatDuration $value.CreationDuration}}{{end}}\n" +
-		indent1 + "Description:\t{{$value.Metrics.Description}}\n" +
-		"{{end}}"
 )
 
 // ETL

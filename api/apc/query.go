@@ -26,9 +26,6 @@ const (
 	QparamETLFQN           = "etl_fqn"
 	QparamETLSecret        = "etl_secret" // secret generated during ETL init to validate directly target access from trusted ETL
 
-	QparamRegex      = "regex"       // dsort: list regex
-	QparamOnlyActive = "only_active" // dsort: list only active
-
 	// remove existing custom keys and store new custom metadata
 	// NOTE: making an s/_/-/ naming exception because of the namesake CLI usage
 	QparamNewCustom = "set-new-custom"
@@ -225,11 +222,6 @@ const (
 	QparamPrimaryCii = QparamClusterInfo + "-" + QparamAskPrimary
 
 	QparamDontResilver = "dntres" // true: do not resilver data off of mountpaths that are being disabled/detached
-
-	// dsort
-	QparamTotalCompressedSize       = "tcs"
-	QparamTotalInputShardsExtracted = "tise"
-	QparamTotalUncompressedSize     = "tunc"
 
 	// 2PC transactions - control plane
 	QparamNetwTimeout  = "xnt" // [begin, start-commit] timeout

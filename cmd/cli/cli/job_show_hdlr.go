@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmd/cli/teb"
 	"github.com/NVIDIA/aistore/cmn"
@@ -92,9 +91,8 @@ var showJobFlags = append(
 	unitsFlag,
 	dateTimeFlag,
 	topFlag,
-	// download and dsort only
+	// download only
 	progressFlag,
-	dsortLogFlag,
 )
 
 var showCmdJob = cli.Command{
@@ -196,8 +194,6 @@ func showJobsDo(c *cli.Context, name, xid, daemonID string, bck cmn.Bck) (int, e
 		switch name {
 		case cmdDownload:
 			return _showJobs(c, cmdDownload, xid, daemonID, bck, false /*caption, here and elsewhere*/)
-		case cmdDsort:
-			return _showJobs(c, cmdDsort, xid, daemonID, bck, false)
 		case commandETL:
 			_, otherID, _ := xid2Name(xid)
 			return _showJobs(c, commandETL, otherID /*etl name*/, daemonID, bck, false)
@@ -269,8 +265,6 @@ func _showJobs(c *cli.Context, name, xid, daemonID string, bck cmn.Bck, caption 
 		return showDownloads(c, xid, caption)
 	case commandETL:
 		return showETLs(c, xid, caption)
-	case cmdDsort:
-		return showDsorts(c, xid, caption)
 	default:
 		var (
 			// finished or not, always try to show when xid provided
@@ -306,26 +300,6 @@ func showDownloads(c *cli.Context, id string, caption bool) (int, error) {
 	}
 	// display status of a download job identified by its JOB_ID
 	return 1, downloadJobStatus(c, id)
-}
-
-func showDsorts(c *cli.Context, id string, caption bool) (int, error) {
-	var (
-		usejs      = flagIsSet(c, jsonFlag)
-		onlyActive = !flagIsSet(c, allJobsFlag)
-	)
-	if id == "" {
-		list, err := api.ListDsort(apiBP, parseStrFlag(c, regexJobsFlag), onlyActive)
-		l := len(list)
-		if err != nil || l == 0 {
-			return l, V(err)
-		}
-		if caption {
-			jobCptn(c, cmdDsort, id, nil /*ctlmsgs*/, onlyActive, false)
-		}
-		return l, dsortJobsList(c, list, usejs)
-	}
-
-	return 1, dsortJobStatus(c, id)
 }
 
 //

@@ -532,7 +532,6 @@ func (t *target) Run() error {
 	}
 
 	etl.Tinit()
-	t.initDsort(db, config) // note: conditional linkage
 	dload.Init(db, config.Client)
 
 	err = t.htrun.run(config)
@@ -673,7 +672,6 @@ func (t *target) initRecvHandlers() {
 
 		// plus, PromHandler() at "/metrics" (see ais/htrun)
 	)
-	networkHandlers = t.regDsort(networkHandlers)
 	t.regNetHandlers(networkHandlers)
 }
 

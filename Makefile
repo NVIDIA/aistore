@@ -145,16 +145,6 @@ cli-autocompletions: ## Add CLI autocompletions
 	@echo "Adding CLI autocomplete..."
 	@./$(BUILD_DIR)/cli/autocomplete/install.sh
 
-## NOTE:
-## - requires '-tags=dsort'
-## - alternatively, split imported ext/dsort/shard/* structures into api.go and api_impl.go
-## - otherwise, TODO:
-##   - introduce ISHARD_BUILD_TAGS := $(BUILD_TAGS) and append to it 'dsort' tag if not already present
-ishard: ## Build ishard CLI binary
-	@echo "Building ishard..."
-	@cd $(BUILD_DIR)/ishard && go build -tags=dsort -o $(BUILD_DEST)/ishard *.go
-	@echo "done."
-
 authn: build-authn         ## Build AuthN
 aisloader: build-aisloader ## Build aisloader
 xmeta: build-xmeta         ## Build xmeta
@@ -219,7 +209,6 @@ clean: ## Remove all AIS related files and binaries
 
 mod-all: mod-clean mod-tidy
 	@echo "CLI ..." && cd cmd/cli && $(MAKE) mod-tidy
-	@echo "ishard ..." && cd cmd/ishard && $(MAKE) mod-tidy
 
 # cleanup go-mod cache
 mod-clean:
@@ -309,7 +298,6 @@ lint:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(SHELL) "$(SCRIPTS_DIR)/bootstrap.sh" lint
 	@$(MAKE) -C $(BUILD_DIR)/cli lint
-	@$(MAKE) -C $(BUILD_DIR)/ishard lint TAGS=dsort     ## NOTE: requires '-tags=dsort'
 
 ## Lint only the go files in the main AIS project included in build tags or .golangci.yml
 lint-scoped:
@@ -324,10 +312,6 @@ lint-python:
 lint-cli:
 	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
 	@$(MAKE) -C $(BUILD_DIR)/cli lint
-
-lint-ishard:
-	@([[ -x "$(command -v golangci-lint)" ]] && echo "Cannot find golangci-lint, run 'make lint-update' to install" && exit 1) || true
-	@$(MAKE) -C $(BUILD_DIR)/ishard lint
 
 install-python-deps:
 	@cd python && make common_deps botocore_deps

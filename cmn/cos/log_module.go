@@ -29,7 +29,7 @@ const (
 	ModBackend
 	ModSpace
 	ModMirror
-	ModDsort
+	ModDsort // Deprecated: dsort is removed (keep the slot: module values are positional)
 	ModDload
 	ModETL
 	ModS3

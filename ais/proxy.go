@@ -247,7 +247,6 @@ func (p *proxy) Run() error {
 		nlog.Infoln(cmn.NetIntraData+":", "\t", p.si.DataNet.URL)
 	}
 
-	p.initDsort(config) // note: conditional linkage
 	return p.htrun.run(config)
 }
 
@@ -308,9 +307,9 @@ func (p *proxy) initRecvHandlers() {
 
 		// plus:
 		// - PromHandler() at "/metrics" (see ais/htrun)
-		// - dsortHandler
+		// - dsort stub (removed; see ais/dsort_hdl_stub.go)
 	)
-	networkHandlers = p.regDsort(networkHandlers)
+	networkHandlers = p.regDsortStub(networkHandlers)
 	p.regNetHandlers(networkHandlers)
 }
 

@@ -109,13 +109,6 @@ func NewCTFromFQN(fqn string, b meta.Bowner) (ct *CT, err error) {
 	return ct, err
 }
 
-// usage: dsort only
-func NewDsortCT(bck *cmn.Bck, objName string) (ct *CT, err error) {
-	ct = &CT{objName: objName, bck: meta.CloneBck(bck), contentType: fs.ObjCT}
-	err = ct.init()
-	return
-}
-
 // bare minimum: from fs.ParsedFQN
 func NewCTFromParsed(parsed *fs.ParsedFQN, fqn string) *CT {
 	return &CT{

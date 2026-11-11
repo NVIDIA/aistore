@@ -252,8 +252,8 @@ func (gco *gco) Update(cluConfig *ClusterConfig) (err error) {
 			config.Tracing = nil
 		}
 	}
-	// post-4.2 fixup: dsort is conditionally linked ("go:build dsort")
-	dropDsortConfig(config)
+	// dsort is removed; drop its (deprecated) config section, if present
+	config.Dsort = nil
 
 	override := gco.GetOverride()
 	if override != nil {

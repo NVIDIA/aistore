@@ -27,10 +27,6 @@ type (
 		Msg       *apc.TCOMsg
 		DisableDM bool
 	}
-	DsortArgs struct {
-		BckFrom *meta.Bck
-		BckTo   *meta.Bck
-	}
 	ECEncodeArgs struct {
 		Phase   string
 		Recover bool

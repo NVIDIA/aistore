@@ -20,7 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/ec"
-	"github.com/NVIDIA/aistore/ext/dsort"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/stats"
 )
@@ -111,7 +110,6 @@ var (
 		"FormatUnixNano":       fmtUnixNano,
 		"FormatStart":          FmtTime,
 		"FormatEnd":            FmtTime,
-		"FormatDsortStatus":    dsortJobInfoStatus,
 		"FormatLsObjStatus":    fmtLsObjStatus,
 		"FormatLsObjIsCached":  fmtLsObjIsCached,
 		"FormatObjCustom":      fmtObjCustom,
@@ -542,19 +540,6 @@ func fmtIsChunked(flags uint16) string {
 		return FmtBool(true) // (compare with CACHED column)
 	}
 	return ""
-}
-
-func dsortJobInfoStatus(j *dsort.JobInfo) string {
-	switch {
-	case j.Aborted:
-		return "Aborted"
-	case j.Archived:
-		return "Archived"
-	case j.FinishTime.IsZero():
-		return "Running"
-	default:
-		return "Finished"
-	}
 }
 
 //

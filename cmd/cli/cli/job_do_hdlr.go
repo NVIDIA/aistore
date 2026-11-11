@@ -144,10 +144,6 @@ var (
 			hfRevisionFlag,
 			hfAuthFlag,
 		},
-		cmdDsort: {
-			specFlag,
-			verboseFlag,
-		},
 		commandPrefetch: append(
 			listRangeProgressWaitFlags,
 			dryRunFlag,
@@ -230,7 +226,6 @@ var (
 				Flags:     sortFlags(startSpecialFlags[cmdDownload]),
 				Action:    startDownloadHandler,
 			},
-			dsortStartCmd,
 			{
 				Name:         cmdLRU,
 				Usage:        "Run LRU eviction",
@@ -310,14 +305,6 @@ var (
 				Flags:        sortFlags(removeCmdsFlags),
 				Action:       removeDownloadHandler,
 				BashComplete: downloadIDFinishedCompletions,
-			},
-			{
-				Name:         cmdDsort,
-				Usage:        "remove finished dsort job(s)",
-				ArgsUsage:    optionalJobIDArgument,
-				Flags:        sortFlags(removeCmdsFlags),
-				Action:       removeDsortHandler,
-				BashComplete: dsortIDFinishedCompletions,
 			},
 		},
 	}
@@ -1182,7 +1169,7 @@ func stopJobHandler(c *cli.Context) error {
 			actionWarnf(c, "ignoring %s in presence of %s argument ('%s')", warn, jobIDArgument, xid)
 		case name == commandRebalance:
 			actionWarn(c, "global rebalance is _global_ - ignoring"+warn)
-		case regex != "" && name != cmdDownload && name != cmdDsort:
+		case regex != "" && name != cmdDownload:
 			actionWarn(c, "ignoring "+warn+" -"+NIY)
 		}
 	}
@@ -1244,11 +1231,6 @@ func stopJobHandler(c *cli.Context) error {
 			return stopDownloadRegex(c, regex)
 		}
 		return stopDownloadHandler(c, xid)
-	case cmdDsort:
-		if xid == "" {
-			return stopDsortRegex(c, regex)
-		}
-		return stopDsortHandler(c, xid)
 	case commandETL:
 		return stopETLs(c, otherID /*etl name*/)
 	case commandRebalance:
@@ -1346,7 +1328,6 @@ func formatXactMsg(xactID, xactKind string, bck cmn.Bck) string {
 	}
 }
 
-//nolint:dupl // stop downloads and dsorts: different API methods justify seemingly duplicated code
 func stopDownloadRegex(c *cli.Context, regex string) error {
 	dlList, err := api.DownloadGetList(apiBP, regex, true /*onlyActive*/)
 	if err != nil {
@@ -1376,39 +1357,6 @@ func stopDownloadHandler(c *cli.Context, id string) (err error) {
 		return
 	}
 	actionDonef(c, "Stopped download job %s\n", id)
-	return
-}
-
-//nolint:dupl // stop downloads and dsorts: different API methods justify seemingly duplicated code
-func stopDsortRegex(c *cli.Context, regex string) error {
-	dsortLst, err := api.ListDsort(apiBP, regex, true /*onlyActive*/)
-	if err != nil {
-		return V(err)
-	}
-
-	var cnt int
-	for _, dsort := range dsortLst {
-		if err = api.AbortDsort(apiBP, dsort.ID); err == nil {
-			actionDone(c, "Stopped dsort job "+dsort.ID)
-			cnt++
-		} else {
-			actionWarnf(c, "failed to stop dsort job %q: %v", dsort.ID, err)
-		}
-	}
-	if err != nil {
-		return err
-	}
-	if cnt == 0 {
-		actionDone(c, "No running dsort jobs, nothing to do")
-	}
-	return nil
-}
-
-func stopDsortHandler(c *cli.Context, id string) (err error) {
-	if err = api.AbortDsort(apiBP, id); err != nil {
-		return
-	}
-	actionDonef(c, "Stopped dsort job %s\n", id)
 	return
 }
 
@@ -1446,17 +1394,11 @@ func waitJobHandler(c *cli.Context) error {
 
 func waitJob(c *cli.Context, name, xid string, bck cmn.Bck) error {
 	// special wait
-	switch name {
-	case cmdDownload:
+	if name == cmdDownload {
 		if xid == "" {
 			return missingArgumentsError(c, jobIDArgument)
 		}
 		return waitDownloadHandler(c, xid /*job ID*/)
-	case cmdDsort:
-		if xid == "" {
-			return missingArgumentsError(c, jobIDArgument)
-		}
-		return waitDsortHandler(c, xid /*job ID*/)
 	}
 
 	// shared wait parameters
@@ -1587,62 +1529,10 @@ func waitDownloadHandler(c *cli.Context, id string) error {
 	return nil
 }
 
-func waitDsortHandler(c *cli.Context, id string) error {
-	refreshRate := _refreshRate(c)
-	if flagIsSet(c, progressFlag) {
-		dsortResult, err := newDsortPB(apiBP, id, refreshRate).run()
-		if err != nil {
-			return err
-		}
-		actionDone(c, dsortResult.String())
-		return nil
-	}
-
-	// poll at refresh rate
-	var (
-		total   time.Duration
-		timeout time.Duration
-		qn      = xact.Cname(cmdDsort, id)
-	)
-	if flagIsSet(c, waitJobXactFinishedFlag) {
-		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
-	}
-	for {
-		resp, err := api.MetricsDsort(apiBP, id)
-		if err != nil {
-			return V(err)
-		}
-		finished := true
-		for _, targetMetrics := range resp {
-			if targetMetrics.Metrics.Aborted.Load() {
-				if total > wasFast {
-					fmt.Fprintln(c.App.Writer)
-				}
-				return fmt.Errorf("%s was aborted", qn)
-			}
-			finished = finished && targetMetrics.Metrics.Creation.Finished
-		}
-		if finished {
-			break
-		}
-		time.Sleep(refreshRate)
-		total += refreshRate
-		if timeout != 0 && total > timeout {
-			return fmt.Errorf("timed out waiting for %s", qn)
-		}
-	}
-	if total > wasFast {
-		fmt.Fprintln(c.App.Writer)
-	}
-	actionDone(c, qn+" finished")
-	return nil
-}
-
 //
 // job remove
 //
 
-//nolint:dupl // remove download and dsort jobs: different API methods justify seemingly duplicated code
 func removeDownloadHandler(c *cli.Context) error {
 	regex := parseStrFlag(c, regexJobsFlag)
 	if flagIsSet(c, allFinishedJobsFlag) || regex != "" {
@@ -1691,56 +1581,6 @@ func removeDownloadRegex(c *cli.Context, regex string) error {
 	return nil
 }
 
-//nolint:dupl // remove download and dsort jobs: different API methods justify seemingly duplicated code
-func removeDsortHandler(c *cli.Context) error {
-	regex := parseStrFlag(c, regexJobsFlag)
-	if flagIsSet(c, allFinishedJobsFlag) || regex != "" {
-		return removeDsortRegex(c, regex)
-	}
-
-	// by job ID
-	if c.NArg() < 1 {
-		msg := fmt.Sprintf("Expecting either %s argument or %s option (with or without regular expression)",
-			jobIDArgument, qflprn(allFinishedJobsFlag))
-		return cannotExecuteError(c, errors.New("missing "+jobIDArgument), msg)
-	}
-	id := c.Args().Get(0)
-	if err := api.RemoveDsort(apiBP, id); err != nil {
-		return V(err)
-	}
-
-	actionDonef(c, "Removed finished dsort job %q", id)
-	return nil
-}
-
-func removeDsortRegex(c *cli.Context, regex string) error {
-	dsortLst, err := api.ListDsort(apiBP, regex, false /*onlyActive*/)
-	if err != nil {
-		return V(err)
-	}
-
-	var cnt int
-	for _, dsort := range dsortLst {
-		if dsort.IsRunning() {
-			continue
-		}
-		err = api.RemoveDsort(apiBP, dsort.ID)
-		if err == nil {
-			actionDonef(c, "Removed dsort job %q", dsort.ID)
-			cnt++
-		} else {
-			actionWarnf(c, "failed to remove dsort job %q: %v", dsort.ID, err)
-		}
-	}
-	if err != nil {
-		return err
-	}
-	if cnt == 0 {
-		actionDone(c, "No finished dsort jobs, nothing to do")
-	}
-	return nil
-}
-
 //
 // utility functions
 //
@@ -1761,7 +1601,7 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 
 	if name == commandList {
 		name = apc.ActList
-	} else if name != "" && name != apc.ActDsort {
+	} else if name != "" {
 		if xactKind, xactName := xact.GetSimilar(name); xactKind == "" {
 			daemonID = xid
 			xid = name
@@ -1806,7 +1646,7 @@ func jobArgs(c *cli.Context, shift int, ignoreDaemonID bool) (name, xid, daemonI
 }
 
 // 1. support assorted system job prefixes via multi-match
-// 2. disambiguate download/dsort/etl job ID vs xaction UUID
+// 2. disambiguate download/etl job ID vs xaction UUID
 func xid2Name(xid string) (name, otherID string, multimatch bool) {
 	switch xid {
 	case "evict", "prefetch", "delete":
@@ -1823,10 +1663,6 @@ func xid2Name(xid string) (name, otherID string, multimatch bool) {
 	case strings.HasPrefix(xid, xact.PrefixDnlID):
 		if _, err := api.DownloadStatus(apiBP, xid, false /*onlyActive*/); err == nil {
 			name = cmdDownload
-		}
-	case strings.HasPrefix(xid, xact.PrefixSrtID):
-		if _, err := api.MetricsDsort(apiBP, xid); err == nil {
-			name = cmdDsort
 		}
 	case strings.HasPrefix(xid, xact.PrefixEtlID):
 		if l := findETL("", xid); l != nil {

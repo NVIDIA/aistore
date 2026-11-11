@@ -12,7 +12,6 @@ const (
 	PrefixTcoID = "tco-" // transform/copy objects
 	PrefixInvID = "inv-" // create bucket inventory (NBI)
 	PrefixGbtID = "gbt-" // get-batch (internally, x-moss)
-	PrefixSrtID = "srt-" // conditional linkage (build tag "dsort")
 
 	// evict
 	PrefixEvictKeepID   = "kpmd-"

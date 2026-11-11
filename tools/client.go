@@ -6,7 +6,6 @@ package tools
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -52,7 +51,6 @@ const (
 	CopyBucketTimeout     = 3 * time.Minute
 	MultiProxyTestTimeout = 3 * time.Minute
 
-	DsortFinishTimeout      = 6 * time.Minute
 	RebalanceTimeout        = 3 * time.Minute
 	EvictPrefetchTimeout    = 2 * time.Minute
 	BucketCleanupTimeout    = time.Minute
@@ -668,41 +666,6 @@ func GetObjectAtime(t *testing.T, bp api.BaseParams, bck cmn.Bck, object, timeFo
 
 	tassert.Fatalf(t, false, "Cannot find %s in bucket %s", object, bck.String())
 	return time.Time{}, ""
-}
-
-// WaitForDsortToFinish waits until all dSorts jobs finished without failure or
-// all jobs abort.
-func WaitForDsortToFinish(proxyURL, managerUUID string) (allAborted bool, err error) {
-	tlog.Logfln("waiting for dsort[%s]", managerUUID)
-
-	bp := BaseAPIParams(proxyURL)
-	deadline := time.Now().Add(DsortFinishTimeout)
-	for time.Now().Before(deadline) {
-		all, err := api.MetricsDsort(bp, managerUUID)
-		if err != nil {
-			return false, err
-		}
-
-		allAborted := true
-		allFinished := true
-		for _, jmetrics := range all {
-			m := jmetrics.Metrics
-			allAborted = allAborted && m.Aborted.Load()
-			allFinished = allFinished &&
-				!m.Aborted.Load() &&
-				m.Extraction.Finished &&
-				m.Sorting.Finished &&
-				m.Creation.Finished
-		}
-		if allAborted {
-			return true, nil
-		}
-		if allFinished {
-			return false, nil
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return false, errors.New("deadline exceeded")
 }
 
 func BaseAPIParams(urls ...string) api.BaseParams {

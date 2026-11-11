@@ -31,7 +31,7 @@ const (
 
 	// extensions
 	Download = "download" // downloader
-	Sort     = "sort"     // dsort
+	Sort     = "sort"     // Deprecated: dsort is removed (stub only)
 	ETL      = "etl"
 
 	// proxy only
@@ -76,12 +76,8 @@ const (
 	// Prometheus metrics
 	Metrics = "metrics"
 
-	// dsort, downloader
-	Records     = "records"
-	Shards      = "shards"
-	FinishedAck = "finished_ack"
-	UList       = "list"
-	Remove      = "remove"
+	// downloader
+	Remove = "remove"
 
 	LoadX509 = "load-x509"
 
@@ -188,17 +184,6 @@ var (
 	URLPathVoteProxy   = urlpath(Version, Vote, Proxy)
 	URLPathVoteVoteres = urlpath(Version, Vote, Voteres)
 	URLPathVotePriStop = urlpath(Version, Vote, PriStop)
-
-	URLPathdSort        = urlpath(Version, Sort)
-	URLPathdSortInit    = urlpath(Version, Sort, Init)
-	URLPathdSortStart   = urlpath(Version, Sort, Start)
-	URLPathdSortList    = urlpath(Version, Sort, UList)
-	URLPathdSortAbort   = urlpath(Version, Sort, Abort)
-	URLPathdSortShards  = urlpath(Version, Sort, Shards)
-	URLPathdSortRecords = urlpath(Version, Sort, Records)
-	URLPathdSortMetrics = urlpath(Version, Sort, Metrics)
-	URLPathdSortAck     = urlpath(Version, Sort, FinishedAck)
-	URLPathdSortRemove  = urlpath(Version, Sort, Remove)
 
 	URLPathDownload       = urlpath(Version, Download)
 	URLPathDownloadAbort  = urlpath(Version, Download, Abort)

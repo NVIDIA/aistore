@@ -259,7 +259,7 @@ func getxst(out any, q url.Values, bp BaseParams, args *xact.ArgsMsg) (err error
 // (2) All xactions including those that do not notify IC ("snaps"-based)
 // --------------------------------------------------
 //   Under the hood: QueryXactionSnaps (per-target snapshots)
-//   Typical examples: resilver, blob-download, dsort, warm-up, etc.
+//   Typical examples: resilver, blob-download, warm-up, etc.
 //
 // Selection rules:
 //   - args.Kind is a filter: querying with a kind returns only that kind (server-side);

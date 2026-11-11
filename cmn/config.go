@@ -113,7 +113,7 @@ type (
 		// optional sections: absent via ordinary serialization
 		Ext     any          `json:"ext,omitempty"`              // reserved
 		Tracing *TracingConf `json:"tracing,omitempty"`          // see cmn/gco fixup; build tag
-		Dsort   *DsortConf   `json:"distributed_sort,omitempty"` // ditto; build tag
+		Dsort   *DsortConf   `json:"distributed_sort,omitempty"` // Deprecated: dsort is removed; accepted and dropped
 
 		// default-omittable sections: pruned at encode time when wholly default
 		WritePolicy *WritePolicyConf `json:"write_policy,omitempty"` // object metadata: (immediate | delayed | never)
@@ -915,6 +915,10 @@ type (
 		Timeout *cos.Duration `json:"timeout,omitempty"`
 	}
 
+	// Deprecated: dsort is removed
+	// - keep the section (and its "to-set" counterpart) to load existing configs
+	//   and to accept set-config from older clients; ignored otherwise
+	// TODO: remove one release later
 	DsortConf struct {
 		DuplicatedRecords   string `json:"duplicated_records"`
 		MissingShards       string `json:"missing_shards"` // cmn.SupportedReactions enum
@@ -1622,7 +1626,7 @@ func (c *ClientConf) Validate() error {
 		errExpectedRange = "(expected range [1s, 30m])"
 	)
 	// hydrate first: zero means no end-to-end timeout for http.Client
-	// (see ec/getx, reb/globrun, ext/dsort/manager)
+	// (see ec/getx, reb/globrun)
 	if c.Timeout == 0 {
 		c.Timeout = cos.Duration(clientTimeoutDflt)
 	}
@@ -3777,7 +3781,7 @@ func LoadConfig(globalConfPath, localConfPath, daeRole string, config *Config) e
 		debug.Assert(config.Version > 0 && config.UUID != "")
 	}
 
-	dropDsortConfig(config) // 4.3 update: conditional linkage
+	config.Dsort = nil // dsort is removed; see DsortConf
 
 	// `log` is used before the override-merge and Config.Validate below
 	if err := config.ClusterConfig.HydrateOmittables(); err != nil {

@@ -45,10 +45,6 @@ var _ = Describe("E2E CLI Tests", func() {
 	for _, path := range files {
 		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 
-		if base == "dsort" && !dsortEnabled {
-			continue
-		}
-
 		args = append(args, Entry(base, base))
 	}
 	DescribeTable("e2e-cli", args...)

@@ -36,7 +36,6 @@ const (
 
 	ActETLInline = "etl-inline"
 
-	ActDsort    = "dsort"
 	ActDownload = "download"
 
 	ActBlobDl = "blob-download"

@@ -100,15 +100,6 @@ func RenewTCB(uuid, kind string, custom *TCBArgs) RenewRes {
 	)
 }
 
-func RenewDsort(id string, custom *DsortArgs) RenewRes {
-	return RenewBucketXact(
-		apc.ActDsort,
-		custom.BckFrom,
-		Args{Custom: custom, UUID: id},
-		custom.BckFrom, custom.BckTo,
-	)
-}
-
 func RenewBckRename(bckFrom, bckTo *meta.Bck, uuid, phase string) RenewRes {
 	custom := &TCBArgs{
 		Phase:   phase,

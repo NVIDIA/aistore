@@ -27,7 +27,6 @@ require (
 	github.com/onsi/gomega v1.44.0
 	github.com/oracle/oci-go-sdk/v65 v65.126.2
 	github.com/pierrec/lz4/v4 v4.1.33
-	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.25.0
 	github.com/seiflotfy/cuckoofilter v0.0.0-20240715131351-a2f2c23f1771
 	github.com/tidwall/buntdb v1.3.2

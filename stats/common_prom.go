@@ -20,6 +20,7 @@ import (
 )
 
 type (
+	//nolint:modernize // keeping old-style atomics
 	statsValue struct {
 		iprom      iprom
 		kind       string // enum { KindCounter, ..., KindSpecial }

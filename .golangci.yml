@@ -223,9 +223,6 @@ linters:
           - govet
           - modernize
           - prealloc
-      - path: ext/dsort/
-        linters:
-          - unused
 
       # Exclude certain staticcheck warnings, e.g.: "remove embedded field DemandBase", "Deprecated" - TODO remove
       - linters:
