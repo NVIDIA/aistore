@@ -368,7 +368,7 @@ func TestRemoteBucketEndpointEgress(t *testing.T) {
 	tassert.Errorf(t, hits.Load() == 0, "endpoint %s received %d request(s)", endpoint.URL, hits.Load())
 }
 
-func TestCreateDestroyRemoteAISBucket(t *testing.T) {
+func TestCreateDestroyRemaisBucket(t *testing.T) {
 	t.Run("withObjects", func(t *testing.T) { testCreateDestroyRemoteAISBucket(t, true) })
 	t.Run("withoutObjects", func(t *testing.T) { testCreateDestroyRemoteAISBucket(t, false) })
 }

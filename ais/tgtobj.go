@@ -86,7 +86,6 @@ type (
 		ranges     byteRanges // range read (see https://www.rfc-editor.org/rfc/rfc7233#section-2.1)
 		atime      int64      // access time.Now()
 		ltime      int64      // mono.NanoTime, to measure latency
-		chunked    bool       // chunked transfer (en)coding: https://tools.ietf.org/html/rfc7230#page-36
 		unlocked   bool       // internal
 		verchanged bool       // version changed
 		retry      bool       // once

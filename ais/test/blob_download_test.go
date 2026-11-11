@@ -862,7 +862,7 @@ func testBlobDownloadLatestVersion(t *testing.T, latest bool) {
 	m.validateChunksOnDisk(bck, objName, int(objSize/chunkSize))
 }
 
-func TestBlobDownloadRemoteAISReadTimeout(t *testing.T) {
+func TestBlobDownloadRemaisReadTimeout(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
 	const objSize = 2 * cmn.ChunkSizeMin
 	var (
