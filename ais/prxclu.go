@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -112,6 +111,8 @@ func (p *proxy) httpcluget(w http.ResponseWriter, r *http.Request, isPub bool) {
 			return
 		}
 		p.writeJSON(w, r, all, what)
+	case apc.WhatRemaisNodes:
+		p.qcluRemais(w, r, what)
 	case apc.WhatTargetIPs:
 		// Return comma-separated IPs of the targets.
 		// It can be used to easily fill the `--noproxy` parameter in cURL.
@@ -265,40 +266,6 @@ func (p *proxy) qcluSysinfo(w http.ResponseWriter, r *http.Request, what string,
 	}
 	out.Target = targetResults
 	p.writeJSON(w, r, out, what)
-}
-
-func (p *proxy) getRemAisVec(refresh bool) (*meta.RemAisVec, error) {
-	smap := p.owner.smap.get()
-	si, errT := smap.GetRandTarget()
-	if errT != nil {
-		return nil, errT
-	}
-	q := url.Values{apc.QparamWhat: []string{apc.WhatRemoteAIS}}
-	if refresh {
-		q[apc.QparamClusterInfo] = []string{"true"} // handshake to check connectivity and get remote Smap
-	}
-	cargs := allocCargs()
-	{
-		cargs.si = si
-		cargs.req = cmn.HreqArgs{
-			Method: http.MethodGet,
-			Path:   apc.URLPathDae.S,
-			Query:  q,
-		}
-		cargs.timeout = cmn.Rom.MaxKeepalive()
-		cargs.cresv = cresjGeneric[meta.RemAisVec]{}
-	}
-	var (
-		v   *meta.RemAisVec
-		res = p.call(cargs, smap)
-		err = res.toErr()
-	)
-	if err == nil {
-		v = res.v.(*meta.RemAisVec)
-	}
-	freeCargs(cargs)
-	freeCR(res)
-	return v, err
 }
 
 func (p *proxy) _sysinfo(r *http.Request, timeout time.Duration, to int, query url.Values) (cos.JSONRawMsgs, error) {
@@ -1056,6 +1023,10 @@ func (p *proxy) _syncConfFinal(ctx *configModifier, clone *globalConfig) {
 	if ctx.wait {
 		wg.Wait()
 	}
+	if ctx.msg.Action == apc.ActAttachRemAis || ctx.msg.Action == apc.ActDetachRemAis ||
+		!clone.Backend.EqualRemAIS(&ctx.oldConfig.Backend, p.String()) {
+		go p.remaisRefresh(&clone.ClusterConfig)
+	}
 }
 
 // xstart: rebalance, resilver, other "startables" (see xaction/api.go)
@@ -1390,45 +1361,6 @@ func (p *proxy) cluputItems(w http.ResponseWriter, r *http.Request, items []stri
 	}
 }
 
-func (p *proxy) actRemAis(w http.ResponseWriter, r *http.Request, action string, query url.Values) {
-	what := query.Get(apc.QparamWhat)
-	if what != apc.WhatRemoteAIS {
-		p.writeErr(w, r, fmt.Errorf(fmtUnknownQue, what))
-		return
-	}
-	if !p.ClusterStarted() {
-		const fmerr = "(config-backends modifying) remote cluster: (%t, %s)"
-		var timeout time.Duration
-		for {
-			time.Sleep(cmn.Rom.MaxKeepalive())
-			timeout += cmn.Rom.MaxKeepalive()
-			config := cmn.GCO.Get()
-			if p.ClusterStarted() {
-				break
-			}
-			if timeout > config.Timeout.Startup.D()/2 {
-				p.writeErr(w, r, fmt.Errorf("%s: failed to attach "+fmerr, p, p.ClusterStarted(), config))
-				return
-			}
-			nlog.Errorf("%s: waiting to attach "+fmerr, p, p.ClusterStarted(), config)
-		}
-	}
-	ctx := &configModifier{
-		pre:   p._remaisConf,
-		final: p._syncConfFinal,
-		msg:   &apc.ActMsg{Action: action},
-		query: query,
-		hdr:   r.Header,
-		wait:  true,
-	}
-	newConfig, err := p.owner.config.modify(ctx)
-	if err != nil {
-		p.writeErr(w, r, err)
-	} else if newConfig != nil {
-		go p._remais(&newConfig.ClusterConfig, false)
-	}
-}
-
 func (p *proxy) actBackend(w http.ResponseWriter, r *http.Request, tag string, upath apc.URLPath, items []string) {
 	if len(items) < 2 {
 		p.writeErrf(w, r, "invalid URL '%s': missing cloud backend", r.URL.Path)
@@ -1469,78 +1401,6 @@ func (p *proxy) actBackend(w http.ResponseWriter, r *http.Request, tag string, u
 	}
 
 	nlog.Infoln("done:", tag, provider)
-}
-
-// the flow: attach/detach remais => modify cluster config => _remaisConf as the pre phase
-// of the transaction
-func (p *proxy) _remaisConf(ctx *configModifier, config *globalConfig) (bool, error) {
-	var (
-		aisConf cmn.BackendConfAIS
-		action  = ctx.msg.Action
-		v       = config.Backend.Get(apc.AIS)
-	)
-	if v == nil {
-		if action == apc.ActDetachRemAis {
-			return false, fmt.Errorf("%s: remote cluster config is empty", p.si)
-		}
-		aisConf = make(cmn.BackendConfAIS)
-	} else {
-		aisConf = cmn.BackendConfAIS{}
-		cos.MustMorphMarshal(v, &aisConf)
-	}
-
-	alias := ctx.hdr.Get(apc.HdrRemAisAlias)
-	if action == apc.ActDetachRemAis {
-		if _, ok := aisConf[alias]; !ok {
-			return false,
-				cmn.NewErrFailedTo(p, action, "remote cluster", errors.New("not found"), http.StatusNotFound)
-		}
-		delete(aisConf, alias)
-		if len(aisConf) == 0 {
-			aisConf = nil // unconfigure
-		}
-	} else {
-		debug.Assert(action == apc.ActAttachRemAis)
-		u := ctx.hdr.Get(apc.HdrRemAisURL)
-		detail := fmt.Sprintf("remote cluster [alias %s => %v]", alias, u)
-
-		// validation rules:
-		// rule #1: no two remote ais clusters can share the same alias (TODO: allow configuring multiple URLs per)
-		for a, urls := range aisConf {
-			if a != alias {
-				continue
-			}
-			errmsg := fmt.Sprintf("%s: %s is already attached", p.si, detail)
-			if !slices.Contains(urls, u) {
-				return false, errors.New(errmsg)
-			}
-			nlog.Warningln(errmsg + " - proceeding anyway")
-		}
-		// rule #2: aliases and UUIDs are two distinct non-overlapping sets
-		p.remais.mu.RLock()
-		for _, remais := range p.remais.A {
-			debug.Assert(remais.Alias != alias)
-			if alias == remais.UUID {
-				p.remais.mu.RUnlock()
-				return false, fmt.Errorf("%s: alias %q cannot be equal UUID of an already attached cluster [%s => %s]",
-					p.si, alias, remais.Alias, remais.UUID)
-			}
-		}
-		p.remais.mu.RUnlock()
-
-		parsed, err := url.ParseRequestURI(u)
-		if err != nil {
-			return false, cmn.NewErrFailedTo(p, action, detail, err)
-		}
-		if parsed.Scheme != "http" && parsed.Scheme != "https" {
-			return false, cmn.NewErrFailedTo(p, action, detail, errors.New("invalid URL scheme"))
-		}
-		nlog.Infof("%s: %s %s", p, action, detail)
-		aisConf[alias] = []string{u}
-	}
-	config.Backend.Set(apc.AIS, aisConf)
-
-	return true, nil
 }
 
 // remove members that joined with a version that cannot decode the weighted Smap

@@ -378,7 +378,7 @@ func (p *proxy) reverseRemAis(w http.ResponseWriter, r *http.Request, msg *apc.A
 	if !exists {
 		var refreshed bool
 		if p.remais.Ver == 0 {
-			p._remais(&config.ClusterConfig, true)
+			p.remaisRefreshOnce(&config.ClusterConfig)
 			refreshed = true
 		}
 	ml:
@@ -392,7 +392,7 @@ func (p *proxy) reverseRemAis(w http.ResponseWriter, r *http.Request, msg *apc.A
 		}
 		p.remais.mu.RUnlock()
 		if !exists && !refreshed {
-			p._remais(&config.ClusterConfig, true)
+			p.remaisRefreshOnce(&config.ClusterConfig)
 			refreshed = true
 			goto ml
 		}

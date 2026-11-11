@@ -231,6 +231,26 @@ func GetRemoteAIS(bp BaseParams) (remais meta.RemAisVec, err error) {
 	return remais, err
 }
 
+// return remote clusters as currently seen by each node in the cluster
+// (compare with GetRemoteAIS above)
+func GetRemaisNodes(bp BaseParams) (nodes meta.RemAisNodes, err error) {
+	q := qalloc()
+	q.Set(apc.QparamWhat, apc.WhatRemaisNodes)
+
+	bp.Method = http.MethodGet
+	reqParams := AllocRp()
+	{
+		reqParams.BaseParams = bp
+		reqParams.Path = apc.URLPathClu.S
+		reqParams.Query = q
+	}
+	_, err = reqParams.DoReqAny(&nodes)
+
+	FreeRp(reqParams)
+	qfree(q)
+	return nodes, err
+}
+
 // (see also enable/disable backend below)
 func GetConfiguredBackends(bp BaseParams) (out []string, err error) {
 	q := qalloc()

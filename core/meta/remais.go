@@ -15,4 +15,10 @@ type (
 		A   []*RemAis `json:"a"`
 		Ver int64     `json:"ver"`
 	}
+	// node ID => remote clusters as currently seen by this node
+	// (see apc.WhatRemaisNodes)
+	RemAisNodes struct {
+		Proxy  map[string]*RemAisVec `json:"proxy"`
+		Target map[string]*RemAisVec `json:"target"`
+	}
 )

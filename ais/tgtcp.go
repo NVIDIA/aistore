@@ -482,24 +482,8 @@ func (t *target) httpdaeget(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case apc.WhatRemoteAIS:
-		var (
-			config  = cmn.GCO.Get()
-			aisbp   = t.aisbp()
-			refresh = cos.IsParseBool(query.Get(apc.QparamClusterInfo))
-		)
-		if !refresh {
-			t.writeJSON(w, r, aisbp.GetInfoInternal(), httpdaeWhat)
-			return
-		}
-		anyConf := config.Backend.Get(apc.AIS)
-		if anyConf == nil {
-			t.writeJSON(w, r, meta.RemAisVec{}, httpdaeWhat)
-			return
-		}
-		aisConf, ok := anyConf.(cmn.BackendConfAIS)
-		debug.Assert(ok)
-
-		t.writeJSON(w, r, aisbp.GetInfo(aisConf), httpdaeWhat)
+		refresh := cos.IsParseBool(query.Get(apc.QparamClusterInfo))
+		t.writeJSON(w, r, t.remaisInfo(refresh), httpdaeWhat)
 	default:
 		t.htrun.httpdaeget(w, r, query, t /*htext*/)
 	}
@@ -1339,33 +1323,7 @@ func (t *target) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload 
 		fs.ExpireCapCache()
 	}
 
-	// special: remais update
-	if msg.Action == apc.ActAttachRemAis || msg.Action == apc.ActDetachRemAis {
-		return t.attachDetachRemAis(newConfig, msg)
-	}
-
-	if newConfig.Backend.EqualRemAIS(&oldConfig.Backend, t.String()) {
-		return nil
-	}
-	if aisConf := newConfig.Backend.Get(apc.AIS); aisConf != nil {
-		return t.attachDetachRemAis(newConfig, msg)
-	}
-	aisbp := backend.NewAIS(t, t.statsT, false)
-	t.bps[apc.AIS] = aisbp
-	t.rlbps[apc.AIS] = &rlbackend{Backend: aisbp, t: t}
-
-	return nil
-}
-
-// NOTE: apply the entire config: add new and update existing entries (remote clusters)
-func (t *target) attachDetachRemAis(newConfig *globalConfig, msg *actMsgExt) (err error) {
-	var (
-		aisbp   *backend.AISbp
-		aisConf = newConfig.Backend.Get(apc.AIS)
-	)
-	debug.Assert(aisConf != nil)
-	aisbp = t.aisbp()
-	return aisbp.Apply(aisConf, msg.Action, &newConfig.ClusterConfig)
+	return t.remaisConfig(oldConfig, newConfig, msg)
 }
 
 // POST /v1/metasync

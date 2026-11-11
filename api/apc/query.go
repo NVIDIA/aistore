@@ -279,11 +279,12 @@ const (
 	WhatMetricNames = "metrics"
 
 	// assorted
-	WhatMountpaths = "mountpaths"
-	WhatRemoteAIS  = "remote"
-	WhatSmapVote   = "smapvote"
-	WhatSysInfo    = "sysinfo"
-	WhatTargetIPs  = "target_ips" // comma-separated list of all target IPs (compare w/ GetWhatSnode)
+	WhatMountpaths  = "mountpaths"
+	WhatRemoteAIS   = "remote"
+	WhatRemaisNodes = "remote_nodes" // WhatRemoteAIS as currently seen by each node
+	WhatSmapVote    = "smapvote"
+	WhatSysInfo     = "sysinfo"
+	WhatTargetIPs   = "target_ips" // comma-separated list of all target IPs (compare w/ GetWhatSnode)
 
 	// log
 	WhatLog = "log"

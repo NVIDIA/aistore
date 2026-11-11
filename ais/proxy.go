@@ -30,7 +30,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/feat"
 	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/k8s"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -74,12 +73,7 @@ type (
 
 		notifs notifs
 
-		remais struct {
-			old []*meta.RemAis // to facilitate a2u resolution (and, therefore, offline access)
-			meta.RemAisVec
-			mu sync.RWMutex
-			in atomic.Bool
-		}
+		remais remaisCache
 
 		settingNewPrimary atomic.Bool // when executing "set new primary" request (transition)
 
@@ -2799,6 +2793,9 @@ func (p *proxy) httpdaeget(w http.ResponseWriter, r *http.Request) {
 			p.writeJSON(w, r, ds, what)
 		}
 
+	case apc.WhatRemoteAIS:
+		p.writeJSON(w, r, p._remaisCopy(), what)
+
 	case apc.WhatSysInfo:
 		p.writeJSON(w, r, apc.GetMemCPU(), what)
 
@@ -3068,87 +3065,8 @@ func (p *proxy) receiveConfig(newConfig *globalConfig, msg *actMsgExt, payload m
 		return // nothing to do
 	}
 
-	go p._remais(&newConfig.ClusterConfig, false)
+	go p.remaisRefresh(&newConfig.ClusterConfig)
 	return
-}
-
-// refresh local p.remais cache via intra-cluster call to a random target
-// NOTE:
-// - best-effort: provides eventual consistency for remote-AIS metadata
-// TODO:
-// - split blocking path to proceed without retry loops
-// - return the current version and/or error (or success flag)
-// - make remais.Ver atomic
-func (p *proxy) _remais(newConfig *cmn.ClusterConfig, blocking bool) {
-	const maxretries = 5
-	if !p.remais.in.CAS(false, true) {
-		return
-	}
-	var (
-		sleep      time.Duration
-		retries    = maxretries
-		warn       string
-		over, nver int64
-	)
-	if blocking {
-		retries = 1
-	} else {
-		sleep = newConfig.Timeout.CplaneOperation.D()
-		maxsleep := newConfig.Timeout.MaxKeepalive.D()
-		if uptime := p.keepalive.cluUptime(mono.NanoTime()); uptime < maxsleep {
-			sleep = 2 * maxsleep
-		}
-	}
-	for ; retries > 0; retries-- {
-		if !blocking {
-			time.Sleep(sleep)
-		}
-		all, err := p.getRemAisVec(false /*refresh*/)
-		if err != nil {
-			if retries < maxretries {
-				nlog.Errorf("%s: failed to get remais (%d attempts)", p, retries-1)
-			}
-			continue
-		}
-		p.remais.mu.Lock()
-		if over <= 0 {
-			over = p.remais.Ver
-		}
-		if p.remais.Ver < all.Ver {
-			// keep old/detached clusters to support access to existing ("cached") buckets
-			// i.e., the ability to resolve remote alias to Ns.UUID (see p.a2u)
-			for _, a := range p.remais.RemAisVec.A {
-				var found bool
-				for _, b := range p.remais.old {
-					if b.UUID == a.UUID {
-						*b = *a
-						found = true
-						break
-					}
-					if b.Alias == a.Alias {
-						warn = fmt.Sprintf("duplicated remais alias: (%q, %q) vs (%q, %q)", a.UUID, a.Alias, b.UUID, b.Alias)
-					}
-				}
-				if !found {
-					p.remais.old = append(p.remais.old, a)
-				}
-			}
-
-			p.remais.RemAisVec = *all
-			nver = p.remais.Ver
-			p.remais.mu.Unlock()
-			break
-		}
-		p.remais.mu.Unlock()
-		nlog.Errorf("%s: retrying remais ver=%d (%d attempts)", p, all.Ver, retries-1)
-		sleep = newConfig.Timeout.CplaneOperation.D()
-	}
-
-	p.remais.in.Store(false)
-	if warn != "" {
-		nlog.Warningln(warn)
-	}
-	nlog.Infof("%s: remais v%d => v%d", p, over, nver)
 }
 
 func (p *proxy) receiveRMD(newRMD *rebMD, msg *actMsgExt, sender string) error {

@@ -15,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/xact"
@@ -74,64 +73,6 @@ func freeBctx(a *bctx) {
 //
 // lookup and add buckets on the fly
 //
-
-func (p *proxy) a2u(aliasOrUUID string) string {
-	p.remais.mu.RLock()
-	for _, remais := range p.remais.A {
-		if aliasOrUUID == remais.Alias || aliasOrUUID == remais.UUID {
-			p.remais.mu.RUnlock()
-			return remais.UUID
-		}
-	}
-	l := len(p.remais.old)
-	for i := l - 1; i >= 0; i-- {
-		remais := p.remais.old[i]
-		if aliasOrUUID == remais.Alias || aliasOrUUID == remais.UUID {
-			p.remais.mu.RUnlock()
-			return remais.UUID
-		}
-	}
-	p.remais.mu.RUnlock()
-	return aliasOrUUID
-}
-
-// Fixup local p.remais cache in the unlikely case it hasn't been populated yet via regular flows:
-// - when a proxy starts up (or restarts), p.remais cache is populated asynchronously via _remais() goroutine
-// - if a request for a remote-ais bucket arrives before the latter completes, p.a2u() (below)
-//   fails to resolve alias to UUID
-
-func (p *proxy) remaisVersionFixup() bool {
-	// NOTE: benign race (monotonic); TODO: consider atomic.Int64
-	if p.remais.Ver != 0 {
-		return true
-	}
-	var ver int64
-	p.remais.mu.RLock()
-	ver = p.remais.Ver
-	p.remais.mu.RUnlock()
-	if ver != 0 {
-		return true
-	}
-
-	config := cmn.GCO.Get()
-	uptime := p.keepalive.cluUptime(mono.NanoTime())
-	if uptime == 0 || uptime > cos.ClampDuration(config.Timeout.JoinTimeout(), time.Minute, 10*time.Minute) {
-		return false
-	}
-	conf := config.Backend.Get(apc.AIS)
-	if conf == nil {
-		return false
-	}
-	aisConf, ok := conf.(cmn.BackendConfAIS)
-	debug.Assertf(ok, "aisConf %T", conf)
-	if !ok || len(aisConf) == 0 {
-		return false
-	}
-
-	nlog.Warningln(p.String(), "remais fixup (starting up w/ _remais() delayed?)")
-	p._remais(&config.ClusterConfig, true /*blocking*/)
-	return true
-}
 
 // initialize bucket and check access permissions
 func (bctx *bctx) init() (int, error) {

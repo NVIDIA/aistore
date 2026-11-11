@@ -236,9 +236,6 @@ func TestColdGetRangesRemoteDelete(t *testing.T) {
 func TestRemaisColdGetRanges(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true, RequiredDeployment: tools.ClusterTypeLocal})
 	tools.WaitForRebalAndResil(t, tools.BaseAPIParams(tools.RandomProxyURL(t)))
-	// give proxies time to refresh the restored route after the last subtest
-	var restoreDelay time.Duration
-	t.Cleanup(func() { time.Sleep(restoreDelay) })
 
 	const chunkSize = 4 * cos.MiB
 	tests := []struct {
@@ -412,13 +409,12 @@ func TestRemaisColdGetRanges(t *testing.T) {
 			backend.Conf = maps.Clone(backend.Conf)
 			backend.Set(apc.AIS, cmn.BackendConfAIS{"crange-" + trand.String(8): []string{bridge.URL}})
 			t.Cleanup(func() {
-				err := api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &config.Backend}, false)
-				tassert.CheckError(t, err)
-				if err == nil {
-					restoreDelay = 2 * config.Timeout.CplaneOperation.D()
-				}
+				setRemaisBackend(t, bp, &config.Backend)
 			})
-			tassert.CheckFatal(t, api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{Backend: &backend}, false))
+			setRemaisBackend(t, bp, &backend)
+			if t.Failed() {
+				t.FailNow()
+			}
 
 			var out bytes.Buffer
 			args := &api.GetArgs{Writer: &out}
