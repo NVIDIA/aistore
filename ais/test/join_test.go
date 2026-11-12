@@ -8,6 +8,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,11 +18,13 @@ import (
 
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/tools/tlog"
 )
 
 type joinTestBody struct {
@@ -30,6 +33,161 @@ type joinTestBody struct {
 }
 
 const invalidNodeJoinSecret = "invalid-node-join-secret"
+
+func TestPodDerivedRejoin(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+
+	config := tools.GetClusterConfig(t)
+	config.Version, config.UUID = 0, ""
+	config.Rebalance.Enabled = true
+	config.Keepalive.Proxy.Interval = cos.Duration(45 * time.Second)
+	config.Keepalive.Proxy.Factor = 2
+	host, scheme := "127.0.0.1", "http"
+	if config.Net.UseIPv6 {
+		host = "::1"
+	}
+	if config.Net.HTTP.UseHTTPS {
+		scheme = "https"
+	}
+
+	// reserve distinct ports for the private cluster and its replacements
+	var listeners [10]net.Listener
+	var ports [len(listeners)]int
+	for i := range listeners {
+		listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+		tassert.CheckFatal(t, err)
+		t.Cleanup(func() { _ = listener.Close() })
+		listeners[i] = listener
+		ports[i] = listener.Addr().(*net.TCPAddr).Port
+	}
+	for _, listener := range listeners {
+		tassert.CheckFatal(t, listener.Close())
+	}
+	primaryURL := cmn.ProtoEndpoint(scheme, net.JoinHostPort(host, strconv.Itoa(ports[0])))
+	config.Proxy.PrimaryURL, config.Proxy.OriginalURL, config.Proxy.DiscoveryURL = primaryURL, primaryURL, primaryURL
+	t.Setenv(env.AisPrimaryEP, primaryURL)
+	t.Setenv(env.AisK8sNamespace, "ais-rejoin-test")
+	t.Setenv("AIS_DAEMON_ID", "")
+
+	start := func(role, pod string, public, control int, args ...string) func() {
+		t.Helper()
+		tlog.Logfln("Starting %s pod %s with fresh state (public port %d, control port %d)", role, pod, public, control)
+		t.Setenv(env.AisK8sPod, pod)
+		local := &cmn.LocalConfig{
+			ConfigDir: t.TempDir(),
+			LogDir:    t.TempDir(),
+			TestFSP:   cmn.TestFSPConf{Root: t.TempDir(), Count: 1},
+			HostNet: cmn.LocalNetConfig{
+				Hostname: host, HostnameIntraControl: host, Port: public, PortIntraControl: control,
+			},
+		}
+		tassert.CheckFatal(t, os.Mkdir(filepath.Join(local.TestFSP.Root, "mp1"), 0o755))
+		cfg := *config
+		pid := tools.DeployNode(t, &meta.Snode{DaeType: role}, &cfg, local, append(args, "-daemon_id_source=k8s-pod")...)
+		stop := func() {
+			if pid != 0 {
+				tools.CleanupNode(t, pid)
+				pid = 0
+			}
+		}
+		t.Cleanup(stop)
+		return stop
+	}
+	start(apc.Proxy, "ais-proxy-0", ports[0], ports[1], "-ntargets=2")
+	start(apc.Target, "ais-target-0", ports[2], ports[3])
+	stopTarget := start(apc.Target, "ais-target-1", ports[4], ports[5])
+	bp := tools.BaseAPIParams(primaryURL)
+	startup := tools.WaitRetryOpts{MaxRetries: 160, Interval: 250 * time.Millisecond}
+	rejoin := tools.WaitRetryOpts{MaxRetries: 60, Interval: 250 * time.Millisecond}
+	tlog.Logfln("Waiting for private cluster primary %s to be ready for rebalance", primaryURL)
+	tassert.CheckFatal(t, tools.WaitForCondition(func() bool { return api.Health(bp, true) == nil }, startup))
+	tlog.Logfln("Private cluster is ready for rebalance")
+
+	checkRejoin := func(role, pod string, public, control int, stop, onPublished func()) {
+		t.Helper()
+		var old *meta.Snode
+		tlog.Logfln("Waiting for %s pod %s to register and become ready", role, pod)
+		tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+			smap, err := api.GetClusterMap(bp)
+			if err != nil {
+				return false
+			}
+			nodes := smap.Tmap
+			if role == apc.Proxy {
+				nodes = smap.Pmap
+			}
+			for _, node := range nodes {
+				if node.PubNet.Port == strconv.Itoa(public) && api.GetProxyReadiness(tools.BaseAPIParams(node.PubNet.URL)) == nil {
+					old = node
+					return true
+				}
+			}
+			return false
+		}, rejoin))
+
+		tlog.Logfln("Killing %s (control %s)", old.StringEx(), old.ControlNet.URL)
+		stop()
+		tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+			return api.Health(tools.BaseAPIParams(old.PubNet.URL)) != nil
+		}, rejoin))
+		current, err := api.GetClusterMap(bp)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, current.GetNode(old.ID()) != nil, "%s was removed before the replacement started", old.StringEx())
+		tlog.Logfln("%s is down and its old registration is still in Smap v%d", old.StringEx(), current.Version)
+
+		start(role, pod, public, control)
+		tlog.Logfln("Waiting for %s to rejoin at control port %d", old.StringEx(), control)
+		published := false
+		err = tools.WaitForCondition(func() bool {
+			smap, err := api.GetClusterMap(bp)
+			if err != nil {
+				return false
+			}
+			newNode := smap.GetNode(old.ID())
+			tassert.Fatalf(t, newNode != nil, "%s was removed while rejoining", old.StringEx())
+			if newNode.ControlNet.Port != strconv.Itoa(control) || newNode.SameIncarnation(old) {
+				return false
+			}
+			if !published {
+				tlog.Logfln("Smap v%d published %s with control %s and a new verifying key, waiting for readiness",
+					smap.Version, newNode.StringEx(), newNode.ControlNet.URL)
+				published = true
+				if onPublished != nil {
+					onPublished()
+				}
+			}
+			return api.GetProxyReadiness(tools.BaseAPIParams(newNode.PubNet.URL)) == nil
+		}, rejoin)
+		tassert.Fatalf(t, err == nil, "%s did not rejoin at control port %d: %v", old.StringEx(), control, err)
+		tlog.Logfln("Replacement %s is ready", old.StringEx())
+	}
+	// a same-id replacement with fresh state must not need early GFN from the other target
+	smap, err := api.GetClusterMap(bp)
+	tassert.CheckFatal(t, err)
+	var survivor *meta.Snode
+	for _, node := range smap.Tmap {
+		if node.PubNet.Port == strconv.Itoa(ports[2]) {
+			survivor = node
+			break
+		}
+	}
+	tassert.Fatalf(t, survivor != nil, "surviving target missing from Smap")
+	tlog.Logfln("Pausing %s during the same-ID target rejoin", survivor.StringEx())
+	resume, err := tools.PauseNode(survivor)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		if resume != nil {
+			tassert.CheckError(t, resume())
+		}
+	})
+	checkRejoin(apc.Target, "ais-target-1", ports[4], ports[6], stopTarget, func() {
+		tassert.CheckFatal(t, resume())
+		resume = nil
+		tlog.Logfln("Resumed %s", survivor.StringEx())
+	})
+	stopProxy := start(apc.Proxy, "ais-proxy-1", ports[7], ports[8])
+	checkRejoin(apc.Proxy, "ais-proxy-1", ports[7], ports[9], stopProxy, nil)
+}
 
 func TestSlowKeepaliveDuplicateID(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 1})

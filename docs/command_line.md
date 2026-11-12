@@ -19,6 +19,8 @@ The common executable, typically called `aisnode`, supports the following comman
         "key1=value1,key2=value2" formatted string to override selected entries in config
   -daemon_id string
         user-specified node ID (advanced usage only!)
+  -daemon_id_source string
+        node ID source: k8s-pod or k8s-pod:<scope> (overrides AIS_DAEMON_ID_SOURCE)
   -h    show usage and exit
   -local_config string
         config filename: local file that stores daemon's local configuration

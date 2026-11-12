@@ -19,9 +19,10 @@ import (
 )
 
 type IniCtx struct {
-	UseLoopbacks  bool // using loopback dev-s
-	IgnoreMissing bool // ignore missing mountpath(s)
-	RandomTID     bool // generated random target ID
+	PodName       string // K8s pod name; set when target ID is pod-derived
+	UseLoopbacks  bool   // using loopback dev-s
+	IgnoreMissing bool   // ignore missing mountpath(s)
+	RandomTID     bool   // generated random target ID
 }
 
 // bootstrap from local-config referenced locations
@@ -40,7 +41,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 	// new and empty
 	blockDevs := fs.New(t, len(config.FSP.Paths))
 
-	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
+	if v, err := configLoadVMD(tid, ctx.PodName, config.FSP.Paths); err != nil {
 		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, err, fspaths)
 	} else {
 		vmd = v
@@ -50,6 +51,14 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 	// b) when the config doesn't contain a single valid mountpath
 	// (that in turn contains a copy of VMD, possibly outdated (but that's ok))
 	if vmd == nil {
+		if ctx.PodName != "" {
+			// check before config-init-mpi can stamp any mountpath
+			for mpath := range config.FSP.Paths {
+				if err := checkPodMpath(tid, ctx.PodName, mpath); err != nil {
+					cos.ExitLogf("%s: %v (config-init-mpi, %v)", t, err, fspaths)
+				}
+			}
+		}
 		if err := configInitMPI(tid, config, blockDevs); err != nil {
 			cos.ExitLogf("%s: %v (config-init-mpi, %v, %+v)", t, err, fspaths, ctx)
 		}
@@ -76,6 +85,24 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 		if haveOld {
 			persist = true
 		}
+		if ctx.PodName != "" {
+			// check before pass two can stamp any mountpath
+			// (disabled mountpaths are not stamped and not checked)
+			for mpath, md := range vmd.Mountpaths {
+				if !md.Enabled {
+					continue
+				}
+				if err := checkPodMpath(tid, ctx.PodName, mpath); err != nil {
+					cos.ExitLogf("%s: %v (vmd-init-mpi-p2, %s)", t, err, vmd)
+				}
+				if _, configured := config.FSP.Paths[mpath]; configured {
+					continue // VMD copy checked by config-load-vmd
+				}
+				if _, _, err := loadOneVMD(tid, ctx.PodName, nil, mpath, len(vmd.Mountpaths)); err != nil {
+					cos.ExitLogf("%s: %v (vmd-init-mpi-p2, %s)", t, err, vmd)
+				}
+			}
+		}
 		if v, _, err := initMPI(tid, config, blockDevs, vmd, 2 /*pass #2*/, ctx.IgnoreMissing); err != nil {
 			cos.ExitLogf("%s: %v (vmd-init-mpi-p2, have-old=%t, %+v, %s)", t, err, haveOld, ctx, vmd)
 		} else {
@@ -98,7 +125,7 @@ func NewFromMPI(tid string) (vmd *VMD, err error) {
 		curVersion      uint64
 		avail, disabled = fs.Get()
 	)
-	vmd, err = loadVMD(tid, nil)
+	vmd, err = loadVMD(tid, "", nil)
 	if err != nil {
 		nlog.Warningln(err) // TODO: handle
 	}
@@ -207,7 +234,7 @@ func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, pass 
 		}
 
 		if pass == 1 {
-			if v, old, errLoad := loadOneVMD(tid, vmd, mi.Path, len(vmd.Mountpaths)); v != nil {
+			if v, old, errLoad := loadOneVMD(tid, "", vmd, mi.Path, len(vmd.Mountpaths)); v != nil {
 				debug.Assert(v.Version > vmd.Version)
 				maxVer = v
 			} else if old {
@@ -272,10 +299,12 @@ func RecoverTID(generatedID string, configPaths cos.StrKVs) (tid string, recover
 
 // loading
 
-func LoadVMDTest() (*VMD, error) { return loadVMD("", nil) } // test-only
+// test-only
+func LoadVMDTest(tid, pod string) (*VMD, error)      { return loadVMD(tid, pod, nil) }
+func CheckPodMpathTest(tid, pod, mpath string) error { return checkPodMpath(tid, pod, mpath) }
 
 // config => (temp MPI) => VMD
-func configLoadVMD(tid string, configPaths cos.StrKVs) (vmd *VMD, err error) {
+func configLoadVMD(tid, pod string, configPaths cos.StrKVs) (vmd *VMD, err error) {
 	if len(configPaths) == 0 {
 		err = errors.New("no fspaths - see README => Configuration and fspaths section in the config.sh")
 		return
@@ -284,21 +313,21 @@ func configLoadVMD(tid string, configPaths cos.StrKVs) (vmd *VMD, err error) {
 	for mpath := range configPaths {
 		available[mpath] = nil
 	}
-	return loadVMD(tid, available)
+	return loadVMD(tid, pod, available)
 }
 
 // given a set of *available mountpaths* loadVMD discovers, loads, and validates
 // the most recently updated VMD (which is stored in several copies for redundancy).
 // - Returns nil if VMD does not exist;
 // - Returns error on failure to validate or load existing VMD.
-func loadVMD(tid string, available fs.MPI) (vmd *VMD, err error) {
+func loadVMD(tid, pod string, available fs.MPI) (vmd *VMD, err error) {
 	if available == nil {
 		available = fs.GetAvail()
 	}
 	l := len(available)
 	for mpath := range available {
 		var v *VMD
-		v, _, err = loadOneVMD(tid, vmd, mpath, l)
+		v, _, err = loadOneVMD(tid, pod, vmd, mpath, l)
 		if err != nil {
 			return
 		}
@@ -310,7 +339,7 @@ func loadVMD(tid string, available fs.MPI) (vmd *VMD, err error) {
 }
 
 // given mountpath return a greater-version VMD if available
-func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, bool /*have old*/, error) {
+func loadOneVMD(tid, pod string, vmd *VMD, mpath string, l int) (*VMD, bool /*have old*/, error) {
 	var (
 		v   = newVMD(l)
 		err = v.load(mpath)
@@ -323,6 +352,9 @@ func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, bool /*have ol
 			Code: fs.SieMetaCorrupted,
 			Msg:  fmt.Sprintf("failed to load VMD from %q: %v", mpath, err),
 		}
+	}
+	if pod != "" && v.DaemonID != tid {
+		return nil, false, podIDMismatch(tid, pod, mpath, v.DaemonID)
 	}
 	if vmd == nil {
 		if tid != "" && v.DaemonID != tid {
@@ -366,4 +398,23 @@ func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, bool /*have ol
 		}
 	}
 	return nil, false, err
+}
+
+// pod-derived target ID: mountpath must not be stamped by a different target
+func checkPodMpath(tid, pod, mpath string) error {
+	id, err := fs.LoadMountpathID(mpath)
+	if err != nil && !cos.IsNotExist(err) {
+		return err
+	}
+	if id != "" && id != tid {
+		return podIDMismatch(tid, pod, mpath, id)
+	}
+	return nil
+}
+
+func podIDMismatch(tid, pod, mpath, stored string) error {
+	return &fs.ErrStorageIntegrity{
+		Code: fs.SiePodIDMismatch,
+		Msg:  fmt.Sprintf("pod %q expects target ID %q, mountpath %q belongs to %q", pod, tid, mpath, stored),
+	}
 }

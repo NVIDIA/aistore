@@ -131,6 +131,70 @@ func newSnode(id, daeType string) (snode *meta.Snode) {
 }
 
 //
+// node ID
+//
+
+func TestPodIDSource(t *testing.T) {
+	for _, test := range []struct {
+		source, scope string
+		ok            bool
+	}{
+		{source: "k8s-pod", ok: true},
+		{source: "k8s-pod:6f1c2b7e-3d4a-4c5b-9e8f-0a1b2c3d4e5f", scope: "6f1c2b7e-3d4a-4c5b-9e8f-0a1b2c3d4e5f", ok: true},
+		{source: "k8s-pod:a:b", scope: "a:b", ok: true},
+		{source: "k8s-pod:"},
+		{source: "k8s-node"},
+		{source: "k8s-pod-v2"},
+		{source: ":scope"},
+	} {
+		scope, ok := parsePodIDSource(test.source)
+		tassert.Errorf(t, ok == test.ok, "%q: expected ok=%t, got %t", test.source, test.ok, ok)
+		tassert.Errorf(t, !ok || scope == test.scope, "%q: expected scope %q, got %q", test.source, test.scope, scope)
+	}
+}
+
+func TestPodDerivedID(t *testing.T) {
+	const (
+		ns    = "ais"
+		pod   = "ais-target-1"
+		scope = "6f1c2b7e-3d4a-4c5b-9e8f-0a1b2c3d4e5f"
+	)
+	// persisted on mountpaths and in cluster maps: the encoding must not change
+	for _, test := range []struct {
+		daeType, pod, scope, id string
+	}{
+		{apc.Target, pod, scope, "GBLgBUup"},
+		{apc.Proxy, "ais-proxy-0", scope, "FfIXNSzh"},
+		{apc.Target, pod, "", "xTKdSUkl"},
+	} {
+		id := derivePodID(test.daeType, ns, test.pod, test.scope)
+		tassert.Errorf(t, id == test.id, "%s %s/%s (scope %q): expected %q, got %q",
+			test.daeType, ns, test.pod, test.scope, test.id, id)
+	}
+
+	tid := derivePodID(apc.Target, ns, pod, scope)
+	// same length and alphabet as a random node ID
+	tassert.CheckFatal(t, cos.ValidateDaemonID(tid))
+	tassert.Errorf(t, len(tid) == len(cos.GenDaemonID()), "%q: unexpected length", tid)
+	tassert.Errorf(t, strings.Trim(tid, cos.LetterRunes) == "", "%q: unexpected alphabet", tid)
+
+	// every input changes the result
+	for _, other := range []string{
+		derivePodID(apc.Proxy, ns, pod, scope),
+		derivePodID(apc.Target, "ais2", pod, scope),
+		derivePodID(apc.Target, ns, "ais-target-2", scope),
+		derivePodID(apc.Target, ns, pod, "0a1b2c3d-4e5f-4c5b-9e8f-6f1c2b7e3d4a"),
+		derivePodID(apc.Target, ns, pod, ""),
+		// same concatenation, different fields
+		derivePodID(apc.Target, "ais-ais", "target-1", scope),
+		derivePodID(apc.Target, ns, pod+scope, ""),
+	} {
+		tassert.Errorf(t, other != tid, "unexpected collision with %q", tid)
+		tassert.CheckError(t, cos.ValidateDaemonID(other))
+	}
+}
+
+//
 // query parsing
 //
 

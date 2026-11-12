@@ -110,9 +110,11 @@ func (p *proxy) iniPrimaryState() {
 func (p *proxy) init(config *cmn.Config) {
 	p.initPhase1(config)
 
-	// (a) get node ID from command-line or env var (see envDaemonID())
-	// (b) load existing ID from config file stored under local config `confdir` (compare w/ target)
-	// (c) generate a new one (genDaemonID())
+	// (a) derive node ID from K8s pod identity, when requested (see podDaemonID())
+	// (b) get node ID from command-line or env var (see envDaemonID())
+	// (c) hash K8s node name
+	// (d) load existing ID from the file stored under local config `confdir` (compare w/ target)
+	// (e) generate a new one (genDaemonID())
 	// - in that sequence
 	pid := initPID(config)
 
@@ -151,6 +153,10 @@ func (p *proxy) init(config *cmn.Config) {
 }
 
 func initPID(config *cmn.Config) string {
+	if pid, _ := podDaemonID(apc.Proxy); pid != "" {
+		return pid
+	}
+
 	// 1. ID from env
 	if pid := envDaemonID(apc.Proxy); pid != "" {
 		if err := cos.ValidateDaemonID(pid); err != nil {

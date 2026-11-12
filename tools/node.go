@@ -574,7 +574,7 @@ func startNode(cmd *RestoreCmd, asPrimary bool) (int, error) {
 	return pid, err
 }
 
-func DeployNode(t *testing.T, node *meta.Snode, conf *cmn.Config, localConf *cmn.LocalConfig) int {
+func DeployNode(t *testing.T, node *meta.Snode, conf *cmn.Config, localConf *cmn.LocalConfig, extraArgs ...string) int {
 	conf.ConfigDir = t.TempDir()
 	conf.LogDir = t.TempDir()
 	conf.TestFSP.Root = t.TempDir()
@@ -593,16 +593,15 @@ func DeployNode(t *testing.T, node *meta.Snode, conf *cmn.Config, localConf *cmn
 	tassert.CheckFatal(t, err)
 
 	configFile := filepath.Join(conf.ConfigDir, "ais.json")
-	err = jsp.SaveMeta(configFile, &conf.ClusterConfig, nil)
+	err = jsp.Save(configFile, &conf.ClusterConfig, jsp.Plain(), nil)
 	tassert.CheckFatal(t, err)
 
-	var cmd = RestoreCmd{
-		Args: []string{
-			"-role=" + node.Type(),
-			"-daemon_id=" + node.ID(),
-			"-config=" + configFile,
-			"-local_config=" + localConfFile,
-		},
+	args := []string{"-role=" + node.Type(), "-config=" + configFile, "-local_config=" + localConfFile}
+	if id := node.ID(); id != "" {
+		args = append(args, "-daemon_id="+id)
+	}
+	cmd := RestoreCmd{
+		Args: append(args, extraArgs...),
 		Node: node,
 		Cmd:  getAISNodeCmd(t),
 	}

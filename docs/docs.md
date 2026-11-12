@@ -85,6 +85,7 @@ Use this page as a quick orientation and navigation map:
 - [Helm charts](https://github.com/NVIDIA/ais-k8s/tree/main/helm)
 - [Deployment monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md)
 - [Node lifecycle: maintenance, shutdown, decommission](/docs/lifecycle_node.md)
+- [Node IDs: sources, persistence, Kubernetes pod-derived IDs](/docs/node_id.md)
 - [Global rebalance](/docs/rebalance.md)
 - [Placement weights](/docs/placement.md)
 - [Resilver](/docs/resilver.md)

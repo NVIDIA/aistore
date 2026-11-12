@@ -246,7 +246,7 @@ func (mi *Mountpath) backupAtmost(from, backup string, bcnt, atMost int) (newBcn
 func (mi *Mountpath) SetDaemonIDXattr(tid string) error {
 	cos.Assert(tid != "")
 	// Validate if mountpath already has daemon ID set.
-	mpathDaeID, err := _loadXattrID(mi.Path)
+	mpathDaeID, err := LoadMountpathID(mi.Path)
 	if err != nil {
 		return err
 	}
@@ -1198,7 +1198,7 @@ func RenameBucketDirs(bckFrom, bckTo *cmn.Bck) (err error) {
 
 func LoadNodeID(mpaths cos.StrKVs) (mDaeID string, err error) {
 	for mp := range mpaths {
-		daeID, err := _loadXattrID(mp)
+		daeID, err := LoadMountpathID(mp)
 		if err != nil {
 			return "", err
 		}
@@ -1219,7 +1219,7 @@ func LoadNodeID(mpaths cos.StrKVs) (mDaeID string, err error) {
 	return
 }
 
-func _loadXattrID(mpath string) (daeID string, err error) {
+func LoadMountpathID(mpath string) (daeID string, err error) {
 	b, err := GetXattr(mpath, xattrNodeID)
 	if err == nil {
 		daeID = string(b)

@@ -109,6 +109,16 @@ func IsValidUUID(uuid string) bool {
 
 func GenDaemonID() string { return CryptoRandS(lenDaemonID) }
 
+// deterministic counterpart of GenDaemonID: same length, same alphabet
+func HashDaemonID(digest uint64) string {
+	b := make([]byte, lenDaemonID)
+	for i := range b {
+		b[i] = LetterRunes[digest%uint64(LenRunes)]
+		digest /= uint64(LenRunes)
+	}
+	return UnsafeS(b)
+}
+
 func ValidateDaemonID(id string) error {
 	if len(id) < lenDaemonID {
 		return fmt.Errorf("node ID %q is too short", id)
