@@ -7,10 +7,12 @@ package ais
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,6 +27,77 @@ import (
 //
 // join and keepalive
 //
+
+func TestSelfJoinConfirmation(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		probeStatus  int
+		replyJoining bool
+		wantErr      string
+	}{
+		{name: "old node responds", probeStatus: http.StatusOK, wantErr: "duplicate node ID"},
+		{name: "probe rejected", probeStatus: http.StatusForbidden, wantErr: "failed to obtain node info"},
+		{name: "joining node responds", probeStatus: http.StatusOK, replyJoining: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				probes atomic.Int32
+				reply  []byte
+			)
+			srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				probes.Add(1)
+				if r.Method != http.MethodGet || r.URL.Path != apc.URLPathDae.S || r.URL.Query().Get(apc.QparamWhat) != apc.WhatSnode {
+					t.Errorf("unexpected node-info probe: %s %s", r.Method, r.URL)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				if test.probeStatus != http.StatusOK {
+					http.Error(w, http.StatusText(test.probeStatus), test.probeStatus)
+					return
+				}
+				w.Header().Set(cos.HdrContentType, cos.ContentJSON)
+				_, _ = w.Write(reply)
+			}))
+			t.Cleanup(srv.Close)
+
+			old := newSnode("target01", apc.Target)
+			host, port, err := net.SplitHostPort(srv.Listener.Addr().String())
+			tassert.CheckFatal(t, err)
+			old.ControlNet.Init("http", host, port)
+			joining := old.Clone()
+			joining.ControlNet.Init("http", host, "1")
+			if test.replyJoining {
+				reply = cos.MustMarshal(joining)
+			} else {
+				reply = cos.MustMarshal(old)
+			}
+			srv.Start()
+
+			p := &proxy{}
+			p.si = newSnode("primary", apc.Proxy)
+			p.keepalive = &palive{p: p, keepalive: keepalive{hb: newHB(time.Second)}}
+			p.svs.init()
+			smap := newSmap()
+			smap.Primary = p.si
+			smap.addProxy(p.si)
+			smap.addTarget(old)
+			p.owner.smap = &smapOwner{}
+			p.owner.smap.smap.Store(smap)
+
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, apc.URLPathCluAutoReg.S, http.NoBody)
+			c := &clupost{p: p, w: rec, r: req, nsi: joining, smap: smap, apiOp: apc.SelfJoin}
+			stop := c.handshake()
+			tassert.Errorf(t, probes.Load() == 1, "expected one node-info probe, got %d", probes.Load())
+			if test.wantErr != "" {
+				tassert.Errorf(t, stop && rec.Code == http.StatusBadRequest && strings.Contains(rec.Body.String(), test.wantErr),
+					"expected join rejection %q, got stop=%t, status=%d, body=%q", test.wantErr, stop, rec.Code, rec.Body)
+			} else {
+				tassert.Errorf(t, !stop && rec.Body.Len() == 0, "expected join to proceed, got stop=%t, body=%q", stop, rec.Body)
+			}
+		})
+	}
+}
 
 func TestKeepaliveConfirmationSnapshot(t *testing.T) {
 	osi := &meta.Snode{}
@@ -73,6 +146,60 @@ func TestKeepaliveConfirmationSnapshot(t *testing.T) {
 	}
 }
 
+// keepalive removal is by node ID: skip when the ID re-registered while the primary was retrying
+func TestKeepaliveRemoveReplaced(t *testing.T) {
+	restarted := func(si *meta.Snode) *meta.Snode {
+		nsi := si.Clone()
+		nsi.VerifyingKey = make([]byte, cos.NodeSigningPublicKeySize)
+		return nsi
+	}
+	moved := func(si *meta.Snode) *meta.Snode {
+		nsi := si.Clone()
+		nsi.ControlNet.Init("http", "10.233.64.17", "51081")
+		return nsi
+	}
+	for _, test := range []struct {
+		name    string
+		current func(*meta.Snode) *meta.Snode // Smap entry by the time of removal
+		removed bool
+	}{
+		{name: "unchanged", removed: true},
+		{name: "restarted at same endpoints", current: restarted},
+		{name: "re-registered at new endpoints", current: moved},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			p := plTestProxy()
+			smap := placementTestSmap()
+			probed := smap.Tmap[plT1]
+			if test.current != nil {
+				smap.Tmap[plT1] = test.current(probed)
+			}
+			p.owner.smap = &smapOwner{}
+			p.owner.smap.smap.Store(smap)
+
+			pkr := &palive{p: p}
+			pkr.openCh(smap.Count())
+			pkr.toRemoveCh <- probed
+
+			var (
+				ctx   = &smapModifier{}
+				clone = smap.clone()
+				err   = pkr._pre(ctx, clone)
+			)
+			tassert.Fatalf(t, len(pkr.toRemoveCh) == 0, "expected removal queue drained")
+			if test.removed {
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, clone.GetTarget(plT1) == nil, "expected %s removed", plT1)
+				tassert.Fatalf(t, ctx.msg != nil, "expected metasync message")
+			} else {
+				tassert.Fatalf(t, err != nil && ctx.msg == nil, "expected nothing to do, got err=%v", err)
+				tassert.Fatalf(t, clone.GetTarget(plT1) != nil, "expected %s kept", plT1)
+			}
+			tassert.Fatalf(t, clone.GetTarget(plT2) != nil, "expected %s kept", plT2)
+		})
+	}
+}
+
 func TestKeepaliveRejectVersion(t *testing.T) {
 	p := &proxy{}
 	p.si = &meta.Snode{}
@@ -103,48 +230,73 @@ func TestCluPostVerify(t *testing.T) {
 		secret = []byte(tstJoinSecret)
 		body   = []byte(tstJoinBody)
 		p      = &proxy{}
-		config = &cmn.Config{}
+		smap   = newSmap()
+		member = newSnode("member", apc.Proxy)
 	)
 	p.joinSecret = secret
+	p.si = newSnode("primary", apc.Proxy)
+	smap.Primary = p.si
+	smap.addProxy(p.si)
+	smap.addProxy(member)
 
 	for _, test := range []struct {
-		name     string
-		apiOp    string
-		flags    cos.NodeStateFlags
-		signed   bool
-		wantErr  bool
-		wantAuth bool
+		name          string
+		apiOp         string
+		flags         cos.NodeStateFlags
+		signed        bool
+		absent        bool
+		rebalance     bool
+		verifiedEarly bool
+		rejectAt      string
 	}{
-		{name: "unsigned self-join", apiOp: apc.SelfJoin, wantErr: true},
-		{name: "signed self-join", apiOp: apc.SelfJoin, signed: true, wantAuth: true},
-		{name: "unsigned restarted keepalive", apiOp: apc.Keepalive, flags: cos.NodeRestarted, wantErr: true},
-		{name: "signed restarted keepalive", apiOp: apc.Keepalive, flags: cos.NodeRestarted, signed: true, wantAuth: true},
-		{name: "ordinary keepalive deferred", apiOp: apc.Keepalive},
+		{name: "unsigned self-join", apiOp: apc.SelfJoin, rejectAt: "verify"},
+		{name: "signed self-join", apiOp: apc.SelfJoin, signed: true, verifiedEarly: true},
+		{name: "unsigned restarted keepalive", apiOp: apc.Keepalive, flags: cos.NodeRestarted, rejectAt: "verify"},
+		{name: "promoted keepalive", apiOp: apc.Keepalive, flags: cos.NodeRestarted, signed: true, rebalance: true, verifiedEarly: true},
+		{name: "restarted keepalive without rebalance", apiOp: apc.Keepalive, flags: cos.NodeRestarted, signed: true, absent: true,
+			verifiedEarly: true},
+		{name: "ordinary member keepalive", apiOp: apc.Keepalive},
+		{name: "unsigned absent keepalive", apiOp: apc.Keepalive, absent: true, rejectAt: "admit"},
+		{name: "signed absent keepalive", apiOp: apc.Keepalive, signed: true, absent: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 			if test.signed {
 				signNodeJoin(nodeJoinRequestHMACDomain, secret, body, req.Header)
 			}
+			nsi := member
+			if test.absent {
+				nsi = newSnode("absent", apc.Proxy)
+			}
+			config := &cmn.Config{}
+			config.Rebalance = &cmn.RebalanceConf{Enabled: test.rebalance}
 			c := &clupost{
-				p: p, r: req, config: config, apiOp: test.apiOp, body: body,
+				p: p, w: httptest.NewRecorder(), r: req, config: config, apiOp: test.apiOp, body: body,
+				smap: smap, nsi: nsi, nversStr: cmn.VersionAIStore,
 				regReq: cluMeta{Flags: test.flags},
 			}
 
+			stage := "verify"
 			err := c.verify()
-			tassert.Fatalf(t, (err != nil) == test.wantErr, "expected error %t, got %v", test.wantErr, err)
-			tassert.Fatalf(t, c.joinVerified == test.wantAuth,
-				"expected authenticated %t, got %t", test.wantAuth, c.joinVerified)
-			if err != nil {
-				herr := cmn.AsErrHTTP(err)
-				tassert.Fatalf(t, herr != nil && herr.Status == http.StatusUnauthorized,
-					"expected status %d, got %v", http.StatusUnauthorized, err)
+			if err == nil {
+				tassert.Fatalf(t, !c.resumeReb(), "resumeReb stopped admission")
+				if test.rebalance {
+					tassert.Fatalf(t, c.apiOp == apc.SelfJoin, "expected promotion, got %q", c.apiOp)
+				}
+				if test.verifiedEarly {
+					// admission must not repeat the early proof check
+					req.Header.Del(apc.HdrJoinSig)
+				}
+				stage = "admit"
+				err = c.admit(smap.GetNode(nsi.ID()))
 			}
-
-			if c.joinVerified {
-				req.Header = make(http.Header)
-				tassert.CheckFatal(t, c._verify())
+			if test.rejectAt == "" {
+				tassert.CheckFatal(t, err)
+				return
 			}
+			herr := cmn.AsErrHTTP(err)
+			tassert.Fatalf(t, stage == test.rejectAt && herr != nil && herr.Status == http.StatusUnauthorized,
+				"expected unauthorized at %s, got %v at %s", test.rejectAt, err, stage)
 		})
 	}
 }
@@ -445,6 +597,54 @@ func TestPlacementWeightPutNode(t *testing.T) {
 	m.Tmap[plT2].Flags = meta.SnodeMaint
 	if w, err := (&clupost{p: plTestProxy(), nsi: newTarget()}).placementWeight(m.clone()); err != nil || w != w1 {
 		t.Fatalf("expected %d, got %d (%v)", w1, w, err)
+	}
+}
+
+func TestMustRebalanceJoin(t *testing.T) {
+	const maint = meta.SnodeMaint
+	for _, test := range []struct {
+		name                string
+		oldFlags, peerFlags cos.BitFlags
+		flags               cos.BitFlags
+		newID, restarted    bool
+		interrupted         bool
+		oldWeight, weight   int64
+		want                bool
+	}{
+		{name: "first active target", newID: true, oldFlags: maint, peerFlags: maint},
+		{name: "new active target", newID: true, want: true},
+		{name: "new inactive target", newID: true, flags: maint},
+		{name: "reactivated", oldFlags: maint, want: true},
+		{name: "deactivated", flags: maint, want: true},
+		{name: "last active deactivated", flags: maint, peerFlags: maint, restarted: true},
+		{name: "same active unweighted"},
+		{name: "same active weighted", oldWeight: 3, weight: 3},
+		{name: "only active restarted", peerFlags: maint, restarted: true, want: true},
+		{name: "inactive interrupted with active peer", oldFlags: maint, flags: maint, interrupted: true, want: true},
+		{name: "inactive interrupted without active peer", oldFlags: maint, flags: maint, peerFlags: maint, interrupted: true},
+		{name: "assigned missing weight", weight: 1, want: true},
+		{name: "assigned missing weight with no active peers", weight: 1, peerFlags: maint},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			smap := placementTestSmap()
+			old, peer := smap.GetTarget(plT1), smap.GetTarget(plT2)
+			old.Flags, peer.Flags = test.oldFlags, test.peerFlags
+			old.SetPlacementWeight(test.oldWeight)
+			if test.weight > 0 {
+				peer.SetPlacementWeight(1)
+			}
+			id := old.ID()
+			if test.newID {
+				id = "t1111111"
+			}
+			ctx := &smapModifier{
+				nsi: newSnode(id, apc.Target), flags: test.flags,
+				restarted: test.restarted, interrupted: test.interrupted,
+			}
+			if got := mustRebalanceJoin(ctx, smap, test.weight); got != test.want {
+				t.Fatalf("mustRebalanceJoin = %t, want %t", got, test.want)
+			}
+		})
 	}
 }
 

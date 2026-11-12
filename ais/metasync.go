@@ -123,6 +123,7 @@ type (
 		wg        *sync.WaitGroup
 		failedCnt *atomic.Int32
 		pairs     []revsPair
+		selected  meta.Nodes
 		ty        int // enum: { reqSync, reqNotify }
 	}
 	msPayload map[string][]byte     // tag => revs' body
@@ -201,7 +202,7 @@ func (y *metasyncer) Run() error {
 				y.tmOff()
 				break
 			}
-			failedCnt := y.do(revsReq.pairs, revsReq.ty)
+			failedCnt := y.do(revsReq.pairs, revsReq.ty, revsReq.selected)
 			if revsReq.wg != nil {
 				if revsReq.failedCnt != nil {
 					revsReq.failedCnt.Store(int32(failedCnt))
@@ -242,15 +243,15 @@ func (y *metasyncer) Stop(err error) {
 	close(y.stopCh)
 }
 
-// notify only targets - see bcastTo below
-func (y *metasyncer) notify(wait bool, pair revsPair) (failedCnt int) {
-	var (
-		failedCntAtomic = atomic.NewInt32(0)
-		req             = revsReq{pairs: []revsPair{pair}, ty: reqNotify}
-	)
-	if y.isPrimary() != nil {
+// notify targets; nil selection means all targets
+func (y *metasyncer) notify(wait bool, pair revsPair, selected meta.Nodes) (failedCnt int) {
+	if (selected != nil && len(selected) == 0) || y.isPrimary() != nil {
 		return
 	}
+	var (
+		failedCntAtomic = atomic.NewInt32(0)
+		req             = revsReq{pairs: []revsPair{pair}, ty: reqNotify, selected: selected}
+	)
 	if wait {
 		req.wg = &sync.WaitGroup{}
 		req.wg.Add(1)
@@ -302,7 +303,7 @@ drain:
 }
 
 // main method; see top of the file; returns number of "sync" failures
-func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
+func (y *metasyncer) do(pairs []revsPair, reqT int, selected meta.Nodes) (failedCnt int) {
 	var (
 		refused meta.NodeMap
 		newTIDs []string
@@ -371,7 +372,15 @@ func (y *metasyncer) do(pairs []revsPair, reqT int) (failedCnt int) {
 	args.timeout = cmn.Rom.MaxKeepalive() // making exception for this critical op
 	args.to = to
 	args.ignoreMaintenance = true
-	results := y.p.bcastGroup(args)
+	var results sliceResults
+	if selected == nil {
+		results = y.p.bcastGroup(args)
+	} else {
+		args.selected = selected
+		args.nodeCount = len(selected)
+		args.network = cmn.NetIntraControl
+		results = y.p.bcastSelected(args)
+	}
 	freeBcArgs(args)
 
 	// step: count failures and fill-in refused

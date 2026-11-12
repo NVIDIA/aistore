@@ -890,7 +890,7 @@ func (p *proxy) setPlacementWeights(w http.ResponseWriter, r *http.Request, msg 
 		nlog.Warningln(p.String(), msg.Action, "with fewer than 2 active targets:", preview.StrPlacementWeights())
 	}
 	if !ctx.skipReb {
-		if err := p.notifyEarlyGFN(ctx, ctx.smap, ""); err != nil {
+		if err := p.notifyEarlyGFN(ctx, ctx.smap, "", nil); err != nil {
 			p.writeErr(w, r, err)
 			return
 		}

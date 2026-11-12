@@ -492,7 +492,7 @@ func (p *proxy) setBprops(msg *apc.ActMsg, bck *meta.Bck, nprops *cmn.Bprops) (s
 	)
 	if _rePlacement(bprops, nprops, smap) {
 		gfnCtx = &smapModifier{smap: smap}
-		if err := p.notifyEarlyGFN(gfnCtx, smap, ""); err != nil {
+		if err := p.notifyEarlyGFN(gfnCtx, smap, "", nil); err != nil {
 			return "", err
 		}
 		defer func() {

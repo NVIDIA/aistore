@@ -53,7 +53,7 @@ type (
 	palive struct {
 		p          *proxy
 		stoppedCh  chan struct{}
-		toRemoveCh chan string
+		toRemoveCh chan *meta.Snode
 		keepalive
 	}
 	keepalive struct {
@@ -303,7 +303,7 @@ func (pkr *palive) goping(si *meta.Snode, wg cos.WG, smap *smapX, config *cmn.Co
 		pkr.stoppedCh <- struct{}{}
 	}
 	if !ok {
-		pkr.toRemoveCh <- si.ID()
+		pkr.toRemoveCh <- si
 	}
 	wg.Done()
 }
@@ -339,7 +339,7 @@ func (pkr *palive) _pingRetry(si *meta.Snode, smap *smapX, config *cmn.Config) (
 func (pkr *palive) openCh(daemonCnt int) {
 	if pkr.stoppedCh == nil || cap(pkr.stoppedCh) < daemonCnt {
 		pkr.stoppedCh = make(chan struct{}, daemonCnt*2)
-		pkr.toRemoveCh = make(chan string, daemonCnt*2)
+		pkr.toRemoveCh = make(chan *meta.Snode, daemonCnt*2)
 	}
 	debug.Assert(len(pkr.stoppedCh) == 0)
 	debug.Assert(len(pkr.toRemoveCh) == 0)
@@ -366,7 +366,12 @@ func (pkr *palive) _pre(ctx *smapModifier, clone *smapX) error {
 loop:
 	for {
 		select {
-		case sid := <-pkr.toRemoveCh:
+		case probed := <-pkr.toRemoveCh:
+			sid := probed.ID()
+			// a re-registration may have replaced the node during retries
+			if si := clone.GetNode(sid); si != nil && (!si.EqNetID(probed) || !si.SameIncarnation(probed)) {
+				continue
+			}
 			sb.WriteString(" [")
 			switch {
 			case clone.GetProxy(sid) != nil:

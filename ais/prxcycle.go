@@ -300,7 +300,7 @@ func (p *proxy) mcastMaint(msg *apc.ActMsg, nodes meta.Nodes, snames []string, r
 	}
 	for _, si := range nodes {
 		if si.IsTarget() {
-			if err := p._earlyGFN(ctx, si, msg.Action, false /*joining*/); err != nil {
+			if err := p.earlyMaintGFN(ctx, si); err != nil {
 				return nil, err
 			}
 			// the first target ID in a batch (if there's a batch) - is sufficient
@@ -450,13 +450,10 @@ func _rebPost(ctx *smapModifier, _ *smapX) {
 	}
 }
 
-func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, joining bool) error {
+func (p *proxy) earlyMaintGFN(ctx *smapModifier, si *meta.Snode) error {
 	smap := p.owner.smap.get()
 	if !smap.isPrimary(p.si) {
-		return newErrNotPrimary(p.si, smap, "cannot "+action+" "+si.StringEx())
-	}
-	if si.IsProxy() {
-		return nil
+		return newErrNotPrimary(p.si, smap, "cannot "+ctx.msg.Action+" "+si.StringEx())
 	}
 	if err := p.canRebalance(smap, false /*cleanup mode*/); err != nil {
 		if err == errRebalanceDisabled {
@@ -465,25 +462,20 @@ func (p *proxy) _earlyGFN(ctx *smapModifier, si *meta.Snode, action string, join
 		return err
 	}
 
-	if smap.CountActiveTs() == 0 {
+	if smap.CountActiveTs() <= 1 {
 		return nil
 	}
-	if !joining && smap.CountActiveTs() == 1 {
-		return nil
-	}
-
-	return p.notifyEarlyGFN(ctx, smap, si.ID())
+	return p.notifyEarlyGFN(ctx, smap, si.ID(), nil)
 }
 
-// keeping separate from _earlyGFN: stop-maintenance can rebalance while reactivating
-// multiple targets when there are currently zero active targets
+// stop-maintenance can also notify when reactivating multiple targets from zero active targets
 // - tid: joining (or reactivated) target, if any; empty for weight and bucket placement updates
-func (p *proxy) notifyEarlyGFN(ctx *smapModifier, smap *smapX, tid string) error {
+func (p *proxy) notifyEarlyGFN(ctx *smapModifier, smap *smapX, tid string, selected meta.Nodes) error {
 	// Notify targets before publishing the updated Smap.
 	actMsgExt := p.newAmsgActVal(apc.ActStartGFN, nil)
 	actMsgExt.UUID = tid
 	revs := revsPair{&smapX{Smap: meta.Smap{Version: smap.Version}}, actMsgExt}
-	if fcnt := p.metasyncer.notify(true /*wait*/, revs); fcnt > 0 {
+	if fcnt := p.metasyncer.notify(true /*wait*/, revs, selected); fcnt > 0 {
 		return fmt.Errorf("failed to notify early-gfn (%d)", fcnt)
 	}
 	ctx.gfn = true
@@ -502,7 +494,7 @@ func (p *proxy) stopEarlyGFN(ctx *smapModifier, tid string) {
 	actMsgExt := p.newAmsgActVal(apc.ActStopGFN, nil)
 	actMsgExt.UUID = tid
 	revs := revsPair{&smapX{Smap: meta.Smap{Version: ver}}, actMsgExt}
-	_ = p.metasyncer.notify(false /*wait*/, revs) // async, failed-cnt always zero
+	_ = p.metasyncer.notify(false /*wait*/, revs, nil) // async, failed-cnt always zero
 }
 
 // rebalance's `can`: factors not including cluster map
@@ -540,18 +532,13 @@ func (p *proxy) canRebalance(smap *smapX, cleanup bool) error {
 // rebalance's `must`: compares previous and current (cloned, updated) Smap
 // TODO: bmd.num-buckets == 0 would be an easy one to check
 func mustRebalance(ctx *smapModifier, cur *smapX) bool {
-	if !cmn.GCO.Get().Rebalance.Enabled {
-		return false
-	}
-	if nlog.Stopping() {
-		return false
-	}
 	prev := ctx.smap
-	// no rebalance when no active targets (before or after this change)
-	if prev.CountActiveTs() == 0 || cur.CountActiveTs() == 0 {
+	switch {
+	case !cmn.GCO.Get().Rebalance.Enabled, nlog.Stopping():
 		return false
-	}
-	if ctx.interrupted || ctx.restarted {
+	case prev.CountActiveTs() == 0, cur.CountActiveTs() == 0:
+		return false
+	case ctx.interrupted, ctx.restarted:
 		return true
 	}
 
@@ -956,7 +943,7 @@ func (p *proxy) mcastStopMaint(msg *apc.ActMsg, sids, snames []string, tsi *meta
 		debug.Assert(tsi != nil)
 
 		smap := p.owner.smap.get()
-		if err := p.notifyEarlyGFN(ctx, smap, tsi.ID()); err != nil {
+		if err := p.notifyEarlyGFN(ctx, smap, tsi.ID(), nil); err != nil {
 			return "", err
 		}
 		defer p.stopEarlyGFN(ctx, tsi.ID())

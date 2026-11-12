@@ -58,8 +58,8 @@ type clupost struct {
 	nversStr    string      // enforce/track software versioning
 	nversParsed cos.Version // ditto
 
-	flags        cos.BitFlags // nsi.Flags snapshot, taken after flag resolution
-	joinVerified bool         // when joining node has been already verified
+	flags      cos.BitFlags // nsi.Flags snapshot, taken after flag resolution
+	joinWeight int64        // admitted weight for c.smap
 
 	// keepalive with changed net-info: confirmed outside Smap lock (see handshake, kalive)
 	confirm struct {
@@ -295,24 +295,23 @@ func (c *clupost) decode(isPub bool) (stop bool) {
 func (c *clupost) verify() error {
 	switch c.apiOp {
 	case apc.SelfJoin: // TODO: support admin-join as well
-		return c._verify()
+		return c.verifyJoinSecret()
 	case apc.Keepalive:
-		if c.regReq.Flags.IsSet(cos.NodeRestarted) { // TODO: handle `resumeReb` cos.RebalanceInterrupted mutation
-			return c._verify()
+		if c.regReq.Flags.IsSet(cos.NodeRestarted) {
+			return c.verifyJoinSecret()
 		}
 	}
 	return nil
 }
 
-func (c *clupost) _verify() error {
-	if len(c.p.joinSecret) == 0 || c.joinVerified {
+func (c *clupost) verifyJoinSecret() error {
+	if len(c.p.joinSecret) == 0 {
 		return nil
 	}
 	maxSkew := c.config.Auth.NodeJoinNonceWindow()
 	if err := verifyNodeJoin(nodeJoinRequestHMACDomain, c.p.joinSecret, c.body, c.r.Header, maxSkew); err != nil {
 		return cmn.NewErrHTTP(c.r, err, http.StatusUnauthorized)
 	}
-	c.joinVerified = true
 	return nil
 }
 
@@ -476,8 +475,7 @@ func (c *clupost) handshake() (stop bool) {
 // resume interrupted rebalance bookkeeping; promote a restarted keepalive to self-join
 func (c *clupost) resumeReb() (stop bool) {
 	if !c.config.Rebalance.Enabled {
-		c.regReq.Flags = c.regReq.Flags.Clear(cos.RebalanceInterrupted)
-		c.regReq.Flags = c.regReq.Flags.Clear(cos.NodeRestarted)
+		return false
 	}
 
 	var (
@@ -708,6 +706,9 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 	if err := c.admit(osi); err != nil {
 		return false, false, err
 	}
+	if !c.config.Rebalance.Enabled {
+		c.regReq.Flags = c.regReq.Flags.Clear(cos.RebalanceInterrupted | cos.NodeRestarted)
+	}
 	if osi != nil {
 		if osi.Type() != c.nsi.Type() {
 			err := fmt.Errorf("unexpected node type: osi=%s, nsi=%s, %s (%t)",
@@ -748,9 +749,7 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 	}
 	started, starting := p.ClusterStarted(), p.owner.rmd.starting.Load()
 	if !started || starting {
-		if err := c.joinStartup(started); err != nil {
-			return false, false, err
-		}
+		c.joinStartup(started)
 		c.noteVersion()
 		return false, true, nil
 	}
@@ -760,7 +759,7 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 
 // validate node-join under the Smap lock:
 // - reject if this proxy is no longer primary
-// - self-join and absent keepalive (re-admission): verify join secret when configured (see joinVerified)
+// - absent ordinary keepalive: verify join secret (self-joins and restarted keepalives checked earlier)
 // - admin-join: use the peer version obtained by its handshake; join-secret verification is TODO
 // - every request, including no-op re-registration: enforce version boundary and Smap/BMD placement
 // - primary startup: defer unweighted targets (see startupWeights)
@@ -774,8 +773,8 @@ func (c *clupost) admit(osi *meta.Snode) error {
 	}
 
 	absent := c.apiOp == apc.Keepalive && osi == nil
-	if c.apiOp == apc.SelfJoin || absent {
-		if err := c._verify(); err != nil {
+	if absent && !c.regReq.Flags.IsSet(cos.NodeRestarted) {
+		if err := c.verifyJoinSecret(); err != nil {
 			return err
 		}
 	}
@@ -784,9 +783,11 @@ func (c *clupost) admit(osi *meta.Snode) error {
 		c.noteRejectedVer()
 		return cmn.NewErrHTTP(c.r, err, http.StatusConflict)
 	}
-	if _, err := c.placementWeight(smap); err != nil {
+	weight, err := c.placementWeight(smap)
+	if err != nil {
 		return newErrJoinRejected(c.r, err)
 	}
+	c.joinWeight = weight
 	if c.apiOp == apc.SelfJoin || c.apiOp == apc.AdminJoin {
 		// warn only: an address may have been reused while another node's registration is stale
 		if dup, err := smap.IsDupNet(nsi); err != nil {
@@ -833,6 +834,26 @@ func (c *clupost) placementWeight(smap *smapX) (int64, error) {
 	return w, nil
 }
 
+// reuse admission while its Smap and BMD are current
+func (c *clupost) recheckJoinPlacement(smap *smapX) error {
+	bmd := c.p.owner.bmd.get()
+	if smap == c.smap && bmd == c.bmd {
+		return nil
+	}
+	if err := c.checkJoinPlacement(smap, bmd); err != nil {
+		return cmn.NewErrHTTP(nil, err, http.StatusConflict)
+	}
+	if smap != c.smap {
+		weight, err := c.placementWeight(smap)
+		if err != nil {
+			return newErrJoinRejected(nil, err)
+		}
+		c.joinWeight = weight
+	}
+	c.smap, c.bmd = smap, bmd
+	return nil
+}
+
 // joining node => primary: version boundary and placement
 func (c *clupost) checkVer() error {
 	if err := checkNodeVer(c.p.String(), c.nsi.StringEx(), c.nversStr); err != nil {
@@ -857,17 +878,13 @@ func (c *clupost) noteVersion() {
 }
 
 // under Smap lock
-func (c *clupost) joinStartup(started bool) error {
+func (c *clupost) joinStartup(started bool) {
 	p := c.p
 	clone := c.smap.clone()
 	// TODO [feature]: updated *nsi contents (e.g., different network) may not "survive" earlystart merge
-	weight, err := c.placementWeight(clone)
-	if err != nil {
-		return newErrJoinRejected(c.r, err)
-	}
 	c.osi = clone.putNode(c.nsi, c.flags)
-	if weight > 0 {
-		c.nsi.SetPlacementWeight(weight)
+	if c.joinWeight > 0 {
+		c.nsi.SetPlacementWeight(c.joinWeight)
 	}
 	c.joined = clone
 	p.owner.smap.put(clone)
@@ -879,7 +896,56 @@ func (c *clupost) joinStartup(started bool) error {
 		_ = p.metasyncer.sync(revsPair{clone, actMsgExt})
 	}
 	c.setVerHdr()
-	return nil
+}
+
+func (c *clupost) earlyJoinGFN(ctx *smapModifier) error {
+	p := c.p
+	smap := p.owner.smap.get()
+	if !smap.isPrimary(p.si) {
+		return newErrNotPrimary(p.si, smap, "cannot "+ctx.msg.Action+" "+ctx.nsi.StringEx())
+	}
+	if err := p.canRebalance(smap, false /*cleanup mode*/); err != nil {
+		if err == errRebalanceDisabled {
+			return nil
+		}
+		return err
+	}
+	if err := c.recheckJoinPlacement(smap); err != nil {
+		return err
+	}
+	if !mustRebalanceJoin(ctx, smap, c.joinWeight) {
+		return nil
+	}
+
+	// skip the joining ID: its previous endpoint may be gone
+	id := ctx.nsi.ID()
+	selected := make(meta.Nodes, 0, smap.CountTargets())
+	for sid, tsi := range smap.Tmap {
+		if sid != id {
+			selected = append(selected, tsi)
+		}
+	}
+	return p.notifyEarlyGFN(ctx, smap, id, selected)
+}
+
+// a join changes only one target's active membership and weight
+func mustRebalanceJoin(ctx *smapModifier, smap *smapX, weight int64) bool {
+	id := ctx.nsi.ID()
+	old := smap.GetTarget(id)
+	wasActive := old != nil && !old.InMaintOrDecomm()
+	active := !ctx.flags.IsAnySet(meta.SnodeMaintDecomm)
+	switch {
+	case wasActive != active:
+		return smap.HasActiveTs(id)
+	case ctx.interrupted, ctx.restarted:
+		return active || smap.HasActiveTs(id)
+	case !active, old.PlacementWeight() == weight:
+		return false
+	default:
+		// admission preserves a positive weight; assigning one to an unweighted
+		// target changes placement only if it has active peers
+		return smap.HasActiveTs(id)
+	}
 }
 
 func (c *clupost) mcastJoined() (string, error) {
@@ -895,10 +961,12 @@ func (c *clupost) mcastJoined() (string, error) {
 		interrupted: c.regReq.Flags.IsSet(cos.RebalanceInterrupted),
 		restarted:   c.regReq.Flags.IsSet(cos.NodeRestarted),
 	}
-	if err := p._earlyGFN(ctx, ctx.nsi, c.msg.Action, true /*joining*/); err != nil {
-		return "", err
+	if ctx.nsi.IsTarget() {
+		if err := c.earlyJoinGFN(ctx); err != nil {
+			return "", err
+		}
+		defer p.stopEarlyGFN(ctx, ctx.nsi.ID())
 	}
-	defer p.stopEarlyGFN(ctx, ctx.nsi.ID())
 	if err := p.owner.smap.modify(ctx); err != nil {
 		return "", err
 	}
@@ -922,16 +990,12 @@ func (c *clupost) _joinedPre(ctx *smapModifier, clone *smapX) error {
 	if !clone.isPrimary(p.si) {
 		return newErrNotPrimary(p.si, clone, fmt.Sprintf("cannot add %s", ctx.nsi))
 	}
-	if err := c.checkJoinPlacement(clone, p.owner.bmd.get()); err != nil {
-		return cmn.NewErrHTTP(nil, err, http.StatusConflict)
-	}
-	weight, err := c.placementWeight(clone)
-	if err != nil {
-		return newErrJoinRejected(nil, err)
+	if err := c.recheckJoinPlacement(ctx.smap); err != nil {
+		return err
 	}
 	ctx.osi = clone.putNode(ctx.nsi, ctx.flags)
-	if weight > 0 {
-		ctx.nsi.SetPlacementWeight(weight)
+	if c.joinWeight > 0 {
+		ctx.nsi.SetPlacementWeight(c.joinWeight)
 	}
 	if ctx.nsi.IsProxy() {
 		clone.staffIC()
@@ -949,7 +1013,7 @@ func (c *clupost) _joinedPost(ctx *smapModifier, clone *smapX) {
 	if err := p.canRebalance(ctx.smap, false /*cleanup mode*/); err != nil {
 		return
 	}
-	if !mustRebalance(ctx, clone) {
+	if !mustRebalanceJoin(ctx, ctx.smap, c.joinWeight) {
 		return
 	}
 	// new RMD
