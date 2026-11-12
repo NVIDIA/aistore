@@ -15,6 +15,7 @@ from aistore.sdk.const import (
     AIS_CONNECT_TIMEOUT,
     AIS_MAX_CONN_POOL,
     EXT_TAR,
+    NS_URL_PREFIXES,
 )
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.client_state import ClientState
@@ -374,6 +375,9 @@ class Client:
         try:
             provider, bck_name, obj_name = parse_url(url)
             if not provider or not bck_name or not obj_name:
+                raise InvalidURLException(url)
+            # Namespaced URLs ("ais://@uuid#ns/bucket/object") are not supported
+            if bck_name.startswith(NS_URL_PREFIXES):
                 raise InvalidURLException(url)
             return self.bucket(bck_name, provider=provider).object(obj_name)
         except InvalidURLException as err:

@@ -11,7 +11,7 @@ from urllib3.util import Retry
 from tenacity import Retrying, stop_after_delay, wait_exponential
 from aistore.sdk import Client
 from aistore.sdk.cluster import Cluster
-from aistore.sdk.errors import ClientClosedError
+from aistore.sdk.errors import ClientClosedError, InvalidURLException
 from aistore.sdk.provider import Provider
 from aistore.sdk.etl.etl import Etl
 from aistore.sdk.request_client import RequestClient
@@ -175,6 +175,16 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable,too-many
         mock_bucket.assert_called_once_with(bck_name, provider=provider)
         mock_bucket_instance.object.assert_called_once_with(obj_name)
         self.assertEqual(result, expected_object)
+
+    @cases(
+        "bucket/object",
+        "ais://bucket",
+        "ais://@uuid#ns/bucket/object",
+        "ais://#ns/bucket/object",
+    )
+    def test_fetch_object_from_invalid_url(self, url):
+        with self.assertRaises(InvalidURLException):
+            self.client.get_object_from_url(url)
 
     @patch("aistore.sdk.client.SessionManager")
     @patch("aistore.sdk.client.RequestClient")

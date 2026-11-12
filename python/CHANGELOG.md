@@ -26,6 +26,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- `parse_url()` and `Client.get_object_from_url()` no longer truncate object names at `#` or `?`.
+
 ## [2.1.0] - 2026-10-28
 
 This release expands object streaming and blob-download controls, strengthens

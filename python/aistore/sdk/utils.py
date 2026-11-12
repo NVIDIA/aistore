@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import logging
@@ -25,6 +25,7 @@ from aistore.sdk.const import (
     XX_HASH_SEED,
     QPARAM_PROVIDER,
     URL_PATH_OBJECTS,
+    BCK_PROVIDER_SEPARATOR,
 )
 from aistore.sdk.provider import Provider, provider_aliases
 
@@ -201,9 +202,13 @@ def parse_url(url: str) -> Tuple[str, str, str]:
     Returns:
         Tuple[str, str, str]: Provider, bucket name, and object name
     """
-    parsed_url = urlparse(url)
-    path = parsed_url.path.lstrip("/")
-    return parsed_url.scheme, parsed_url.netloc, path
+    # Not `urlparse`: object names may contain "?" and "#", which it would
+    # split off as query and fragment.
+    provider, sep, rest = url.partition(BCK_PROVIDER_SEPARATOR)
+    if not sep or "/" in provider:
+        return "", "", url.lstrip("/")
+    bck_name, _, obj_name = rest.partition("/")
+    return provider.lower(), bck_name, obj_name.lstrip("/")
 
 
 def extract_and_parse_url(msg: str) -> Optional[Tuple[str, str, bool]]:

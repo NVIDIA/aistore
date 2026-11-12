@@ -440,6 +440,10 @@ class TestObjectOps(ParallelTestBase):
 
     def test_get_object_from_url(self):
         objects = self._put_objects(5)
+        # "#" and "?" are valid in object names, not URL fragment or query delimiters
+        for obj_name in (f"{self.obj_prefix}-a#b.wav", f"{self.obj_prefix}-a?b=c.wav"):
+            objects[obj_name] = obj_name.encode()
+            self.bucket.object(obj_name).get_writer().put_content(objects[obj_name])
         for obj_name, content in objects.items():
             url = f"{self.bucket.provider.value}://{self.bucket.name}/{obj_name}"
             fetched_obj = self.client.get_object_from_url(url)

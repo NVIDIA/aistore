@@ -32,6 +32,7 @@ from aistore.sdk.utils import (
     get_digest,
     get_provider_from_request,
     extract_and_parse_url,
+    parse_url,
 )
 from tests.const import PREFIX_NAME
 from tests.utils import cases
@@ -322,3 +323,30 @@ class TestUtils(unittest.TestCase):
     def test_extract_and_parse_url(self, test_case):
         url_or_msg, expected = test_case
         self.assertEqual(expected, extract_and_parse_url(url_or_msg))
+
+
+class TestParseUrl(unittest.TestCase):
+    @cases(
+        ("ais://bucket/obj", ("ais", "bucket", "obj")),
+        ("S3://bucket/dir/obj.tar/file.wav", ("s3", "bucket", "dir/obj.tar/file.wav")),
+        ("ais://bucket//obj", ("ais", "bucket", "obj")),
+        ("ais://bucket", ("ais", "bucket", "")),
+        ("ais://bucket/", ("ais", "bucket", "")),
+        ("bucket/obj", ("", "", "bucket/obj")),
+        ("bucket/dir/a://b", ("", "", "bucket/dir/a://b")),
+        ("ais://bucket/dir/a://b", ("ais", "bucket", "dir/a://b")),
+        ("", ("", "", "")),
+        ("ais://bucket/a#b", ("ais", "bucket", "a#b")),
+        ("ais://bucket/a?b=c", ("ais", "bucket", "a?b=c")),
+        ("ais://bucket/a;b", ("ais", "bucket", "a;b")),
+        ("ais://bucket/#a", ("ais", "bucket", "#a")),
+        ("ais://bucket/a%23b", ("ais", "bucket", "a%23b")),
+        ("ais://bucket/a\tb\n", ("ais", "bucket", "a\tb\n")),
+        (
+            "s3://bucket/shard.tar/file_#1.wav",
+            ("s3", "bucket", "shard.tar/file_#1.wav"),
+        ),
+    )
+    def test_parse_url(self, test_case):
+        url, expected = test_case
+        self.assertEqual(expected, parse_url(url))

@@ -132,6 +132,11 @@ WHAT_CLUSTER_CONFIG = "cluster_config"
 QPARAM_LOG_SEV = "severity"
 QPARAM_ALL_LOGS = "all"
 
+# Separates the provider from the bucket in a bucket or object URL (see api/apc/provider.go)
+BCK_PROVIDER_SEPARATOR = "://"
+# Namespace prefixes in a bucket URL: "@uuid#name" (see NsUUIDPrefix, NsNamePrefix in api/apc/provider.go)
+NS_URL_PREFIXES = ("@", "#")
+
 # URL paths
 URL_PATH_CLUSTER = "cluster"
 URL_PATH_BUCKETS = "buckets"
