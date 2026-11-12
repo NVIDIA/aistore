@@ -64,7 +64,7 @@ Choose a deployment path:
 * [Minimal Compose](/docs/getting_started.md#minimal-compose-deployment): One-proxy, one-target container smoke test without TLS or AuthN; not for production.
 * Multi-node development and testing: [Ansible](/deploy/dev/ansible/README.md), [Slurm](/deploy/dev/slurm/README.md), [Docker](/deploy/dev/docker/README.md).
 
-For a summary of all options, see [deployment options](/deploy/README.md); for Kubernetes specifically, see [choose a Kubernetes deployment](/docs/kubernetes.md).
+See the [development deployment summary](/deploy/README.md) for the setups in this repository.
 
 After starting your cluster, [create your first object with Python](/docs/python_sdk.md).
 

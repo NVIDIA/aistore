@@ -13,6 +13,8 @@ For local KinD development, the [local Kubernetes guide](/deploy/dev/k8s/README.
 
 Before using the production operator, decide how to provision [target storage volumes](https://github.com/NVIDIA/ais-k8s/blob/main/docs/storage_volumes.md), configure [Kubernetes monitoring](https://github.com/NVIDIA/ais-k8s/blob/main/monitoring/README.md), and handle [TLS](https://github.com/NVIDIA/ais-k8s/blob/main/docs/tls.md). Follow the upstream deployment guides for the actual manifests and commands.
 
+Before creating a production cluster, review how AIStore assigns [node IDs and handles rejoins](/docs/lifecycle_node.md#node-identity-and-rejoining). The [pod-derived ID setup](/docs/lifecycle_node.md#pod-derived-ids) explains how to keep proxy and target identities stable and pair target pods with their volumes.
+
 If the cluster requires authentication, refer to [AIS token validation](/docs/auth_validation.md) and the operator's [authentication guide](https://github.com/NVIDIA/ais-k8s/blob/main/docs/authentication.md) and [auth profile guide](https://github.com/NVIDIA/ais-k8s/blob/main/docs/auth_profile.md). For an example using an external issuer, refer to the current [Keycloak deployment guide](https://github.com/NVIDIA/ais-k8s/blob/main/docs/deploy_with_keycloak.md). The separate [AuthN service guide](/docs/authn.md) includes its own security-audit caveat; using the operator does not remove that caveat.
 
 AIStore [ETL](/docs/etl.md) requires Kubernetes and an ETL-enabled `aisnode` build or image. The local Kubernetes guide describes its ETL development image; for production, use the [ETL prerequisites and operator image guidance](/docs/etl.md#quick-start) before deploying transformations.

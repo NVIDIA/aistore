@@ -172,7 +172,7 @@ lost or missing mountpath "/ais/nvme7n1"
 | `sie#40` | Startup | Corrupted metadata on a mountpath                |
 | `sie#50` | Startup | Mountpath mismatch between config and VMD        |
 | `sie#60` | Startup | Mountpath not found                              |
-| `sie#70` | Startup | Mountpath belongs to a different target ([pod-derived ID](/docs/node_id.md#pod-derived-ids)) |
+| `sie#70` | Startup | Mountpath belongs to a different target ([pod-derived IDs](/docs/lifecycle_node.md#pod-derived-ids)) |
 
 ---
 

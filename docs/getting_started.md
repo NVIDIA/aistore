@@ -581,11 +581,7 @@ Finally, there's also HTTPS configuration including X.509 certificates and optio
 
 ### Multiple deployment options
 
-AIStore deploys anywhere anytime supporting multiple deployment options [summarized and further referenced here](/deploy/README.md).
-
-All [containerized deployments](/deploy/README.md) have their own separate `Makefiles`. With the exception of [local playground](#local-playground), each specific build-able development (`dev/`) and production (`prod/`) option under the `deploy` folder contains a pair: {`Dockerfile`, `Makefile`}.
-
-> This separation is typically small in size and easily readable and maintainable.
+The [deployment summary](/deploy/README.md) lists the development and test setups in this repository. Use the [ais-k8s production deployment guide](https://github.com/NVIDIA/ais-k8s/blob/main/docs/README.md) for production.
 
 Also supported is the option *not* to have the [required](#prerequisites) [Go](https://go.dev) installed and configured. To still be able to build AIS binaries without [Go](https://go.dev) on your machine, make sure that you have `docker` and simply uncomment `CROSS_COMPILE` line in the top [`Makefile`](https://github.com/NVIDIA/aistore/blob/main/Makefile).
 

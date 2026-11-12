@@ -62,19 +62,8 @@ $ TAGS=etl make node
 
 With the AIS Kubernetes Operator, set `spec.nodeImage` to the ETL image. With the Helm chart, set `nodeImage.tag` to the corresponding `-etl` tag.
 
-There are several deployment options, each suited for different purposes:
-
-1. **AIStore Development with Local Kubernetes**:
-   - Folder: [deploy/dev/k8s](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s)
-   - Intended for: AIStore development using local Kubernetes.
-   - How to use: Run a local Kubernetes cluster and deploy an AIS cluster on it using the carefully documented steps available [here](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s).
-   - Documentation: [README](https://github.com/NVIDIA/aistore/tree/main/deploy/dev/k8s)
-
-2. **Production Deployment with Kubernetes**:
-   - Folder: [deploy/prod/k8s](https://github.com/NVIDIA/aistore/tree/main/deploy/prod/k8s)
-   - Intended for: Production use
-   - How to use: Utilize the Dockerfiles in this folder to build AIS images for production deployment. For this purpose, there is a separate dedicated [repository](https://github.com/NVIDIA/ais-k8s) that contains corresponding tools, scripts, and documentation.
-   - Documentation: [AIS/K8s Operator and Deployment Playbooks](https://github.com/NVIDIA/ais-k8s)
+* For local development, follow the [KinD or Minikube guide](/deploy/dev/k8s/README.md).
+* For production, follow the [ais-k8s deployment guide](https://github.com/NVIDIA/ais-k8s/blob/main/docs/README.md) and configure the ETL-enabled image as described above.
 
 To verify that your deployment is correctly set up, execute the following [CLI](/docs/cli.md) command:
 

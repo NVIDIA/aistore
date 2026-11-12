@@ -1,6 +1,6 @@
 # AIStore Node Lifecycle
 
-AIStore operators can use this guide to understand node maintenance, shutdown, and decommission before changing cluster membership. These operations change node state; the diagram below shows the states and transitions.
+This guide covers how AIStore nodes join and rejoin a cluster, and how operators put nodes into maintenance, shut them down, or decommission them. The diagram shows the states and transitions for nodes that are already members.
 
 ![Node lifecycle: states and transitions](images/lifecycle-graceful-term.png)
 
@@ -26,6 +26,10 @@ Needless to say, there's no simple way back out of `decommission` - the proverbi
 ## Table of Contents
 
 - [Joining a Cluster: Discovery URL](#joining-a-cluster-discovery-url)
+- [Node identity and rejoining](#node-identity-and-rejoining)
+  - [Node ID sources](#node-id-sources)
+  - [Pod-derived IDs](#pod-derived-ids)
+  - [What happens after a pod restart](#what-happens-after-a-pod-restart)
 - [Cluster](#cluster)
 - [Privileges](#privileges)
 - [Rebalance](#rebalance)
@@ -72,6 +76,53 @@ $ ais config cluster proxy --json
     }
 }
 ```
+
+## Node identity and rejoining
+
+The discovery URL tells a starting node where to find the cluster. Its node ID tells the primary which member is joining. The ID appears in the cluster map (Smap), logs, and CLI. When the primary accepts a same-ID rejoin with changed network addresses, it updates the existing Smap entry.
+
+Object placement uses target IDs. When restarting or moving a target, keep its ID and its data volumes together.
+
+### Node ID sources
+
+At startup, AIS takes the first applicable source for the node's role.
+
+| Order | Proxy | Target |
+| --- | --- | --- |
+| 1 | Pod-derived ID, when configured | Pod-derived ID, when configured |
+| 2 | `-daemon_id`, then `AIS_DAEMON_ID` | `-daemon_id`, then `AIS_DAEMON_ID` |
+| 3 | Hash of the Kubernetes node name (`MY_NODE`) when running in Kubernetes | ID in the `user.ais.daemon_id` extended attributes on its mountpaths |
+| 4 | ID in `.ais.proxy_id` in the configuration directory | ID recovered from volume metadata (VMD), or a new ID |
+| 5 | New ID, saved in `.ais.proxy_id` | |
+
+A target stores its ID in its mountpath attributes and in its replicated VMD. A node that loads a local Smap without its own ID stops at startup. See [System Files](/docs/sysfiles.md) and [storage integrity errors](/docs/troubleshooting.md#storage-integrity-errors-sie).
+
+### Pod-derived IDs
+
+To opt in when creating a **new Kubernetes cluster**, set `AIS_DAEMON_ID_SOURCE=k8s-pod:<scope>` on both proxy and target containers. The equivalent `-daemon_id_source` flag takes precedence over the environment variable. AIS derives an eight-letter ID from the role (`-role`), namespace (`K8S_NS`), pod name (`MY_POD`), and optional scope. A proxy in this mode derives its ID at each startup without using `.ais.proxy_id`.
+
+* Supply `K8S_NS` and `MY_POD` and keep them stable. StatefulSet pod names such as `ais-target-1` let a replacement pod retain the same ID on another Kubernetes node.
+* Use a scope unique to the AIS cluster and keep it fixed for the lifetime of its volumes. For example, a deployment can use the AIStore custom resource UID. Recreating that resource changes its UID and makes previously stamped volumes incompatible with the new IDs. The unscoped value `k8s-pod` is accepted and gives the same IDs to clusters with identical roles, namespaces, and pod names.
+* Attach the same persistent volumes to each target pod after rescheduling. Per-pod StatefulSet volume claims can preserve this mapping. A host-path mount remains on its original Kubernetes node.
+* Leave `-daemon_id` and `AIS_DAEMON_ID` unset. AIS exits on invalid source settings, missing inputs, or conflicting explicit IDs.
+
+The deployment supplies these inputs and manages the volumes. AIS derives the ID without querying Kubernetes for the identity. Changing the source or scope of an existing cluster changes its IDs and can prevent targets from starting with their existing volumes.
+
+### What happens after a pod restart
+
+The following cases assume pod-derived IDs.
+
+| Event | Result |
+| --- | --- |
+| Proxy restarts with fresh local state and the same pod identity | The proxy derives the same ID and rejoins. |
+| Target restarts or moves with its original volumes | The target derives the same ID, loads its VMD, and rejoins with its data. |
+| Target returns with blank volumes | The target derives the same ID and creates a new VMD. The primary treats it as the same member. |
+| Target receives another target's volumes, even alongside blank volumes | Startup fails with `sie#70` before AIS writes to any of those mountpaths. |
+| Target starts with a different scope and retains its old volumes | Startup fails with `sie#70` if the derived ID differs from the stored ID. |
+
+At startup, AIS checks the target ID in mountpath extended attributes and VMD for the volumes it will use. It stamps mountpaths that lack an ID. At runtime, attaching or enabling a mountpath with a foreign ID in its extended attribute fails with `sie#10`. See the [storage integrity error reference](/docs/troubleshooting.md#sie-error-reference).
+
+**Blank volumes do not recover local data.** AIS does not detect that an existing target has returned with blank volumes. Objects backed by remote buckets can be fetched again on a cold GET. Objects in `ais://` buckets with no surviving copies are lost.
 
 ## Cluster
 
