@@ -757,6 +757,66 @@ func TestDeleteList(t *testing.T) {
 	})
 }
 
+func TestRemoteAISRateLimitError(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
+	bp := tools.BaseAPIParams(tools.RandomProxyURL(t))
+	remoteBP := tools.BaseAPIParams(tools.RemoteCluster.URL)
+	remoteSmap, err := api.GetClusterMap(remoteBP)
+	tassert.CheckFatal(t, err)
+	for _, tc := range []struct {
+		name  string
+		retry bool
+	}{
+		{name: "forward-429"},
+		{name: "backend-retries-429", retry: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteBck := cmn.Bck{Name: "remais-rate-limit-" + cos.GenTie(), Provider: apc.AIS}
+			tools.CreateBucket(t, remoteBP.URL, remoteBck, nil, true)
+			names, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
+				Context: t.Context(), ProxyURL: remoteBP.URL, Bck: remoteBck,
+				ObjCnt: 1, ObjSize: cos.KiB, FixedSize: true,
+			})
+			tassert.CheckFatal(t, err)
+			bck := remoteBck
+			bck.Ns.UUID = tools.RemoteCluster.UUID
+			_, err = api.HeadBucket(bp, bck, false)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { tassert.CheckError(t, api.EvictRemoteBucket(bp, bck, false)) })
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+				Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+					Enabled: apc.Ptr(tc.retry), MaxTokens: apc.Ptr(100), Interval: apc.Ptr(cos.Duration(time.Second)),
+				}, NumRetries: apc.Ptr(1)},
+			}})
+			tassert.CheckFatal(t, err)
+			_, err = api.SetBucketProps(remoteBP, remoteBck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+				Frontend: &cmn.BurstyToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+					Enabled: apc.Ptr(true), MaxTokens: apc.Ptr(4 * remoteSmap.CountActivePs()),
+					Interval: apc.Ptr(cos.Duration(time.Hour)),
+				}, Size: apc.Ptr(1)},
+			}})
+			tassert.CheckFatal(t, err)
+			tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+				_, err := api.GetObject(remoteBP, remoteBck, names[0], nil)
+				if err == nil {
+					return false
+				}
+				herr := cmn.AsErrHTTP(err)
+				tassert.Fatalf(t, herr != nil && herr.Status == http.StatusTooManyRequests, "expected remote 429, got %v", err)
+				return true
+			}, tools.WaitRetryOpts{MaxRetries: 32, Interval: time.Millisecond}))
+			_, err = api.GetObject(bp, bck, names[0], nil)
+			herr := cmn.AsErrHTTP(err)
+			tassert.Fatalf(t, herr != nil, "expected HTTP error, got %v", err)
+			if tc.retry {
+				tassert.Fatalf(t, herr.TypeCode == "ErrBackendRetry", "expected exhausted backend retry, got %v", err)
+			} else {
+				tassert.Fatalf(t, herr.Status == http.StatusTooManyRequests, "expected forwarded 429, got %v", err)
+			}
+		})
+	}
+}
+
 func TestPrefetchRange(t *testing.T) {
 	var (
 		m = ioContext{

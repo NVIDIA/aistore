@@ -110,9 +110,13 @@ func (m *AISbp) extractErrCode(e error, uuid string) (int, error) {
 	if herr.Status == http.StatusRequestedRangeNotSatisfiable {
 		return http.StatusRequestedRangeNotSatisfiable, cos.NewErrRangeNotSatisfiable(herr, nil, 0)
 	}
+	e = herr
+	if herr.Status == http.StatusTooManyRequests || herr.Status == http.StatusServiceUnavailable {
+		e = cmn.NewErrTooManyRequests(herr, herr.Status)
+	}
 
 	if uuid == "" {
-		return herr.Status, herr
+		return herr.Status, e
 	}
 
 	msg := herr.Message
@@ -141,7 +145,7 @@ func (m *AISbp) extractErrCode(e error, uuid string) (int, error) {
 	}
 	herr.Message = prefix + "]: " + herr.Message
 
-	return herr.Status, herr
+	return herr.Status, e
 }
 
 // apply new or updated (attach, detach) cmn.BackendConfAIS configuration
