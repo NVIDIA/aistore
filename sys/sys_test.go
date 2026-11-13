@@ -85,8 +85,8 @@ func TestMemoryStats(t *testing.T) {
 	}
 }
 
-// cross-check ActualFree against (free + speculative + inactive) pages * page size, as reported by `vm_stat`
-// (`vm_stat` excludes speculative pages from "Pages free"; Mach free_count includes them);
+// cross-check ActualFree against (free + file-backed) pages * page size, as reported by `vm_stat`
+// (`vm_stat` excludes speculative pages from "Pages free"; darwin BuffCache excludes them from file-backed);
 // tolerate a 2x drift between the two samples (a wrong page size would be off by 4x on Apple Silicon)
 func checkDarwinActualFree(t *testing.T, mem *sys.MemStat) {
 	out, err := exec.Command("vm_stat").Output()
@@ -104,15 +104,15 @@ func checkDarwinActualFree(t *testing.T, mem *sys.MemStat) {
 		return v
 	}
 	var (
-		pageSize    = parse(`page size of (\d+) bytes`)
-		free        = parse(`Pages free:\s+(\d+)`)
-		speculative = parse(`Pages speculative:\s+(\d+)`)
-		inactive    = parse(`Pages inactive:\s+(\d+)`)
-		expected    = (free + speculative + inactive) * pageSize
+		pageSize   = parse(`page size of (\d+) bytes`)
+		free       = parse(`Pages free:\s+(\d+)`)
+		fileBacked = parse(`File-backed pages:\s+(\d+)`)
+		expected   = (free + fileBacked) * pageSize
 	)
-	t.Logf("vm_stat: page size %d, (free + speculative + inactive) %s", pageSize, cos.ToSizeIEC(int64(expected), 2))
+	t.Logf("vm_stat: page size %d, (free + file-backed) %s", pageSize, cos.ToSizeIEC(int64(expected), 2))
+	tassert.Errorf(t, mem.BuffCache > 0, "BuffCache must be greater than zero: %+v", mem)
 	tassert.Errorf(t, mem.ActualFree >= expected/2 && mem.ActualFree <= expected*2,
-		"ActualFree %d is not within 2x of vm_stat (free + speculative + inactive) %d", mem.ActualFree, expected)
+		"ActualFree %d is not within 2x of vm_stat (free + file-backed) %d", mem.ActualFree, expected)
 }
 
 func TestProcAndMaxLoad(t *testing.T) {

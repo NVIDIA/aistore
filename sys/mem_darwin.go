@@ -15,6 +15,8 @@ import (
 	"fmt"
 	"syscall"
 	"unsafe" //nolint:gocritic // super weird case
+
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 type (
@@ -51,16 +53,16 @@ func readTotalMemory() (uint64, error) {
 	return totalMem, nil
 }
 
-func readVMStat(host C.host_t, vmstat *C.vm_statistics_data_t) error {
-	var count C.mach_msg_type_number_t = C.HOST_VM_INFO_COUNT
-	status := C.host_statistics(
+func readVMStat(host C.host_t, vmstat *C.vm_statistics64_data_t) error {
+	var count C.mach_msg_type_number_t = C.HOST_VM_INFO64_COUNT
+	status := C.host_statistics64(
 		host,
-		C.HOST_VM_INFO,
-		C.host_info_t(unsafe.Pointer(vmstat)),
+		C.HOST_VM_INFO64,
+		C.host_info64_t(unsafe.Pointer(vmstat)),
 		&count,
 	)
 	if status != C.KERN_SUCCESS {
-		return fmt.Errorf("host_statistics=%v", status)
+		return fmt.Errorf("host_statistics64=%v", status)
 	}
 	return nil
 }
@@ -83,7 +85,7 @@ func readMemHost() (mem MemStat, err error) {
 	host := C.mach_host_self()
 	defer C.mach_port_deallocate(C.mach_task_self_, host)
 
-	var vmstat C.vm_statistics_data_t
+	var vmstat C.vm_statistics64_data_t
 	if err := readVMStat(host, &vmstat); err != nil {
 		return mem, err
 	}
@@ -92,10 +94,13 @@ func readMemHost() (mem MemStat, err error) {
 		return mem, err
 	}
 
+	// BuffCache: file-backed pages minus speculative ones (already counted in free_count)
 	var (
-		sstats  = swapStats{}
-		freeMem = uint64(vmstat.free_count) * pageSize
-		kern    = uint64(vmstat.inactive_count) * pageSize
+		sstats      = swapStats{}
+		freeMem     = uint64(vmstat.free_count) * pageSize
+		external    = uint64(vmstat.external_page_count)
+		speculative = uint64(vmstat.speculative_count)
+		buffCache   = cos.Ternary(external > speculative, external-speculative, 0) * pageSize
 	)
 	if err := readSysctl("vm.swapusage", &sstats); err != nil {
 		return mem, err
@@ -104,8 +109,9 @@ func readMemHost() (mem MemStat, err error) {
 	mem.Total = totalMem
 	mem.Free = freeMem
 	mem.Used = totalMem - freeMem
-	mem.ActualFree = freeMem + kern
-	mem.ActualUsed = totalMem - freeMem - kern
+	mem.BuffCache = buffCache
+	mem.ActualFree = min(freeMem+buffCache, totalMem)
+	mem.ActualUsed = totalMem - mem.ActualFree
 	mem.SwapTotal = sstats.Total
 	mem.SwapFree = sstats.Free
 	mem.SwapUsed = sstats.Used
