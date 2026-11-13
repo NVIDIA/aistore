@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch, MagicMock, ANY
 from io import BytesIO
 import tarfile
 
+from aistore.sdk.batch.errors import BatchTruncatedError
 from aistore.sdk.batch.extractor.tar_stream_extractor import TarStreamExtractor
 from aistore.sdk.batch.types import MossReq, MossIn, MossOut, MossResp
 from aistore.sdk.const import GB_MISSING_FILES_DIR
@@ -525,3 +526,53 @@ class TestTarStreamExtractor(unittest.TestCase):
             [out.err_msg for out, _ in results],
             ["server error details", None] + ["server error details"] * 3,
         )
+
+    def test_truncated_at_member_boundary(self):
+        """Raise on a TAR that ends after the first of two requested entries, unless cont_on_err."""
+        archive = BytesIO()
+        with tarfile.open(fileobj=archive, mode="w") as tar:
+            for item in self.moss_req.moss_in:
+                member = tarfile.TarInfo(f"{item.bck}/{item.obj_name}")
+                member.size = 1
+                tar.addfile(member, BytesIO(b"x"))
+        # Keep one complete header and its padded data block, without a trailer.
+        content = archive.getvalue()[: 2 * tarfile.BLOCKSIZE]
+        metadata = MossResp(
+            out=[
+                MossOut(obj_name=item.obj_name, bucket=item.bck, provider=item.provider)
+                for item in self.moss_req.moss_in
+            ]
+        )
+        strict_req = self.moss_req.model_copy(update={"cont_on_err": False})
+        for response_metadata in (
+            None,
+            metadata,
+            metadata.model_copy(update={"out": metadata.out[:1]}),
+        ):
+            with self.subTest(multipart=response_metadata is not None):
+                response = Mock()
+                result = self.tar_extractor.extract(
+                    response, BytesIO(content), strict_req, response_metadata
+                )
+                self.assertEqual(next(result)[1], b"x")
+                with self.assertRaisesRegex(BatchTruncatedError, "received 1 of 2"):
+                    next(result)
+                response.close.assert_called_once()
+
+                response = Mock()
+                result = self.tar_extractor.extract(
+                    response, BytesIO(content), strict_req, response_metadata
+                )
+                next(result)
+                result.close()
+                response.close.assert_called_once()
+
+                # cont_on_err=True is best effort: yield what arrived, do not raise
+                response = Mock()
+                result = list(
+                    self.tar_extractor.extract(
+                        response, BytesIO(content), self.moss_req, response_metadata
+                    )
+                )
+                self.assertEqual([data for _, data in result], [b"x"])
+                response.close.assert_called_once()

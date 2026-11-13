@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch, MagicMock
 from io import BytesIO
 import zipfile
 
+from aistore.sdk.batch.errors import BatchTruncatedError
 from aistore.sdk.batch.extractor.zip_stream_extractor import ZipStreamExtractor
 from aistore.sdk.batch.types import MossReq, MossIn, MossOut, MossResp
 from aistore.sdk.const import GB_MISSING_FILES_DIR
@@ -78,6 +79,8 @@ class TestZipStreamExtractor(unittest.TestCase):
         # Setup file list and content
         mock_zip_file.infolist.return_value = [mock_zipinfo]
         mock_zip_file.read.return_value = b"zip file content"
+        # The archive has one member, so request one entry
+        self.moss_req_zip.moss_in = self.moss_req_zip.moss_in[:1]
 
         # Execute
         result = list(
@@ -116,6 +119,8 @@ class TestZipStreamExtractor(unittest.TestCase):
         # Setup file list
         mock_zip_file.infolist.return_value = [dir_zipinfo, file_zipinfo]
         mock_zip_file.read.return_value = b"content"
+        # The archive has one file member, so request one entry
+        self.moss_req_zip.moss_in = self.moss_req_zip.moss_in[:1]
 
         # Execute
         result = list(
@@ -134,6 +139,8 @@ class TestZipStreamExtractor(unittest.TestCase):
     def test_input_buffering(self, mock_zipfile):
         """Buffer non-seekable input regardless of request mode; close on read failure."""
         mock_zipfile.return_value.__enter__.return_value.infolist.return_value = []
+        # The archive is empty, so request no entries
+        self.moss_req_zip.moss_in = []
         stream = Mock(spec=["read", "seekable"])
         stream.seekable.return_value = False
         stream.read.return_value = b"zip data"
@@ -396,7 +403,7 @@ class TestZipStreamExtractor(unittest.TestCase):
 
     @patch("zipfile.ZipFile")
     def test_empty_zip_file(self, mock_zipfile):
-        """Test handling of empty ZIP files."""
+        """Test an empty ZIP file for a non-empty request raises BatchTruncatedError."""
         # Setup mock ZipFile
         mock_zip_file = MagicMock()
         mock_zipfile.return_value.__enter__.return_value = mock_zip_file
@@ -405,14 +412,13 @@ class TestZipStreamExtractor(unittest.TestCase):
         mock_zip_file.infolist.return_value = []
 
         # Execute
-        result = list(
-            self.zip_extractor.extract(
-                self.mock_response, BytesIO(b"zip data"), self.moss_req_zip, None
+        with self.assertRaisesRegex(BatchTruncatedError, "received 0 of 2"):
+            list(
+                self.zip_extractor.extract(
+                    self.mock_response, BytesIO(b"zip data"), self.moss_req_zip, None
+                )
             )
-        )
 
-        # Should return empty result
-        self.assertEqual(len(result), 0)
         # Verify response was closed at the end
         self.mock_response.close.assert_called_once()
 
@@ -582,3 +588,34 @@ class TestZipStreamExtractor(unittest.TestCase):
             [out.err_msg for out, _ in results],
             ["server error details", None] + ["server error details"] * 3,
         )
+
+    @patch("zipfile.ZipFile")
+    def test_truncated_archive(self, mock_zipfile):
+        """Raise on a ZIP with one of two requested entries, unless cont_on_err."""
+        archive = mock_zipfile.return_value.__enter__.return_value
+        archive.infolist.return_value = [
+            Mock(filename="test-bucket/missing.txt", **{"is_dir.return_value": False})
+        ]
+        archive.read.return_value = b"x"
+
+        response = Mock()
+        result = self.zip_extractor.extract(response, BytesIO(), self.moss_req_zip)
+        self.assertEqual(next(result)[1], b"x")
+        with self.assertRaisesRegex(BatchTruncatedError, "received 1 of 2"):
+            next(result)
+        response.close.assert_called_once()
+
+        response = Mock()
+        result = self.zip_extractor.extract(response, BytesIO(), self.moss_req_zip)
+        next(result)
+        result.close()
+        response.close.assert_called_once()
+
+        # cont_on_err=True is best effort: yield what arrived, do not raise
+        self.moss_req_zip.cont_on_err = True
+        response = Mock()
+        result = list(
+            self.zip_extractor.extract(response, BytesIO(), self.moss_req_zip)
+        )
+        self.assertEqual([data for _, data in result], [b"x"])
+        response.close.assert_called_once()

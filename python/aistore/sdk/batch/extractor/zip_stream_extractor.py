@@ -90,6 +90,8 @@ class ZipStreamExtractor(ArchiveStreamExtractor):
                         index += 1
                         continue
 
+            self._check_complete(index, moss_req, EXT_ZIP)
+
         except (zipfile.BadZipFile, zipfile.LargeZipFile, OSError) as e:
             # Handle zip stream errors (corrupt archive, etc.)
             logger.error("Failed to read zip archive: %s", str(e))

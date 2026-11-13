@@ -7,6 +7,7 @@ from io import BytesIO
 from abc import ABC, abstractmethod
 from requests import Response
 
+from aistore.sdk.batch.errors import BatchTruncatedError
 from aistore.sdk.batch.types import MossOut, MossReq, MossResp
 from aistore.sdk.const import GB_MISSING_FILES_DIR
 from aistore.sdk.utils import get_logger
@@ -159,3 +160,33 @@ class ArchiveStreamExtractor(ABC):
         raise RuntimeError(
             f"Failed to extract {filename} from {archive_type} archive"
         ) from error
+
+    @staticmethod
+    def _check_complete(received: int, moss_req: MossReq, archive_type: str) -> None:
+        """
+        Verify that the archive contains all requested entries.
+
+        Use the original request count because an incomplete multipart response
+        can omit entries from both its metadata and its archive.
+        If cont_on_err is enabled, logs the shortfall and allows continuation.
+
+        Args:
+            received (int): Number of archive entries processed.
+            moss_req (MossReq): Original batch request.
+            archive_type (str): Archive format, such as 'tar' or 'zip'.
+
+        Raises:
+            BatchTruncatedError: If cont_on_err is False and the archive contains
+                fewer entries than requested.
+        """
+        expected = len(moss_req.moss_in)
+        if received >= expected:
+            return
+        msg = (
+            f"Batch {archive_type} archive ended early: "
+            f"received {received} of {expected} entries"
+        )
+        if moss_req.cont_on_err:
+            logger.warning("%s. Continuing due to cont_on_err=True", msg)
+            return
+        raise BatchTruncatedError(msg)

@@ -317,6 +317,13 @@ class Batch:
         Raises:
             ValueError: If no objects are added, or tar_buffer_size is invalid or
                 supplied for ZIP or raw mode.
+            BatchTruncatedError: While iterating the result (raw=False) with
+                cont_on_err=False, if archive iteration ends normally before all
+                requested entries are processed. Entries received before the end are
+                yielded first. With cont_on_err=True the shortfall is only logged.
+            RuntimeError: While iterating the result (raw=False), if archive parsing
+                fails, or entry extraction fails with cont_on_err=False. This includes
+                TAR data ending within a file.
         """
         if not self.requests_list:
             logger.error("Cannot execute batch: no objects added")
@@ -373,8 +380,8 @@ class Batch:
         if clear_batch:
             # clear() replaces the live list and the snapshot keeps the original
             self.clear()
-        elif request_snapshot.streaming_get:
-            # Retained streaming requests need an independent list, but entries are frozen
+        else:
+            # Retained requests need an independent list, but entries are frozen
             request_snapshot.moss_in = self.requests_list.copy()
 
         # TODO: Handle error response, create customized errors

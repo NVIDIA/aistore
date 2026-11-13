@@ -1,13 +1,15 @@
 #
-# Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
 #
 
 import tarfile
 import unittest
 from io import BytesIO
+from unittest.mock import patch
 
+from aistore.sdk.batch.errors import BatchTruncatedError
 from aistore.sdk.errors import AISError
-from aistore.sdk.const import GB_MISSING_FILES_DIR
+from aistore.sdk.const import GB_IN, GB_MISSING_FILES_DIR
 
 from tests.integration import REMOTE_SET
 from tests.integration.sdk.parallel_test_base import ParallelTestBase
@@ -232,6 +234,48 @@ class TestBatch(ParallelTestBase):  # pylint: disable=too-many-public-methods
         self.assertEqual(
             [content for _, content in results[3:]], [valid_content, valid_content, b""]
         )
+
+    @case_matrix([".tar", ".zip"], [True, False])
+    def test_batch_truncated_archive(self, output_format, streaming):
+        """Raise on a short archive with cont_on_err=False; continue with cont_on_err=True."""
+        contents = self._create_objects(num_obj=3, obj_size=64)
+        names = list(contents)
+        request = self.client.batch(bucket=self.bucket).request_client.request
+
+        def omit_last(*args, **kwargs):
+            # Return a real short archive and metadata; keep the client's full request.
+            kwargs["json"] = {**kwargs["json"], GB_IN: kwargs["json"][GB_IN][:-1]}
+            return request(*args, **kwargs)
+
+        for cont_on_err in (False, True):
+            for decode_as_stream in (False,) if streaming else (False, True):
+                with self.subTest(
+                    cont_on_err=cont_on_err, decode_as_stream=decode_as_stream
+                ):
+                    batch = self.client.batch(
+                        names,
+                        self.bucket,
+                        output_format=output_format,
+                        streaming_get=streaming,
+                        cont_on_err=cont_on_err,
+                    )
+                    received = []
+                    with patch.object(
+                        batch.request_client, "request", side_effect=omit_last
+                    ):
+                        result = batch.get(decode_as_stream=decode_as_stream)
+                        if cont_on_err:
+                            received.extend(result)
+                        else:
+                            with self.assertRaisesRegex(
+                                BatchTruncatedError, "received 2 of 3"
+                            ):
+                                for item in result:
+                                    received.append(item)
+                    self.assertEqual(
+                        [content for _, content in received],
+                        [contents[name] for name in names[:-1]],
+                    )
 
     def test_batch_empty_error(self):
         """Test that empty batch raises appropriate error."""
