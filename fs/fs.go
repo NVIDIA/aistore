@@ -90,9 +90,7 @@ type (
 
 		hc HC
 
-		// fsIDs is set in which we store fsids of mountpaths. This allows for
-		// determining if there are any duplications of file system - we allow
-		// only one mountpath per file system.
+		// filesystem IDs of available mountpaths, used to detect filesystem sharing
 		fsIDs map[cos.FsID]string
 
 		// mountpaths
@@ -134,20 +132,34 @@ var mfs *MFS // singleton (target only)
 ///////////////
 
 func NewMountpath(mpath string, label cos.MountpathLabel) (*Mountpath, error) {
+	mi, err := NewMountpathFromFS(mpath, label, cos.FS{})
+	if err != nil {
+		return nil, err
+	}
+	if err = cos.Stat(mi.Path); err != nil {
+		return nil, cos.NewErrNotFound(nil, "mountpath "+mpath)
+	}
+	err = mi.resolveFS()
+	return mi, err
+}
+
+// restore a mountpath from its recorded filesystem without accessing the directory
+func NewMountpathFromFS(mpath string, label cos.MountpathLabel, saved cos.FS) (*Mountpath, error) {
 	cleanMpath, err := cmn.ValidateMpath(mpath)
 	if err != nil {
 		return nil, err
 	}
-	if err = cos.Stat(cleanMpath); err != nil {
-		return nil, cos.NewErrNotFound(nil, "mountpath "+mpath)
-	}
-	mi := &Mountpath{
+	return &Mountpath{
 		Path:       cleanMpath,
 		Label:      label,
+		FS:         saved,
 		PathDigest: onexxh.Checksum64S(cos.UnsafeB(cleanMpath), cos.MLCG32),
-	}
-	err = mi.resolveFS()
-	return mi, err
+	}, nil
+}
+
+// tolerate a change to either the device name or the filesystem ID
+func (mi *Mountpath) LostFS(saved cos.FS) bool {
+	return mi.FsType != saved.FsType || (mi.Fs != saved.Fs && mi.FsID != saved.FsID)
 }
 
 func (mi *Mountpath) CheckFS() (err error) {
@@ -244,22 +256,26 @@ func (mi *Mountpath) backupAtmost(from, backup string, bcnt, atMost int) (newBcn
 }
 
 func (mi *Mountpath) SetDaemonIDXattr(tid string) error {
-	cos.Assert(tid != "")
-	// Validate if mountpath already has daemon ID set.
-	mpathDaeID, err := _loadXattrID(mi.Path)
-	if err != nil {
+	stamped, err := mi.checkDaemonIDXattr(tid)
+	if err != nil || stamped {
 		return err
 	}
-	if mpathDaeID == tid {
-		return nil
+	return SetXattr(mi.Path, xattrNodeID, []byte(tid))
+}
+
+func (mi *Mountpath) checkDaemonIDXattr(tid string) (stamped bool, err error) {
+	cos.Assert(tid != "")
+	mpathDaeID, err := _loadXattrID(mi.Path)
+	if err != nil {
+		return false, err
 	}
 	if mpathDaeID != "" && mpathDaeID != tid {
-		return &ErrStorageIntegrity{
+		return false, &ErrStorageIntegrity{
 			Code: SieMpathIDMismatch,
 			Msg:  fmt.Sprintf("target ID mismatch: %q vs %q(%q)", tid, mpathDaeID, mi),
 		}
 	}
-	return SetXattr(mi.Path, xattrNodeID, []byte(tid))
+	return mpathDaeID == tid, nil
 }
 
 // has-path method
@@ -468,7 +484,6 @@ func (mi *Mountpath) AddEnabled(tid string, avail, disabled MPI, config *cmn.Con
 func (mi *Mountpath) AddDisabled(disabled MPI) {
 	cos.ClrFlag(&mi.flags, FlagWaitingDD)
 	disabled[mi.Path] = mi
-	mfs.fsIDs[mi.FsID] = mi.Path
 }
 
 // check:
@@ -507,14 +522,19 @@ func (mi *Mountpath) _validate(avail, disabled MPI, config *cmn.Config) error {
 }
 
 func (mi *Mountpath) _addEnabled(tid string, avail MPI, config *cmn.Config, blockDevs ios.BlockDevs) error {
-	fsdisks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, mi.Label, config, blockDevs)
-	if err != nil {
-		return err
-	}
+	var stamp func() error
 	if tid != "" { // empty in unit tests
-		if err := mi.SetDaemonIDXattr(tid); err != nil {
+		stamped, err := mi.checkDaemonIDXattr(tid)
+		if err != nil {
 			return err
 		}
+		if !stamped {
+			stamp = func() error { return mi.SetDaemonIDXattr(tid) }
+		}
+	}
+	fsdisks, err := mfs.ios.AddMpath(mi.Path, mi.Fs, mi.Label, config, blockDevs, stamp)
+	if err != nil {
+		return err
 	}
 	mi._setDisks(fsdisks)
 	avail[mi.Path] = mi
@@ -819,14 +839,22 @@ func enable(mpath, cleanMpath, tid string, config *cmn.Config) (enabledMi *Mount
 	}
 
 	debug.Assert(cleanMpath == mi.Path)
-	availableCopy, disabledCopy := cloneMPI()
-	mi, ok = disabledCopy[cleanMpath]
-	debug.Assert(ok)
-	if err = mi.AddEnabled(tid, availableCopy, disabledCopy, config, nil /*blockDevs*/); err != nil {
+	live, err := NewMountpath(cleanMpath, mi.Label)
+	if err != nil {
 		return nil, err
 	}
+	if live.LostFS(mi.FS) {
+		return nil, &ErrStorageIntegrity{
+			Code: SieFsDiffers,
+			Msg:  fmt.Sprintf("mountpath %q filesystem changed (%+v vs %+v)", cleanMpath, live.FS, mi.FS),
+		}
+	}
 
-	enabledMi = mi
+	availableCopy, disabledCopy := cloneMPI()
+	if err := live.AddEnabled(tid, availableCopy, disabledCopy, config, nil /*blockDevs*/); err != nil {
+		return nil, err
+	}
+	enabledMi = live
 	delete(disabledCopy, cleanMpath)
 	PutMPI(availableCopy, disabledCopy)
 	return enabledMi, nil
@@ -856,7 +884,6 @@ func Remove(mpath string, cb ...func()) (*Mountpath, error) {
 		debug.Assert(cleanMpath == mi.Path)
 		disabledCopy := _cloneOne(disabled)
 		delete(disabledCopy, cleanMpath)
-		delete(mfs.fsIDs, mi.FsID) // optional, benign
 		putDisabMPI(disabledCopy)
 		return mi, nil
 	}

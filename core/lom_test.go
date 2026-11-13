@@ -104,6 +104,7 @@ var _ = Describe("LOM", func() {
 		cmn.GCO.CommitUpdate(config)
 
 		for _, mpath := range mpaths {
+			_ = cos.CreateDir(mpath) // AfterEach removes tmpDir
 			_, _ = fs.AddTestMpath(mpath, "daeID")
 		}
 		_ = mock.NewTarget(bmd)

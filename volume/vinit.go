@@ -182,15 +182,16 @@ func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, check
 	debug.Assert(vmd.DaemonID == tid)
 
 	for mpath, fsMpathMD := range vmd.Mountpaths {
-		mi, err := fs.NewMountpath(mpath, fsMpathMD.Label)
+		saved := fsMpathMD.filesystem()
 		if !fsMpathMD.Enabled {
-			mi.Fs = fsMpathMD.Fs
-			mi.FsType = fsMpathMD.FsType
-			mi.FsID = fsMpathMD.FsID
+			mi, err := fs.NewMountpathFromFS(mpath, fsMpathMD.Label, saved)
+			if err != nil {
+				return err
+			}
 			mi.AddDisabled(disabled)
 			continue
 		}
-		// enabled
+		mi, err := fs.NewMountpath(mpath, fsMpathMD.Label)
 		if err != nil {
 			err = &fs.ErrStorageIntegrity{Code: fs.SieMpathNotFound, Msg: err.Error()}
 			if ignore {
@@ -212,7 +213,7 @@ func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, check
 		//
 		// See also: `allowSharedDisksAndNoDisks` and `startWithLostMountpath`
 		if mi.FsType != fsMpathMD.FsType || mi.Fs != fsMpathMD.Fs || mi.FsID != fsMpathMD.FsID {
-			if lostFS(mi, fsMpathMD) {
+			if mi.LostFS(saved) {
 				err := &fs.ErrStorageIntegrity{
 					Code: fs.SieFsDiffers,
 					Msg:  fmt.Sprintf("lost or missing mountpath %q (%+v vs %+v)", mpath, mi.FS, *fsMpathMD),
@@ -262,7 +263,7 @@ func (vmd *VMD) unchecked(checked cos.StrSet) (mpaths []string) {
 			continue
 		}
 		mi, err := fs.NewMountpath(mpath, md.Label)
-		if err != nil || lostFS(mi, md) || checked.Contains(mi.Path) {
+		if err != nil || mi.LostFS(md.filesystem()) || checked.Contains(mi.Path) {
 			continue
 		}
 		mpaths = append(mpaths, mi.Path)
@@ -270,9 +271,8 @@ func (vmd *VMD) unchecked(checked cos.StrSet) (mpaths []string) {
 	return mpaths
 }
 
-// filesystem differs from the one recorded in VMD
-func lostFS(mi *fs.Mountpath, md *fsMpathMD) bool {
-	return mi.FsType != md.FsType || (mi.Fs != md.Fs && mi.FsID != md.FsID)
+func (md *fsMpathMD) filesystem() cos.FS {
+	return cos.FS{Fs: md.Fs, FsType: md.FsType, FsID: md.FsID}
 }
 
 // pre-loading to try to recover lost tid

@@ -21,7 +21,10 @@ func NewIOS() *IOS                              { return &IOS{} }
 func (m *IOS) GetAllMpathUtils() *ios.MpathUtil { return &m.Utils }
 func (m *IOS) GetMpathUtil(mpath string) int64  { return m.Utils.Get(mpath) }
 
-func (*IOS) AddMpath(string, string, cos.MountpathLabel, *cmn.Config, ios.BlockDevs) (ios.FsDisks, error) {
+func (*IOS) AddMpath(_, _ string, _ cos.MountpathLabel, _ *cmn.Config, _ ios.BlockDevs, prepare func() error) (ios.FsDisks, error) {
+	if prepare != nil {
+		return nil, prepare()
+	}
 	return nil, nil
 }
 

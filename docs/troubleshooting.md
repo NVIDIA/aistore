@@ -160,6 +160,7 @@ lost or missing mountpath "/ais/nvme7n1"
   * filesystem type
   * target Node ID
 * VMD validation happens **at target startup**, before runtime checks (FSHC)
+* A disabled mountpath stays recorded even if its directory is unavailable at startup. Re-enabling it requires the directory and a matching filesystem.
 
 ---
 

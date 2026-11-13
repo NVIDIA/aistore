@@ -7,6 +7,7 @@ package ios
 
 import (
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -38,7 +39,8 @@ type (
 	IOS interface {
 		GetAllMpathUtils() *MpathUtil
 		GetMpathUtil(mpath string) int64
-		AddMpath(mpath, fsname string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs) (FsDisks, error)
+		// prepare runs after disk validation and before registration, including with zero disks.
+		AddMpath(mpath, fsname string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs, prepare func() error) (FsDisks, error)
 		RescanDisks(mpath, fsname string, disks []string) RescanDisksResult
 		RemoveMpath(mpath string, testingEnv bool)
 		DiskStats(m cos.AllDiskStats)
@@ -170,21 +172,27 @@ func (ios *ios) _put(cache *cache) { ios.cache.Store(cache) }
 // add mountpath
 //
 
-func (ios *ios) AddMpath(mpath, fsname string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs) (fsdisks FsDisks, err error) {
+func (ios *ios) AddMpath(mpath, fsname string, label cos.MountpathLabel, config *cmn.Config, blockDevs BlockDevs, prepare func() error) (fsdisks FsDisks, err error) {
 	var (
 		warn       string
 		testingEnv = config.TestingEnv()
 		fspaths    = config.LocalConfig.FSP.Paths
 	)
 	fsdisks, err = fs2disks(mpath, fsname, label, blockDevs, len(fspaths), testingEnv)
-	if err != nil || len(fsdisks) == 0 {
+	if err != nil {
+		return fsdisks, err
+	}
+	if len(fsdisks) == 0 {
+		if prepare != nil {
+			err = prepare()
+		}
 		return fsdisks, err
 	}
 	// NOTE: no need to lock when starting up (see via volume.Init and fs.New)
 	if blockDevs == nil {
 		ios.mu.Lock()
 	}
-	warn, err = ios._add(mpath, label, fsdisks, fspaths, testingEnv)
+	warn, err = ios._add(mpath, label, fsdisks, fspaths, testingEnv, prepare)
 	if blockDevs == nil {
 		ios.mu.Unlock()
 	}
@@ -197,12 +205,11 @@ func (ios *ios) AddMpath(mpath, fsname string, label cos.MountpathLabel, config 
 	return fsdisks, err
 }
 
-func (ios *ios) _add(mpath string, label cos.MountpathLabel, fsdisks FsDisks, fspaths cos.StrKVs, testingEnv bool) (warn string, _ error) {
+func (ios *ios) _add(mpath string, label cos.MountpathLabel, fsdisks FsDisks, fspaths cos.StrKVs, testingEnv bool, prepare func() error) (warn string, _ error) {
 	if dd, ok := ios.mpath2disks[mpath]; ok {
 		return "", fmt.Errorf("duplicate mountpath %s (disks %s, %s)", mpath, dd._str(), fsdisks._str())
 	}
 
-	ios.mpath2disks[mpath] = fsdisks
 	for disk := range fsdisks {
 		if mp, ok := ios.disk2mpath[disk]; ok && !testingEnv {
 			if label.IsNil() {
@@ -215,16 +222,16 @@ func (ios *ios) _add(mpath string, label cos.MountpathLabel, fsdisks FsDisks, fs
 			warn = fmt.Sprintf("Warning: disk %s is shared between %s%s and %s%s",
 				disk, mpath, label.ToLog(), mp, otherLabel.ToLog())
 		}
-		ios.disk2mpath[disk] = mpath
-		ios.blockStats[disk] = &blockStats{}
 	}
 
-	for disk, mountpath := range ios.disk2mpath {
+	// resolve stat paths before publishing disk mappings
+	statPaths := make(cos.StrKVs, len(fsdisks))
+	for disk := range fsdisks {
 		if _, ok := ios.disk2sysfn[disk]; ok {
 			continue
 		}
 		path := filepath.Join(statsdir, disk, "stat")
-		ios.disk2sysfn[disk] = path
+		statPaths[disk] = path
 
 		// multipath NVMe: alternative block-stats location
 		cdisk, err := icn(disk, statsdir)
@@ -239,15 +246,26 @@ func (ios *ios) _add(mpath string, label cos.MountpathLabel, fsdisks FsDisks, fs
 		}
 		if cdisk != "" {
 			cpath := filepath.Join(statsdir, cdisk, "stat")
-			if icnPath(ios.disk2sysfn[disk], cpath, mountpath) {
+			if icnPath(path, cpath, mpath) {
 				if warn != "" {
 					warn += "\n"
 				}
 				warn += fmt.Sprint("Info: alternative block-stats path:", disk, path, "=>", cdisk, cpath)
-				ios.disk2sysfn[disk] = cpath
+				statPaths[disk] = cpath
 			}
 		}
 	}
+	if prepare != nil {
+		if err := prepare(); err != nil {
+			return "", err
+		}
+	}
+	ios.mpath2disks[mpath] = fsdisks
+	for disk := range fsdisks {
+		ios.disk2mpath[disk] = mpath
+		ios.blockStats[disk] = &blockStats{}
+	}
+	maps.Copy(ios.disk2sysfn, statPaths)
 	if len(ios.disk2sysfn) != len(ios.disk2mpath) {
 		for disk := range ios.disk2sysfn {
 			if _, ok := ios.disk2mpath[disk]; !ok {
