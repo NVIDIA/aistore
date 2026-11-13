@@ -6,32 +6,63 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-12
+
+This release adds an explicit client lifecycle (`Client.close()` and context
+management), isolates HTTP sessions per process, speeds up sequential reads via
+`ObjectReader.read_all()`, adds Python 3.15 support, and fixes URL parsing for
+object names that contain `#` or `?`. Review the compatibility changes before
+upgrading.
+
 ### Compatibility changes
 
 - **BREAKING**: The MCP server now requires MCP Python SDK 2.x (`mcp[cli]>=2,<3`).
   Existing environments with `mcp<2` must upgrade before starting the server:
-  `python -m pip install --upgrade "mcp[cli]>=2,<3"`.
-- Custom `RetryConfig.network_retry` policies that retry on the result receive `bytes`,
-  not `requests.Response`, for sequential `ObjectReader.read_all()`.
+  `python -m pip install --upgrade "mcp[cli]>=2,<3"`. The core SDK is not
+  affected; `mcp` is installed only with the `mcp` extra.
+- `Client.get_object_from_url()` now raises `InvalidURLException` for namespaced
+  URLs such as `ais://@uuid#ns/bucket/object`, which it never resolved
+  correctly. Use `Client.bucket(..., namespace=...)` for buckets outside the
+  global namespace.
+- Custom `RetryConfig.network_retry` policies that retry on the result receive
+  `bytes`, not `requests.Response`, for sequential `ObjectReader.read_all()`.
 
-### Added
+### Client lifecycle
 
-- `Client.close()`, `closed`, and context management. Requests through closed
-  clients and their handles raise `ClientClosedError`.
-- Python 3.15 support for the SDK, PyTorch integration, and pyaisloader, including
-  the `Etl.init_class()` runtime and CI test coverage.
+- Added `Client.close()`, the `Client.closed` property, and context management
+  (`with Client(...) as client:`). Closing releases the client's HTTP session
+  and connection pools; repeated calls are harmless.
+- Requests through a closed client or its bucket, object, job, and other
+  handles raise the new `ClientClosedError` without retries. Handles,
+  properties, and cached data remain accessible. `Cluster.is_ready()` also
+  raises `ClientClosedError` instead of returning `False`.
+- `Client.close()` does not wait for active requests. Finish them and close
+  streaming responses before closing the client.
+- Pickling or forking `SessionManager` no longer carries live sessions as the
+  receiving process creates its own on first use. Each process closes only
+  the session it owns.
 
-### Changed
+### Data transfers
 
-- Pickling or forking `SessionManager` no longer carries live sessions as the receiving process
-  creates its own on first use.
-- Sequential `ObjectReader.read_all()` no longer reads the body in `requests`' small chunks.
-  A body of known length is read in one call and not copied again when joined, which makes
-  large reads faster and lowers peak memory usage.
+- Sequential `ObjectReader.read_all()` no longer reads the body in `requests`'
+  small chunks. A body of known length is read in one call and not copied again
+  when joined, which makes large reads faster and lowers peak memory usage.
+- `parse_url()` and `Client.get_object_from_url()` no longer truncate object
+  names at `#` or `?`. URLs for objects and archive members with these
+  characters, such as `s3://bucket/shard.tar/file_#1.wav`, now resolve to the
+  full name.
+- Documented blob-download limits enforced by AIStore servers newer than 5.2:
+  `num_workers` must be zero (the default) or at least two, and an object that
+  fits in a single chunk is served by regular GET without a blob-download job.
+  This applies to `BlobDownloadConfig` and `Object.blob_download()`.
+- Documented that `Object.get_reader(direct=True)` and `Smap.get_target_for_object()`
+  select targets with uniform HRW and do not apply target placement weights.
+  Keep `direct=False` (the default) for weighted buckets.
 
-### Fixed
+### Packaging and integrations
 
-- `parse_url()` and `Client.get_object_from_url()` no longer truncate object names at `#` or `?`.
+- Added Python 3.15 support for the SDK, PyTorch integration, and pyaisloader,
+  including the `Etl.init_class()` runtime and CI test coverage.
 
 ## [2.1.0] - 2026-10-28
 
