@@ -474,7 +474,7 @@ const (
 	daemonIDSourceFlag = "daemon_id_source"
 )
 
-func podDaemonID(daemonType string) (id, pod string) {
+func podDaemonID(daemonType string) (id, podRef string) {
 	source, option := daemon.cli.daemonIDSource, "-"+daemonIDSourceFlag
 	if source == "" {
 		source, option = os.Getenv(daemonIDSourceEnv), daemonIDSourceEnv
@@ -495,8 +495,13 @@ func podDaemonID(daemonType string) (id, pod string) {
 	}
 
 	id = derivePodID(daemonType, ns, pod, scope)
-	nlog.Infof("initialized %s[%q] from pod %s/%s", daemonType, id, ns, pod)
-	return id, pod
+	name := meta.Pname(id)
+	if daemonType == apc.Target {
+		name = meta.Tname(id)
+	}
+	podRef = ns + "/" + pod
+	nlog.Infof("initialized %s from %s=%q (pod %s)", name, option, source, podRef)
+	return id, podRef
 }
 
 // parse "k8s-pod" or "k8s-pod:<scope>"

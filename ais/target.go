@@ -298,17 +298,12 @@ func (t *target) aisbp() *backend.AISbp {
 func (t *target) init(config *cmn.Config) {
 	t.initPhase1(config)
 
-	// (a) derive node ID from K8s pod identity, when requested (see podDaemonID());
-	//     mountpaths that belong to a different target are then rejected (volume.Init)
+	// (a) derive node ID from K8s pod identity, when requested (see podDaemonID())
 	// (b) get node ID from command-line or env var (see envDaemonID())
 	// (c) load existing node ID (replicated xattr at roots of respective mountpaths)
 	// (d) generate a new one (genDaemonID())
 	// - in that exact sequence
-	tid, pod := podDaemonID(apc.Target)
-	var generated bool
-	if tid == "" {
-		tid, generated = initTID(config)
-	}
+	tid, podRef, generated := initTID(config)
 	if generated && len(config.FSP.Paths) > 0 {
 		var recovered bool
 		// in an unlikely event when losing all mountpath-stored IDs but still having a volume
@@ -334,7 +329,7 @@ func (t *target) init(config *cmn.Config) {
 
 	// new fs, check and add mountpaths
 	vini := volume.IniCtx{
-		PodName:       pod,
+		PodRef:        podRef,
 		UseLoopbacks:  daemon.cli.target.useLoopbackDevs,
 		IgnoreMissing: daemon.cli.target.startWithLostMountpath,
 		RandomTID:     generated,
@@ -399,13 +394,16 @@ func (t *target) initHostIP(config *cmn.Config) {
 	}
 }
 
-func initTID(config *cmn.Config) (tid string, generated bool) {
+func initTID(config *cmn.Config) (tid, podRef string, generated bool) {
+	if tid, podRef = podDaemonID(apc.Target); tid != "" {
+		return tid, podRef, false
+	}
 	if tid = envDaemonID(apc.Target); tid != "" {
 		if err := cos.ValidateDaemonID(tid); err != nil {
 			cos.ExitLog(err) // FATAL
 		}
 		nlog.Infoln("initialized tid", meta.Tname(tid), "from env")
-		return tid, false
+		return tid, "", false
 	}
 
 	var err error
@@ -422,7 +420,7 @@ func initTID(config *cmn.Config) (tid string, generated bool) {
 		nlog.Infoln("generated tid", meta.Tname(tid))
 		generated = true
 	}
-	return tid, generated
+	return tid, "", generated
 }
 
 func regDiskMetrics(node *meta.Snode, tstats *stats.Trunner, mpi fs.MPI) {

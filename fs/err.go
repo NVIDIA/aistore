@@ -17,7 +17,6 @@ const (
 	SieMetaCorrupted
 	SieFsDiffers
 	SieMpathNotFound
-	SiePodIDMismatch
 )
 
 const (

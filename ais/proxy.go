@@ -169,7 +169,7 @@ func initPID(config *cmn.Config) string {
 	// 2. ID from Kubernetes Node name.
 	if k8s.IsK8s() {
 		pid := cos.HashK8sProxyID(k8s.NodeName)
-		nlog.Infoln("Initialized", meta.Pname(pid), "from K8s node nam", k8s.NodeName)
+		nlog.Infoln("Initialized", meta.Pname(pid), "from K8s node name", k8s.NodeName)
 		return pid
 	}
 

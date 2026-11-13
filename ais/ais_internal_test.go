@@ -89,7 +89,7 @@ func TestMain(m *testing.M) {
 	// target
 	t := newTarget(co)
 	t.initPhase1(config)
-	tid, _ := initTID(config)
+	tid, _, _ := initTID(config)
 	t.si.Init(tid, apc.Target, nil /*verifying key*/)
 
 	// NOTE: without this mountpath nothing downstream works - BMD cannot be

@@ -29,7 +29,9 @@ Needless to say, there's no simple way back out of `decommission` - the proverbi
 - [Node identity and rejoining](#node-identity-and-rejoining)
   - [Node ID sources](#node-id-sources)
   - [Pod-derived IDs](#pod-derived-ids)
+  - [Operator-managed ID source](#operator-managed-id-source)
   - [What happens after a pod restart](#what-happens-after-a-pod-restart)
+  - [Troubleshooting pod-derived IDs](#troubleshooting-pod-derived-ids)
 - [Cluster](#cluster)
 - [Privileges](#privileges)
 - [Rebalance](#rebalance)
@@ -105,25 +107,73 @@ The default generator produces eight random letters. In a development setup with
 
 ### Pod-derived IDs
 
-To opt-in when creating a **new Kubernetes cluster**, set `AIS_DAEMON_ID_SOURCE=k8s-pod:<scope>` on both proxy and target containers. The equivalent `-daemon_id_source` flag takes precedence over the environment variable.
+Opt-in mode for **new** AIStore clusters deployed in Kubernetes: AIS derives the node ID from the pod identity, so that the ID follows the pod across Kubernetes nodes and does not depend on local state.
 
-AIS generates an eight-letter ID at every startup from the role (`-role`), namespace (`K8S_NS`), pod name (`MY_POD`), and optional scope. With those inputs unchanged, a replacement pod gets the same ID even when its local state starts in a fresh [`emptyDir`](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir).
-
-Notice the distinction: `AIS_DAEMON_ID_SOURCE` causes AIStore ID to follow the pod across Kubernetes nodes:
-
-| Scenario | Existing default | `AIS_DAEMON_ID_SOURCE=k8s-pod:<scope>` |
+| Node | Default | `AIS_DAEMON_ID_SOURCE=k8s-pod:<scope>` |
 |---|---|---|
-| Proxy pod moves to another Kubernetes node | ID changes with `MY_NODE` | Same ID if the pod name, namespace, and scope stay the same |
-| Target pod is recreated with blank mountpaths | Generates a new ID | Recomputes the same ID from the pod identity |
+| Proxy | Hash of the Kubernetes node name (`MY_NODE`); changes when the pod moves | Same ID on any Kubernetes node |
+| Target | Read from its mountpaths; new random ID when all mountpaths are blank | Same ID on any Kubernetes node, with or without its volumes |
 
-In summary:
+AIS recomputes the eight-letter ID at every startup from:
 
-* Supply `K8S_NS` and `MY_POD` and keep them stable. StatefulSet pod names such as `ais-target-1` let a replacement pod retain the same ID on another Kubernetes node.
-* Use a scope unique to the AIS cluster and keep it fixed for the lifetime of its volumes. For example, a deployment can use the AIStore custom resource UID. Recreating that resource changes its UID and makes previously stamped volumes incompatible with the new IDs. The unscoped value `k8s-pod` is accepted and gives the same IDs to clusters with identical roles, namespaces, and pod names.
-* Attach the same persistent volumes to each target pod after rescheduling. Per-pod StatefulSet volume claims can preserve this mapping. A host-path mount remains on its original Kubernetes node.
-* Leave `-daemon_id` and `AIS_DAEMON_ID` unset. AIS exits on invalid source settings, missing inputs, or conflicting explicit IDs.
+* role (`-role`)
+* namespace (`K8S_NS`)
+* pod name (`MY_POD`)
+* scope: the part after `k8s-pod:`
 
-The deployment supplies these inputs and manages the volumes. AIS derives the ID without querying Kubernetes for the identity. Changing the source or scope of an existing cluster changes its IDs and can prevent targets from starting with their existing volumes.
+The `-daemon_id_source` flag takes precedence over the `AIS_DAEMON_ID_SOURCE` environment variable. AIS does not query Kubernetes for any of the inputs.
+
+Within a single Kubernetes cluster, namespace and pod name are already unique. The scope distinguishes:
+
+* AIS clusters with identical namespaces and pod names in different Kubernetes clusters
+* a re-created AIS cluster from its predecessor, so that leftover volumes cannot join the new cluster
+
+#### Division of responsibilities
+
+| Deployment ([AIS K8s Operator](https://github.com/NVIDIA/ais-k8s) or other) | AIS |
+|---|---|
+| Set `AIS_DAEMON_ID_SOURCE` on proxy and target containers | Derive the ID; exit on invalid or conflicting settings |
+| Set `MY_POD` and `K8S_NS` (the Operator always does) | Exit if either is missing |
+| Keep pod names stable (StatefulSet) | - |
+| Attach each target's volumes to the same pod after rescheduling (per-pod volume claims) | Reject mountpaths that belong to a different target (`sie#10`, `sie#20`) |
+| Preserve the ID source and scope in every operation that starts or replaces a daemon | Recompute the ID from the inputs supplied at startup |
+
+#### Recommended usage
+
+* New clusters only. Enabling pod-derived IDs on an existing cluster changes every node ID, and targets then fail to start with `sie#10` or `sie#20`.
+* One scope per AIS cluster, the same for proxies and targets. Keep it in the deployment spec: a value generated once survives deleting and re-creating the custom resource (with metadata preserved); the custom resource UID does not.
+* Leave `-daemon_id` and `AIS_DAEMON_ID` unset.
+* The unscoped `k8s-pod` is accepted but not recommended.
+
+For example, in the AIStore custom resource:
+
+```yaml
+spec:
+  proxySpec:
+    env:
+      - name: AIS_DAEMON_ID_SOURCE
+        value: k8s-pod:6f1c2b7e-3d4a-4c5b-9e8f-0a1b2c3d4e5f
+  targetSpec:
+    env:
+      - name: AIS_DAEMON_ID_SOURCE
+        value: k8s-pod:6f1c2b7e-3d4a-4c5b-9e8f-0a1b2c3d4e5f
+```
+
+At startup, each node logs the derived ID, for example:
+
+```
+initialized t[GBLgBUup] from AIS_DAEMON_ID_SOURCE="k8s-pod:6f1c2b7e-3d4a-4c5b-9e8f-0a1b2c3d4e5f" (pod ais/ais-target-1)
+```
+
+### Operator-managed ID source
+
+For pod-derived IDs, it is recommended that AIS/K8s Operator API makes the ID source and optional scope a single **creation-time** setting in the AIStore custom resource.
+
+The Operator would set `AIS_DAEMON_ID_SOURCE` in both StatefulSet pod templates and reject attempts to add, remove, or change the setting on an existing resource. Restarts, upgrades, and rescheduling would then inherit the original setting.
+
+Use the environment variables in the example above today. When recreating the custom resource with existing volumes, restore the original ID source and scope from the deployment spec.
+
+See related [Troubleshooting pod-derived IDs](#troubleshooting-pod-derived-ids) section below.
 
 ### What happens after a pod restart
 
@@ -132,14 +182,29 @@ The following cases assume pod-derived IDs.
 | Event | Result |
 | --- | --- |
 | Proxy restarts with fresh local state and the same pod identity | The proxy derives the same ID and rejoins. |
+| Proxy or target moves to another Kubernetes node | Same ID. If the previous Smap entry is still present, an accepted self-join updates it. If the entry has already been removed, self-join adds it back. |
 | Target restarts or moves with its original volumes | The target derives the same ID, loads its VMD, and rejoins with its data. |
 | Target returns with blank volumes | The target derives the same ID and creates a new VMD. The primary treats it as the same member. |
-| Target receives another target's volumes, even alongside blank volumes | Startup fails with `sie#70` before AIS writes to any of those mountpaths. |
-| Target starts with a different scope and retains its old volumes | Startup fails with `sie#70` if the derived ID differs from the stored ID. |
+| Target receives another target's volumes, even alongside blank volumes | Startup fails with `sie#10` or `sie#20`. |
+| Target starts with a different scope and retains its old volumes | Startup fails with `sie#10` or `sie#20`. |
 
-At startup, AIS checks the target ID in mountpath extended attributes and VMD for the volumes it will use. It stamps mountpaths that lack an ID. At runtime, attaching or enabling a mountpath with a foreign ID in its extended attribute fails with `sie#10`. See the [storage integrity error reference](/docs/troubleshooting.md#sie-error-reference).
+At startup, AIS checks the target ID in mountpath extended attributes and VMD for the volumes it will use, the same way as for an explicit ID (`AIS_DAEMON_ID`). It stamps mountpaths that lack an ID, independently of the object metadata write policy (`write_policy.md`). At runtime, attaching or enabling a mountpath with a foreign ID in its extended attribute fails with `sie#10`. See the [storage integrity error reference](/docs/troubleshooting.md#sie-error-reference).
 
 **Blank volumes do not recover local data.** AIS does not detect that an existing target has returned with blank volumes. Objects backed by remote buckets can be fetched again on a cold GET. Objects in `ais://` buckets with no surviving copies are lost.
+
+### Troubleshooting pod-derived IDs
+
+Keep the original ID source in the deployment spec or launch configuration used for restarts, upgrades, rescheduling, and manual recovery. AIS selects the source on every start from the daemon's command line and environment. The Smap and volumes record the resulting ID, so the deployment must supply the source and scope again. Check the effective value: a nonempty `-daemon_id_source` overrides `AIS_DAEMON_ID_SOURCE`.
+
+| Symptom | Cause | Action |
+|---|---|---|
+| After a restart or replacement, a pod comes back with a different ID or startup reports that its ID is absent from the local Smap | A deployment using pod-derived IDs omitted the source or changed the scope. With both settings absent, a proxy falls back to `MY_NODE`. A target can still recover its previous ID from its volumes, so a successful restart with the original disks can hide the missing setting until a replacement starts with blank volumes. | Restore the original source and scope, and check the role, `MY_POD`, and `K8S_NS`. Confirm the derived ID in the startup log. |
+| An existing deployment starts deriving IDs after a restart or upgrade, or a target exits with `sie#10` or `sie#20` | A deployment using the default or explicit ID source picked up `-daemon_id_source` or `AIS_DAEMON_ID_SOURCE` from a changed command line or environment. | Remove both pod-source settings from the launch configuration and restore the original ID settings. |
+| Exit: `invalid AIS_DAEMON_ID_SOURCE` | Value is neither `k8s-pod` nor `k8s-pod:<scope>` | Fix the value. |
+| Exit: `AIS_DAEMON_ID_SOURCE requires MY_POD and K8S_NS` | Missing environment | Set both from the pod's `metadata.name` and `metadata.namespace`. |
+| Exit: `AIS_DAEMON_ID_SOURCE cannot be combined with ...` | Explicit ID is also set | Remove `-daemon_id` and `AIS_DAEMON_ID`. |
+| Target exits with `sie#10` or `sie#20` | A mountpath belongs to a different target: wrong volume attached, changed scope, renamed pod or namespace, or pod-derived IDs enabled on an existing cluster | The startup error includes the pod namespace and name and both target IDs. Restore the original volume-to-pod mapping or the original `AIS_DAEMON_ID_SOURCE`. Do not remove the extended attribute to force startup: the volume holds another target's data. |
+| Target rejoins with no objects | Blank volumes | See the note on blank volumes above. |
 
 ## Cluster
 
