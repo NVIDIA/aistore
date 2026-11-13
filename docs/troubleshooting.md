@@ -152,7 +152,8 @@ lost or missing mountpath "/ais/nvme7n1"
 
 ### Key Concepts
 
-* VMD is **persisted and replicated** across all mountpaths of a target
+* VMD is **persisted and replicated** on (up to three) mountpaths of a target
+* At startup, the newest valid VMD copy wins; older and corrupted copies are ignored and then replaced
 * Each [mountpath](/docs/terminology.md#mountpath) records:
 
   * filesystem identity
@@ -168,8 +169,8 @@ lost or missing mountpath "/ais/nvme7n1"
 | -------- | ------- | ------------------------------------------------ |
 | `sie#10` | Startup | Mountpaths record different Node IDs             |
 | `sie#20` | Startup | Target Node ID conflicts with mountpath metadata |
-| `sie#30` | Startup | Mountpaths disagree on persisted metadata        |
-| `sie#40` | Startup | Corrupted metadata on a mountpath                |
+| `sie#30` | Startup | Different VMD copies of the newest version       |
+| `sie#40` | Startup | No valid VMD: all VMD copies found are corrupted |
 | `sie#50` | Startup | Mountpath mismatch between config and VMD        |
 | `sie#60` | Startup | Mountpath not found                              |
 

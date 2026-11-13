@@ -8,10 +8,14 @@ package volume
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"slices"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
+	"github.com/NVIDIA/aistore/cmn/jsp"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/fs"
@@ -38,10 +42,22 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 		tid     = t.SID()
 		fspaths = config.FSP.Paths.Keys()
 	)
+	if len(config.FSP.Paths) == 0 {
+		cos.ExitLogf("%s: no fspaths - see README => Configuration and fspaths section in the config.sh", t)
+	}
 	// new and empty
 	blockDevs := fs.New(t, len(config.FSP.Paths))
 
-	if v, err := configLoadVMD(tid, config.FSP.Paths); err != nil {
+	// load VMD copies from the configured mountpaths
+	var (
+		vc      = newVcopies(len(config.FSP.Paths))
+		checked = make(cos.StrSet, len(config.FSP.Paths))
+	)
+	for mpath := range config.FSP.Paths {
+		checked.Set(filepath.Clean(mpath))
+	}
+	vc.load(checked.ToSlice())
+	if v, err := vc.newest(tid); err != nil {
 		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, ctx.ownershipError(err, tid), fspaths)
 	} else {
 		vmd = v
@@ -64,28 +80,30 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 		return true // created
 	}
 
-	// otherwise, use loaded VMD to find the most recently updated (the current) one and, simultaneously,
-	// initialize MPI
-	var persist bool
-	if v, haveOld, err := initMPI(tid, config, blockDevs, vmd, 1 /*pass #1*/, ctx.IgnoreMissing); err != nil {
-		cos.ExitLogf("%s: %v (vmd-init-mpi-p1, %+v, %s)", t, ctx.ownershipError(err, tid), ctx, vmd)
-	} else {
-		if v != nil && v.Version > vmd.Version {
-			vmd = v
-			persist = true
+	// follow the newest copy: it may list mountpaths that store even newer copies
+	for {
+		mpaths := vmd.unchecked(checked)
+		if len(mpaths) == 0 {
+			break
 		}
-		if haveOld {
-			persist = true
+		vc.load(mpaths)
+		checked.Add(mpaths...)
+		v, err := vc.newest(tid)
+		if err != nil {
+			cos.ExitLogf("%s: %v (vmd-discovery, %+v, %s)", t, ctx.ownershipError(err, tid), ctx, vmd)
 		}
-		if v, _, err := initMPI(tid, config, blockDevs, vmd, 2 /*pass #2*/, ctx.IgnoreMissing); err != nil {
-			cos.ExitLogf("%s: %v (vmd-init-mpi-p2, have-old=%t, %+v, %s)", t, ctx.ownershipError(err, tid), haveOld, ctx, vmd)
-		} else {
-			debug.Assert(v == nil || v.Version == vmd.Version)
-		}
-		if persist {
-			if err := vmd.persist(); err != nil {
-				cos.ExitLogf("%s: %v (vmd-init-mpi-persist, have-old=%t, %+v, %s)", t, err, haveOld, ctx, vmd)
-			}
+		vmd = v
+	}
+
+	if err := initMPI(tid, config, blockDevs, vmd, checked, ctx.IgnoreMissing); err != nil {
+		cos.ExitLogf("%s: %v (vmd-init-mpi, %+v, %s)", t, ctx.ownershipError(err, tid), ctx, vmd)
+	}
+
+	// rewrite outdated and bad copies (persist removes all copies from available mountpaths)
+	if n := vc.stale(vmd, fs.GetAvail()); n > 0 {
+		nlog.Warningln(t.String(), vmd.String(), "- replacing", n, "outdated or bad copies")
+		if err := vmd.persist(); err != nil {
+			cos.ExitLogf("%s: %v (vmd-persist, %+v, %s)", t, err, ctx, vmd)
 		}
 	}
 
@@ -109,13 +127,12 @@ func NewFromMPI(tid string) (vmd *VMD, err error) {
 		curVersion      uint64
 		avail, disabled = fs.Get()
 	)
-	vmd, err = loadVMD(tid, nil)
-	if err != nil {
+	vc := newVcopies(len(avail))
+	vc.loadMPI(avail)
+	if _, err := vc.newest(tid); err != nil {
 		nlog.Warningln(err) // TODO: handle
 	}
-	if vmd != nil {
-		curVersion = vmd.Version
-	}
+	curVersion = vc.maxVersion()
 	vmd = newVMD(len(avail))
 	vmd.DaemonID = tid
 	vmd.Version = curVersion + 1 // Bump the version.
@@ -156,8 +173,8 @@ func configInitMPI(tid string, config *cmn.Config, blockDevs ios.BlockDevs) erro
 	return nil
 }
 
-// VMD => fs.MPI in two passes
-func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, pass int, ignore bool) (maxVer *VMD, haveOld bool, _ error) {
+// VMD => fs.MPI
+func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, checked cos.StrSet, ignore bool) error {
 	var (
 		avail    = make(fs.MPI, len(vmd.Mountpaths))
 		disabled = make(fs.MPI)
@@ -167,22 +184,20 @@ func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, pass 
 	for mpath, fsMpathMD := range vmd.Mountpaths {
 		mi, err := fs.NewMountpath(mpath, fsMpathMD.Label)
 		if !fsMpathMD.Enabled {
-			if pass == 2 {
-				mi.Fs = fsMpathMD.Fs
-				mi.FsType = fsMpathMD.FsType
-				mi.FsID = fsMpathMD.FsID
-				mi.AddDisabled(disabled)
-			}
+			mi.Fs = fsMpathMD.Fs
+			mi.FsType = fsMpathMD.FsType
+			mi.FsID = fsMpathMD.FsID
+			mi.AddDisabled(disabled)
 			continue
 		}
 		// enabled
 		if err != nil {
 			err = &fs.ErrStorageIntegrity{Code: fs.SieMpathNotFound, Msg: err.Error()}
-			if pass == 1 || ignore {
-				nlog.Errorf("%v (pass=%d, ignore-missing-mountpath=%t)", err, pass, ignore)
+			if ignore {
+				nlog.Errorf("%v (ignore-missing-mountpath)", err)
 				continue
 			}
-			return nil, false, err
+			return err
 		}
 		if mi.Path != mpath {
 			nlog.Warningf("%s: cleanpath(%q) => %q", mi, mpath, mi.Path)
@@ -197,50 +212,36 @@ func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, pass 
 		//
 		// See also: `allowSharedDisksAndNoDisks` and `startWithLostMountpath`
 		if mi.FsType != fsMpathMD.FsType || mi.Fs != fsMpathMD.Fs || mi.FsID != fsMpathMD.FsID {
-			if mi.FsType != fsMpathMD.FsType || (mi.Fs != fsMpathMD.Fs && mi.FsID != fsMpathMD.FsID) {
+			if lostFS(mi, fsMpathMD) {
 				err := &fs.ErrStorageIntegrity{
 					Code: fs.SieFsDiffers,
 					Msg:  fmt.Sprintf("lost or missing mountpath %q (%+v vs %+v)", mpath, mi.FS, *fsMpathMD),
 				}
-				if pass == 1 || ignore {
-					nlog.Errorf("%v (pass=%d, ignore-missing-mountpath=%t)", err, pass, ignore)
+				if ignore {
+					nlog.Errorf("%v (ignore-missing-mountpath)", err)
 					continue
 				}
-				return nil, false, err
+				return err
 			}
 			if mi.Fs == fsMpathMD.Fs && mi.FsID != fsMpathMD.FsID {
-				nlog.Warningf("detected FS ID change: mp=%q, curr=%+v, prev=%+v (pass %d)",
-					mpath, mi.FS, *fsMpathMD, pass)
+				nlog.Warningf("detected FS ID change: mp=%q, curr=%+v, prev=%+v", mpath, mi.FS, *fsMpathMD)
 			} else if mi.Fs != fsMpathMD.Fs && mi.FsID == fsMpathMD.FsID {
-				nlog.Warningf("detected device name change for the same FS ID: mp=%q, curr=%+v, prev=%+v (pass %d)",
-					mpath, mi.FS, *fsMpathMD, pass)
+				nlog.Warningf("detected device name change for the same FS ID: mp=%q, curr=%+v, prev=%+v",
+					mpath, mi.FS, *fsMpathMD)
 			}
 		}
 
-		if pass == 1 {
-			if v, old, errLoad := loadOneVMD(tid, vmd, mi.Path, len(vmd.Mountpaths)); v != nil {
-				debug.Assert(v.Version > vmd.Version)
-				maxVer = v
-			} else if old {
-				debug.AssertNoErr(errLoad)
-				haveOld = true
-			} else if errLoad != nil {
-				nlog.Warningf("%s: %v", mi, errLoad)
-			}
-		} else {
-			if err := mi.AddEnabled(tid, avail, disabled, config, devs); err != nil {
-				return nil, false, err
-			}
+		if !checked.Contains(mi.Path) {
+			return fmt.Errorf("mountpath %q became available during VMD discovery; retry startup", mi.Path)
 		}
-	}
-
-	if pass == 1 {
-		return maxVer, haveOld, nil
+		if err := mi.AddEnabled(tid, avail, disabled, config, devs); err != nil {
+			return err
+		}
 	}
 
 	if len(avail) == 0 {
 		if len(disabled) == 0 {
-			return nil, false, cmn.ErrNoMountpaths
+			return cmn.ErrNoMountpaths
 		}
 		nlog.Errorf("Warning: %v (avail=%d, disabled=%d)", cmn.ErrNoMountpaths, len(avail), len(disabled))
 	}
@@ -251,8 +252,27 @@ func initMPI(tid string, config *cmn.Config, devs ios.BlockDevs, vmd *VMD, pass 
 		nlog.Warningf("number of available mountpaths (%d) differs from the configured (%d)", la, lc)
 		nlog.Warningln("run 'ais storage mountpath [attach|detach]', fix the config, or use ignore-missing-mountpath")
 	}
+	return nil
+}
 
-	return maxVer, haveOld, nil
+// enabled mountpaths that are present, have the recorded filesystem, and are not yet checked
+func (vmd *VMD) unchecked(checked cos.StrSet) (mpaths []string) {
+	for mpath, md := range vmd.Mountpaths {
+		if !md.Enabled {
+			continue
+		}
+		mi, err := fs.NewMountpath(mpath, md.Label)
+		if err != nil || lostFS(mi, md) || checked.Contains(mi.Path) {
+			continue
+		}
+		mpaths = append(mpaths, mi.Path)
+	}
+	return mpaths
+}
+
+// filesystem differs from the one recorded in VMD
+func lostFS(mi *fs.Mountpath, md *fsMpathMD) bool {
+	return mi.FsType != md.FsType || (mi.Fs != md.Fs && mi.FsID != md.FsID)
 }
 
 // pre-loading to try to recover lost tid
@@ -283,98 +303,142 @@ func RecoverTID(generatedID string, configPaths cos.StrKVs) (tid string, recover
 
 // loading
 
-func LoadVMDTest() (*VMD, error) { return loadVMD("", nil) } // test-only
-
-// config => (temp MPI) => VMD
-func configLoadVMD(tid string, configPaths cos.StrKVs) (vmd *VMD, err error) {
-	if len(configPaths) == 0 {
-		err = errors.New("no fspaths - see README => Configuration and fspaths section in the config.sh")
-		return
+// test-only
+func LoadVMDTest(tid string, mpaths ...string) (*VMD, error) {
+	if len(mpaths) == 0 {
+		return loadVMD(tid, nil)
 	}
-	available := make(fs.MPI, len(configPaths)) // temp MPI to attempt loading
-	for mpath := range configPaths {
+	available := make(fs.MPI, len(mpaths))
+	for _, mpath := range mpaths {
 		available[mpath] = nil
 	}
 	return loadVMD(tid, available)
 }
 
-// given a set of *available mountpaths* loadVMD discovers, loads, and validates
-// the most recently updated VMD (which is stored in several copies for redundancy).
-// - Returns nil if VMD does not exist;
-// - Returns error on failure to validate or load existing VMD.
-func loadVMD(tid string, available fs.MPI) (vmd *VMD, err error) {
+// test-only
+func SaveVMDTest(dir, tid string, version uint64, mpaths ...string) error {
+	vmd := newVMD(len(mpaths))
+	vmd.DaemonID, vmd.Version = tid, version
+	for _, mpath := range mpaths {
+		vmd.Mountpaths[mpath] = &fsMpathMD{Path: mpath, Enabled: true}
+	}
+	return jsp.SaveMeta(filepath.Join(dir, fname.Vmd), vmd, nil)
+}
+
+// load VMD copies from the given (or available) mountpaths and select the newest
+// - returns nil if VMD does not exist
+func loadVMD(tid string, available fs.MPI) (*VMD, error) {
 	if available == nil {
 		available = fs.GetAvail()
 	}
-	l := len(available)
-	for mpath := range available {
-		var v *VMD
-		v, _, err = loadOneVMD(tid, vmd, mpath, l)
-		if err != nil {
-			return
-		}
-		if v != nil {
-			vmd = v
-		}
-	}
-	return
+	vc := newVcopies(len(available))
+	vc.loadMPI(available)
+	return vc.newest(tid)
 }
 
-// given mountpath return a greater-version VMD if available
-func loadOneVMD(tid string, vmd *VMD, mpath string, l int) (*VMD, bool /*have old*/, error) {
-	var (
-		v   = newVMD(l)
-		err = v.load(mpath)
-	)
-	if err != nil {
-		if cos.IsNotExist(err) {
-			return nil, false, nil
-		}
-		return nil, false, &fs.ErrStorageIntegrity{
-			Code: fs.SieMetaCorrupted,
-			Msg:  fmt.Sprintf("failed to load VMD from %q: %v", mpath, err),
+//
+// vcopies: VMD copies found on mountpaths
+//
+
+type vcopies struct {
+	valid map[string]*VMD // mountpath => copy
+	bad   cos.StrSet      // mountpaths with unreadable or corrupted copies
+}
+
+func newVcopies(l int) *vcopies {
+	return &vcopies{valid: make(map[string]*VMD, l), bad: make(cos.StrSet, 2)}
+}
+
+// load copies; skip missing, record bad
+func (vc *vcopies) load(mpaths []string) {
+	for _, mpath := range mpaths {
+		v := newVMD(0)
+		err := v.load(mpath)
+		switch {
+		case err == nil:
+			vc.valid[mpath] = v
+		case cos.IsNotExist(err):
+		default:
+			nlog.Warningf("ignoring bad VMD copy on %q: %v", mpath, err)
+			vc.bad.Set(mpath)
 		}
 	}
-	if vmd == nil {
-		if tid != "" && v.DaemonID != tid {
-			return nil, false, &fs.ErrStorageIntegrity{
+}
+
+func (vc *vcopies) loadMPI(mpi fs.MPI) {
+	mpaths := make([]string, 0, len(mpi))
+	for mpath := range mpi {
+		mpaths = append(mpaths, mpath)
+	}
+	vc.load(mpaths)
+}
+
+// select the newest copy; independent of the order of loading
+// - fail on a copy of a different target (any version)
+// - fail on different copies of the newest version
+// - fail when all found copies are bad
+func (vc *vcopies) newest(tid string) (*VMD, error) {
+	if len(vc.valid) == 0 {
+		if len(vc.bad) > 0 {
+			bad := vc.bad.ToSlice()
+			slices.Sort(bad)
+			return nil, &fs.ErrStorageIntegrity{
+				Code: fs.SieMetaCorrupted,
+				Msg:  fmt.Sprintf("no valid VMD, bad copies on %v", bad),
+			}
+		}
+		return nil, nil
+	}
+	var (
+		mpaths = make([]string, 0, len(vc.valid))
+		newest *VMD
+		at     string
+	)
+	for mpath := range vc.valid {
+		mpaths = append(mpaths, mpath)
+	}
+	slices.Sort(mpaths)
+	for _, mpath := range mpaths {
+		if v := vc.valid[mpath]; newest == nil || v.Version > newest.Version {
+			newest, at = v, mpath
+		}
+	}
+	if tid == "" {
+		tid = newest.DaemonID
+	}
+	for _, mpath := range mpaths {
+		v := vc.valid[mpath]
+		if v.DaemonID != tid {
+			return nil, &fs.ErrStorageIntegrity{
 				Code: fs.SieTargetIDMismatch,
 				Msg:  fmt.Sprintf("VMD on %q has target ID %q, expected %q", mpath, v.DaemonID, tid),
 			}
 		}
-		return v, false, nil
-	}
-	//
-	// validate
-	//
-	debug.Assert(vmd.DaemonID == tid || tid == "")
-	if v.DaemonID != vmd.DaemonID {
-		return nil, false, &fs.ErrStorageIntegrity{
-			Code: fs.SieTargetIDMismatch,
-			Msg:  fmt.Sprintf("VMD on %q has target ID %q, expected %q", mpath, v.DaemonID, vmd.DaemonID),
-		}
-	}
-	if v.Version > vmd.Version {
-		if !_mpathGreaterEq(v, vmd, mpath) {
-			nlog.Warningf("mpath %s stores newer VMD: %s > %s", mpath, v, vmd)
-		}
-		return v, false, nil
-	}
-	if v.Version < vmd.Version {
-		if !_mpathGreaterEq(vmd, v, mpath) {
-			md := vmd.Mountpaths[mpath]
-			// warn of an older version only if this mpath is enabled in the newer one
-			if md != nil && md.Enabled {
-				nlog.Warningf("mpath %s stores older VMD: %s < %s", mpath, v, vmd)
+		if v.Version == newest.Version && !v.equal(newest) {
+			return nil, &fs.ErrStorageIntegrity{
+				Code: fs.SieNotEqVMD,
+				Msg:  fmt.Sprintf("same VMD versions must be identical: %s(mpath %q) vs %s(mpath %q)", v, mpath, newest, at),
 			}
 		}
-		return nil, true, nil // true: outdated copy that must be updated
 	}
-	if !v.equal(vmd) { // same version must be identical
-		err = &fs.ErrStorageIntegrity{
-			Code: fs.SieNotEqVMD,
-			Msg:  fmt.Sprintf("same VMD versions must be identical: %s(mpath %q) vs %s", v, mpath, vmd),
+	return newest, nil
+}
+
+func (vc *vcopies) maxVersion() (ver uint64) {
+	for _, v := range vc.valid {
+		ver = max(ver, v.Version)
+	}
+	return ver
+}
+
+// number of outdated and bad copies on the given mountpaths
+func (vc *vcopies) stale(vmd *VMD, avail fs.MPI) (n int) {
+	for mpath := range avail {
+		if v, ok := vc.valid[mpath]; ok && v.Version < vmd.Version {
+			n++
+		} else if vc.bad.Contains(mpath) {
+			n++
 		}
 	}
-	return nil, false, err
+	return n
 }
