@@ -20,6 +20,7 @@ The second category of *system files and directories* includes:
 | `.ais.rmd` | file | storage target | Rebalancing State | Used internally to make sure that cluster-wide rebalancing runs to completion in presence of all possible events including cluster membership changes and cluster restarts. |
 | `.ais.markers/` | dir | storage target | Persistent state markers | Used for many purposes like determining node restart or rebalance/resilver abort. The role of the markers is to survive potential node's process crash (eg. due to power outage or mistake). |
 | `.ais.proxy_id` | file | gateway | Gateway node ID | Stores the generated proxy ID in the configuration directory for use on restart. See [node ID sources](/docs/lifecycle_node.md#node-id-sources) for the startup precedence. |
+| `.ais.vmd` | file | storage target | Volume metadata | Replicated on target mountpaths. Its `daemon_id` field records the same target ID as the `user.ais.daemon_id` extended attribute at each mountpath root. See [target startup](/docs/lifecycle_node.md#target-startup) for ID reuse and recovery. |
 
 Thirdly, there are also AIS components and tools, such as [AIS authentication server](https://github.com/NVIDIA/aistore/tree/main/cmd/authn) and [AIS CLI](https://github.com/NVIDIA/aistore/tree/main/cmd/cli). Authentication server, if enabled, creates a sub-directory `.authn` that contains:
 

@@ -83,23 +83,40 @@ The discovery URL tells a starting node where to find the cluster. Its node ID t
 
 Object placement uses target IDs. When restarting or moving a target, keep its ID and its data volumes together.
 
+A node that loads a local Smap without its own ID stops at startup.
+
 ### Node ID sources
 
-At startup, AIS takes the first applicable source for the node's role.
+Both proxies and targets first check for [pod-derived IDs](#pod-derived-ids). When that mode is unset, an optional explicit ID takes precedence over the role-specific startup paths below. AIS checks `-daemon_id` before `AIS_DAEMON_ID` (command line always takes precedence over environment).
 
-| Order | Proxy | Target |
-| --- | --- | --- |
-| 1 | Pod-derived ID, when configured | Pod-derived ID, when configured |
-| 2 | `-daemon_id`, then `AIS_DAEMON_ID` | `-daemon_id`, then `AIS_DAEMON_ID` |
-| 3 | Hash of the Kubernetes node name (`MY_NODE`) when running in Kubernetes | ID in the `user.ais.daemon_id` extended attributes on its mountpaths |
-| 4 | ID in `.ais.proxy_id` in the configuration directory | ID recovered from volume metadata (VMD), or a new ID |
-| 5 | New ID, saved in `.ais.proxy_id` | |
+#### Proxy startup
 
-A target stores its ID in its mountpath attributes and in its replicated VMD. A node that loads a local Smap without its own ID stops at startup. See [System Files](/docs/sysfiles.md) and [storage integrity errors](/docs/troubleshooting.md#storage-integrity-errors-sie).
+A proxy running in Kubernetes derives its ID from the Kubernetes node name (`MY_NODE`). Otherwise, it reuses the ID in `.ais.proxy_id` in its configuration directory. If there is no saved ID, it generates one and saves it there.
+
+#### Target startup
+
+A target reuses the ID in the `user.ais.daemon_id` extended attribute at the root of its configured mountpaths. The IDs it finds must agree. If none of the mountpaths has the attribute, the target tries to recover its ID from the `daemon_id` field in a copy of `.ais.vmd` (volume metadata). It uses a newly generated ID when neither source supplies one.
+
+The xattr identifies the owner of each mountpath. The replicated VMD records the same target ID along with the target's mountpath configuration. See [System Files](/docs/sysfiles.md#system-files) and [storage integrity errors](/docs/troubleshooting.md#storage-integrity-errors-sie).
+
+#### Generating a new ID
+
+The default generator produces eight random letters. In a development setup with `test_fspaths.count > 0`, it appends the role and public port to a random prefix. For example, a proxy ID ends in `p8080` and a target ID can end in `t8081`. See [the local playground](/docs/getting_started.md#local-playground).
 
 ### Pod-derived IDs
 
-To opt in when creating a **new Kubernetes cluster**, set `AIS_DAEMON_ID_SOURCE=k8s-pod:<scope>` on both proxy and target containers. The equivalent `-daemon_id_source` flag takes precedence over the environment variable. AIS derives an eight-letter ID from the role (`-role`), namespace (`K8S_NS`), pod name (`MY_POD`), and optional scope. A proxy in this mode derives its ID at each startup without using `.ais.proxy_id`.
+To opt-in when creating a **new Kubernetes cluster**, set `AIS_DAEMON_ID_SOURCE=k8s-pod:<scope>` on both proxy and target containers. The equivalent `-daemon_id_source` flag takes precedence over the environment variable.
+
+AIS generates an eight-letter ID at every startup from the role (`-role`), namespace (`K8S_NS`), pod name (`MY_POD`), and optional scope. With those inputs unchanged, a replacement pod gets the same ID even when its local state starts in a fresh [`emptyDir`](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir).
+
+Notice the distinction: `AIS_DAEMON_ID_SOURCE` causes AIStore ID to follow the pod across Kubernetes nodes:
+
+| Scenario | Existing default | `AIS_DAEMON_ID_SOURCE=k8s-pod:<scope>` |
+|---|---|---|
+| Proxy pod moves to another Kubernetes node | ID changes with `MY_NODE` | Same ID if the pod name, namespace, and scope stay the same |
+| Target pod is recreated with blank mountpaths | Generates a new ID | Recomputes the same ID from the pod identity |
+
+In summary:
 
 * Supply `K8S_NS` and `MY_POD` and keep them stable. StatefulSet pod names such as `ais-target-1` let a replacement pod retain the same ID on another Kubernetes node.
 * Use a scope unique to the AIS cluster and keep it fixed for the lifetime of its volumes. For example, a deployment can use the AIStore custom resource UID. Recreating that resource changes its UID and makes previously stamped volumes incompatible with the new IDs. The unscoped value `k8s-pod` is accepted and gives the same IDs to clusters with identical roles, namespaces, and pod names.
