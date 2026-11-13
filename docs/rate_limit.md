@@ -164,6 +164,17 @@ func (bp *rlbackend) GetObj() (int, error) {
 
 - **Lazy Pruning**: Over time, not all buckets remain active, so the system utilizes common [housekeeping](https://github.com/NVIDIA/aistore/blob/main/hk/common_durations.go) mechanism to lazily prune stale rate-limiter instances.
 
+### Backend Retry Waits
+
+`rlbackend` acquires a token once before each operation. After a backend `429` or `503`, retries use backoff without acquiring additional tokens; errors still contribute to the shared limiter's error statistics.
+
+- Each wait starts from the larger of the previous retry sleep and the current token-derived interval.
+- The error percentage determines the multiplier: **2x** at 30% or below, **4x** above 30%, and **8x** above 50%. With fewer than three recorded requests, the multiplier is 2x.
+- Each sleep is capped at the larger of **6 seconds** (`DfltRateMaxWait / DfltRateMaxRetries`) and the current token-derived interval. Retries remain bounded by `num_retries` (at most 10) and a one-minute retry-sleep budget.
+- The previous sleep belongs only to the current operation. A later operation starts without that accumulated delay.
+
+For one isolated operation with a fresh limiter, a 10ms base interval, and every attempt returning `429`, ten retries sleep for **20ms, 40ms, 80ms, 160ms, 320ms, 640ms, 1.28s, 2.56s, 5.12s, 6s** (16.22s total). A successful retry or a non-rate-limit error ends the retry loop.
+
 ---
 
 ## 5. Handling Batch Jobs

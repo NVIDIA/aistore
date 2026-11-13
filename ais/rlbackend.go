@@ -216,22 +216,25 @@ func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim)
 	}
 	arl = v.(*cos.AdaptRateLim)
 
+	// TODO: make acquisition context-aware so cancellation interrupts token waits
 	arl.RetryAcquire(time.Second)
 	return arl
 }
 
 // reactive: back off and repeat `cb` while the remote keeps responding 429/503
 // - (ecode, err) on entry: the failed attempt that brought us here
+// - sleep grows from the previous wait by 2x/4x/8x based on error rate, capped at max(6s, token-derived interval)
 // - bounded by both `num_retries` and DfltRateMaxWait
 // - `cb` gets no-retry context: one attempt per SDK request
 func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, ecode int, err error,
 	cb func(context.Context) (int, error)) (total time.Duration, _ int, _ error) {
 	var (
 		retries int
+		sleep   time.Duration
 		nctx    = cmn.WithNoRetry(ctx)
 	)
 	for retries < arl.NumRetries() && total < cos.DfltRateMaxWait {
-		sleep := arl.OnErr()
+		sleep = arl.OnErr(sleep)
 		total += sleep
 		if cerr := ctx.Err(); cerr != nil {
 			return total, 0, cerr

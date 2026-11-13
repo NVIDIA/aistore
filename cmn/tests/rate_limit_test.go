@@ -12,6 +12,7 @@ import (
 
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/tools"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
 
 func TestRateLim(t *testing.T) {
@@ -83,7 +84,7 @@ func TestAdaptRateLim(t *testing.T) {
 						continue
 					}
 					// simulate 429 retry
-					arl.OnErr()
+					arl.OnErr(0)
 					if err := arl.Acquire(); err != nil {
 						t.Errorf("expecting to acquire after OnErr: iter %d: %v\n", i, err)
 						continue
@@ -100,6 +101,62 @@ func TestAdaptRateLim(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAdaptRateLimBackoff(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+	for _, tc := range []struct {
+		name     string
+		tokens   int
+		errors   int
+		previous time.Duration
+		want     time.Duration
+	}{
+		{name: "initial", tokens: 100, want: 20 * time.Millisecond},
+		{name: "medium-error-rate", tokens: 100, errors: 3, want: 40 * time.Millisecond},
+		{name: "high-error-rate", tokens: 100, errors: 5, want: 80 * time.Millisecond},
+		{name: "grow-previous-wait", tokens: 100, errors: 5, previous: 20 * time.Millisecond,
+			want: 160 * time.Millisecond},
+		{name: "configured-slower-rate", tokens: 10, previous: time.Millisecond,
+			want: 200 * time.Millisecond},
+		{name: "sleep-ceiling", tokens: 100, errors: 5, previous: time.Second,
+			want: cos.DfltRateMaxWait / cos.DfltRateMaxRetries},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			arl, err := cos.NewAdaptRateLim(tc.tokens, cos.DfltRateMaxRetries, time.Second)
+			tassert.CheckFatal(t, err)
+			for attempt := range 10 {
+				tassert.CheckFatal(t, arl.Acquire())
+				if attempt < tc.errors {
+					arl.OnErr(0)
+				}
+			}
+			started := time.Now()
+			sleep := arl.OnErr(tc.previous)
+			tassert.Fatalf(t, sleep == tc.want && time.Since(started) >= sleep,
+				"backoff = %v, want %v; elapsed %v", sleep, tc.want, time.Since(started))
+		})
+	}
+}
+
+func TestAdaptRateLimRetrySequence(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
+	arl, err := cos.NewAdaptRateLim(int(cos.DfltRateMinIval/cos.DfltRateMinBtwn), cos.DfltRateMaxRetries, cos.DfltRateMinIval)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, arl.Acquire())
+	var sleep time.Duration
+	for _, want := range []time.Duration{
+		20 * time.Millisecond, 40 * time.Millisecond, 80 * time.Millisecond, 160 * time.Millisecond,
+		320 * time.Millisecond, 640 * time.Millisecond, 1280 * time.Millisecond, 2560 * time.Millisecond,
+		5120 * time.Millisecond, 6 * time.Second,
+	} {
+		sleep = arl.OnErr(sleep)
+		tassert.Fatalf(t, sleep == want, "backoff = %v, want %v", sleep, want)
+	}
+	tassert.CheckFatal(t, arl.Acquire())
+	sleep = arl.OnErr(0)
+	tassert.Fatalf(t, sleep == cos.DfltRateMinBtwn<<1,
+		"new operation reused the previous operation's wait: %v", sleep)
 }
 
 func TestBurstRateLim(t *testing.T) {

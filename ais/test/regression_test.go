@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/docker"
 	"github.com/NVIDIA/aistore/tools/readers"
@@ -891,6 +892,177 @@ func checkLsoCount(t *testing.T, bp api.BaseParams, bck cmn.Bck, expected int) {
 	lst, err := api.ListObjects(bp, bck, nil, api.ListArgs{Context: ctx})
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, len(lst.Entries) == expected, "expected %d object(s), got %d", expected, len(lst.Entries))
+}
+
+func TestBackendRateLimitBackoffRemoteAIS(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true, Long: true})
+	bp := tools.BaseAPIParams(tools.RandomProxyURL(t))
+	remoteBP := tools.BaseAPIParams(tools.RemoteCluster.URL)
+	remoteSmap, err := api.GetClusterMap(remoteBP)
+	tassert.CheckFatal(t, err)
+	for _, tc := range []struct {
+		name                string
+		backendRateLimit    bool
+		backendMaxTokens    int
+		backendInterval     time.Duration
+		rangeRead           bool
+		remoteTokenInterval time.Duration
+		missingObject       bool
+		wantHTTPError       int
+		wantErrorType       string
+		numRetries          int
+		wantRetrySleep      time.Duration
+	}{
+		{
+			name: "cold-get-succeeds-without-429", backendRateLimit: true,
+		},
+		{
+			name: "missing-object-returns-404", backendRateLimit: true, missingObject: true,
+			wantHTTPError: http.StatusNotFound,
+		},
+		{
+			name: "disabled-backend-limiter-forwards-429", backendRateLimit: false,
+			remoteTokenInterval: 5 * time.Minute, wantHTTPError: http.StatusTooManyRequests,
+		},
+		{
+			name: "cold-get-recovers-from-429-and-clears-retry-delay", backendRateLimit: true,
+			remoteTokenInterval: 5 * time.Minute,
+		},
+		{
+			name: "range-read-recovers-from-429-and-clears-retry-delay", backendRateLimit: true, rangeRead: true,
+			remoteTokenInterval: 5 * time.Minute,
+		},
+		{
+			name: "one-retry-sleeps-20ms", backendRateLimit: true, numRetries: 1,
+			remoteTokenInterval: time.Hour, wantErrorType: "ErrBackendRetry", wantRetrySleep: 20 * time.Millisecond,
+		},
+		{
+			name: "two-retries-sleep-20ms-plus-40ms", backendRateLimit: true, numRetries: 2,
+			remoteTokenInterval: time.Hour, wantErrorType: "ErrBackendRetry", wantRetrySleep: 60 * time.Millisecond,
+		},
+		{
+			name: "three-retries-sleep-20ms-plus-40ms-plus-80ms", backendRateLimit: true, numRetries: 3,
+			remoteTokenInterval: time.Hour, wantErrorType: "ErrBackendRetry", wantRetrySleep: 140 * time.Millisecond,
+		},
+		{
+			name: "slow-backend-limit-keeps-10s-retry-interval", backendRateLimit: true, numRetries: 1,
+			backendMaxTokens: 1, backendInterval: 20 * time.Second,
+			remoteTokenInterval: time.Hour, wantErrorType: "ErrBackendRetry", wantRetrySleep: 10 * time.Second,
+		},
+		{
+			name: "persistent-429-exhausts-retry-budget", backendRateLimit: true,
+			remoteTokenInterval: time.Hour, wantErrorType: "ErrBackendRetry",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteBck := cmn.Bck{Name: "backend-backoff-" + cos.GenTie(), Provider: apc.AIS}
+			tools.CreateBucket(t, remoteBP.URL, remoteBck, nil, true)
+			names, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
+				Context: t.Context(), ProxyURL: remoteBP.URL, Bck: remoteBck,
+				ObjCnt: 1, ObjSize: cos.KiB, FixedSize: true, CksumType: cos.ChecksumOneXxh,
+			})
+			tassert.CheckFatal(t, err)
+			bck := remoteBck
+			bck.Ns.UUID = tools.RemoteCluster.UUID
+			_, err = api.HeadBucket(bp, bck, false)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { tassert.CheckError(t, api.EvictRemoteBucket(bp, bck, false)) })
+			numRetries := cos.DfltRateMaxRetries
+			if tc.numRetries != 0 {
+				numRetries = tc.numRetries
+			}
+			maxTokens, interval := tc.backendMaxTokens, tc.backendInterval
+			if maxTokens == 0 {
+				maxTokens, interval = 10_000, time.Second
+			}
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+				Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+					Enabled: apc.Ptr(tc.backendRateLimit), MaxTokens: apc.Ptr(maxTokens), Interval: apc.Ptr(cos.Duration(interval)),
+				}, NumRetries: apc.Ptr(numRetries)},
+			}})
+			tassert.CheckFatal(t, err)
+			if tc.remoteTokenInterval != 0 {
+				_, err = api.SetBucketProps(remoteBP, remoteBck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+					Frontend: &cmn.BurstyToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+						Enabled: apc.Ptr(true), MaxTokens: apc.Ptr(8 * remoteSmap.CountActivePs()),
+						Interval: apc.Ptr(cos.Duration(tc.remoteTokenInterval)),
+					}, Size: apc.Ptr(1)},
+				}})
+				tassert.CheckFatal(t, err)
+				tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+					_, getErr := api.GetObject(remoteBP, remoteBck, names[0], nil)
+					if getErr == nil {
+						return false
+					}
+					herr := cmn.AsErrHTTP(getErr)
+					tassert.Fatalf(t, herr != nil && herr.Status == http.StatusTooManyRequests, "expected remote 429, got %v", getErr)
+					return true
+				}, tools.WaitRetryOpts{MaxRetries: 32, Interval: time.Millisecond}))
+			}
+			args := &api.GetArgs{Context: t.Context()}
+			wantSize := int64(cos.KiB)
+			if tc.rangeRead {
+				wantSize = 1
+				args.Header = http.Header{cos.HdrRange: []string{"bytes=0-0"}}
+			}
+			var (
+				owner  *meta.Snode
+				before *stats.Node
+			)
+			if tc.wantRetrySleep != 0 {
+				smap := tools.GetClusterMap(t, bp.URL)
+				smap.InitDigests()
+				owner, err = smap.HrwObjName2T(meta.CloneBck(&bck), names[0])
+				tassert.CheckFatal(t, err)
+				before, err = api.GetDaemonStats(bp, owner)
+				tassert.CheckFatal(t, err)
+			}
+			started := time.Now()
+			name := names[0]
+			if tc.missingObject {
+				name += "-missing"
+			}
+			oa, err := api.GetObject(bp, bck, name, args)
+			elapsed := time.Since(started)
+			tlog.Logfln("GET completed in %v: %v", elapsed, err)
+			if tc.wantRetrySleep != 0 {
+				after, statsErr := api.GetDaemonStats(bp, owner)
+				tassert.CheckFatal(t, statsErr)
+				retried := tools.GetNamedStatsVal(after, stats.RatelimGetRetryCount) - tools.GetNamedStatsVal(before, stats.RatelimGetRetryCount)
+				sleep := time.Duration(tools.GetNamedStatsVal(after, stats.RatelimGetRetryLatencyTotal) - tools.GetNamedStatsVal(before, stats.RatelimGetRetryLatencyTotal))
+				tassert.Fatalf(t, retried == 1 && sleep == tc.wantRetrySleep,
+					"expected one retried GET with %v total sleep, got %d with %v", tc.wantRetrySleep, retried, sleep)
+			}
+			if tc.wantHTTPError == 0 && tc.wantErrorType == "" {
+				tassert.Fatalf(t, err == nil, "GET failed: %v", err)
+				tassert.Fatalf(t, oa.Size() == wantSize, "expected %d bytes, got %d", wantSize, oa.Size())
+				if tc.remoteTokenInterval != 0 {
+					_, err = api.SetBucketProps(remoteBP, remoteBck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+						Frontend: &cmn.BurstyToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{Enabled: apc.Ptr(false)}},
+					}})
+					tassert.CheckFatal(t, err)
+					tassert.CheckFatal(t, api.EvictObject(bp, bck, name))
+					started = time.Now()
+					oa, err = api.GetObject(bp, bck, name, args)
+					elapsed = time.Since(started)
+					tassert.CheckFatal(t, err)
+					tassert.Fatalf(t, oa.Size() == wantSize, "expected %d bytes after recovery, got %d", wantSize, oa.Size())
+					tassert.Fatalf(t, elapsed < time.Second, "successful GET retained retry delay: %v", elapsed)
+					tlog.Logfln("GET after recovery completed in %v", elapsed)
+				}
+				return
+			}
+			herr := cmn.AsErrHTTP(err)
+			tassert.Fatalf(t, herr != nil, "expected HTTP error, got %v", err)
+			if tc.wantErrorType != "" {
+				tassert.Fatalf(t, herr.TypeCode == tc.wantErrorType, "expected %s, got %v", tc.wantErrorType, err)
+				tassert.Fatalf(t, elapsed < 2*cos.DfltRateMaxWait,
+					"persistent 429 exceeded the retry wait budget: %v", elapsed)
+			} else {
+				tassert.Fatalf(t, herr.Status == tc.wantHTTPError, "expected HTTP %d, got %v", tc.wantHTTPError, err)
+			}
+		})
+	}
 }
 
 func TestPrefetchRange(t *testing.T) {
