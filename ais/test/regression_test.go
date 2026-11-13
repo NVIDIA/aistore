@@ -759,6 +759,7 @@ func TestDeleteList(t *testing.T) {
 
 func TestRemoteAISRateLimitError(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
+	config := tools.GetClusterConfig(t)
 	bp := tools.BaseAPIParams(tools.RandomProxyURL(t))
 	remoteBP := tools.BaseAPIParams(tools.RemoteCluster.URL)
 	remoteSmap, err := api.GetClusterMap(remoteBP)
@@ -806,6 +807,11 @@ func TestRemoteAISRateLimitError(t *testing.T) {
 				return true
 			}, tools.WaitRetryOpts{MaxRetries: 32, Interval: time.Millisecond}))
 			_, err = api.GetObject(bp, bck, names[0], nil)
+			if !tc.retry {
+				// Wait out core.RR.Throttle's target-wide backoff before subsequent blob tests.
+				resumeAt := time.Now().Add(config.Timeout.ColdRangeBackoff())
+				t.Cleanup(func() { time.Sleep(time.Until(resumeAt)) })
+			}
 			herr := cmn.AsErrHTTP(err)
 			tassert.Fatalf(t, herr != nil, "expected HTTP error, got %v", err)
 			if tc.retry {
