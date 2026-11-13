@@ -18,48 +18,20 @@ import (
 
 // core renewal logic -------------------
 
-func (r *registry) _renewFlt(entry Renewable, flt *Flt) RenewRes {
+func (r *registry) renewFlt(entry Renewable, flt *Flt) RenewRes {
 	var retried bool
 
 again_rlock:
-	r.renewMtx.RLock()
-
-	var (
-		prevEntry = r.getRunning(flt)
-		xprev     core.Xact
-		havePrev  bool
-		terminal  bool
-	)
-	if prevEntry != nil {
-		havePrev = true
-		xprev = prevEntry.Get()
-		debug.Assert(xprev != nil)
-
-		terminal = !xprev.IsRunning()
-
-		// regular path
-		if !terminal {
-			if usePrev(xprev, entry, flt) {
-				r.renewMtx.RUnlock()
-				return RenewRes{Entry: prevEntry, UUID: xprev.ID()}
-			}
-			if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
-				r.renewMtx.RUnlock()
-				if cmn.IsErrXactUsePrev(err) && wpr != WprUse {
-					nlog.Errorln(err, "- not starting a new one of the same kind")
-				}
-				xctn := prevEntry.Get()
-				return RenewRes{Entry: prevEntry, Err: err, UUID: xctn.ID()}
-			}
+	rns, notStarting, done, terminal := r._renewPrev(entry, flt)
+	if done {
+		if notStarting != nil {
+			nlog.Errorln(notStarting, "- not starting a new one of the same kind")
 		}
+		return rns
 	}
 
-	r.renewMtx.RUnlock()
-
-	//
-	// TOCTOU race (was running when looked up, but now is terminal)
-	//
-	if havePrev && terminal {
+	// (was running when looked up, but now is terminal)
+	if terminal {
 		if !retried {
 			retried = true // just once
 			time.Sleep(waitTerminalCleanup)
@@ -68,27 +40,59 @@ again_rlock:
 	}
 
 	// serialized path
-	r.renewMtx.Lock()
-	rns, aborted := r.renewLocked(entry, flt)
-	r.renewMtx.Unlock()
+	rns, aborted := r._renewSerial(entry, flt)
 
 	if aborted {
 		// abort to propagate & registry to settle
 		time.Sleep(waitPrevAborted)
-		retried = true // prevent any more retries
+		retried = true // ditto
 		goto again_rlock
 	}
 	return rns
 }
 
+// under the read lock, try to use the previous (running) xaction
+// - done means that rns is final (the previous xaction or an error)
+// - terminal means that the previous one is found but not running (the caller retries once)
+// neither means calling _renewSerial under write lock
+//
+//nolint:staticcheck // making an exception
+func (r *registry) _renewPrev(entry Renewable, flt *Flt) (rns RenewRes, notStarting error, done, terminal bool) {
+	r.renewMtx.RLock()
+	defer r.renewMtx.RUnlock()
+
+	prevEntry := r.getRunning(flt)
+	if prevEntry == nil {
+		return rns, nil, false, false
+	}
+	xprev := prevEntry.Get()
+	debug.Assert(xprev != nil)
+	if !xprev.IsRunning() {
+		return rns, nil, false, true // terminal
+	}
+	if usePrev(xprev, entry, flt) {
+		return RenewRes{Entry: prevEntry, UUID: xprev.ID()}, nil, true, false
+	}
+	if wpr, err := entry.WhenPrevIsRunning(prevEntry); wpr == WprUse || err != nil {
+		if cmn.IsErrXactUsePrev(err) && wpr != WprUse {
+			notStarting = err
+		}
+		xctn := prevEntry.Get()
+		return RenewRes{Entry: prevEntry, Err: err, UUID: xctn.ID()}, notStarting, true, false // done
+	}
+	return rns, nil, false, false
+}
+
+func (r *registry) _renewSerial(entry Renewable, flt *Flt) (RenewRes, bool) {
+	r.renewMtx.Lock()
+	defer r.renewMtx.Unlock()
+	return r._renewLocked(entry, flt)
+}
+
 // usePrev: default policies for reusing a currently running xaction
-//
 // 1. same UUID: always reuse
-//
 // 2. non `xact.Demand`: delegate to WhenPrevIsRunning() for full control
-//
 // 3. ActGetBatch: is an `xact.Demand` but requires full control via its own WhenPrevIsRunning()
-//
 // 4. xact.Demand scope-based heuristics:
 //    - non-bucket scope (cluster/node): generally safe to reuse across requests
 //    - bucket-scoped:
@@ -135,7 +139,7 @@ func usePrev(xprev core.Xact, nentry Renewable, flt *Flt) bool {
 	return true
 }
 
-func (r *registry) renewLocked(entry Renewable, flt *Flt) (rns RenewRes, aborted bool) {
+func (r *registry) _renewLocked(entry Renewable, flt *Flt) (rns RenewRes, aborted bool) {
 	var (
 		xprev core.Xact
 		wpr   WPR

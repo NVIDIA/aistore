@@ -572,14 +572,14 @@ func (r *registry) hkDelOld(int64) time.Duration {
 
 func (r *registry) renewByID(entry Renewable, bck *meta.Bck) (rns RenewRes) {
 	flt := Flt{ID: entry.UUID(), Kind: entry.Kind(), Bck: bck}
-	rns = r._renewFlt(entry, &flt)
+	rns = r.renewFlt(entry, &flt)
 	rns.beingRenewed()
 	return
 }
 
 func (r *registry) renew(entry Renewable, bck *meta.Bck, buckets ...*meta.Bck) (rns RenewRes) {
 	flt := Flt{Kind: entry.Kind(), Bck: bck, Buckets: buckets}
-	rns = r._renewFlt(entry, &flt)
+	rns = r.renewFlt(entry, &flt)
 	rns.beingRenewed()
 	return
 }

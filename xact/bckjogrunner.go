@@ -100,8 +100,9 @@ type BckJogRunner struct {
 
 // Init initializes BckJogRunner from opts.
 // If opts.NumWorkers != NwpNone, it auto-tunes worker count (media + load)
-// and sets up the internal worker pool. Returns an error only if the system
-// is under such extreme pressure that starting workers is unsafe.
+// and sets up the internal worker pool. Returns an error if opts.NumWorkers
+// is invalid, or if the system is under such extreme pressure that starting
+// workers is unsafe.
 func (r *BckJogRunner) Init(id, kind string, bck *meta.Bck, opts BckJogRunnerOpts, config *cmn.Config) error {
 	r.cb = opts.CbObj
 

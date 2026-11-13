@@ -742,6 +742,9 @@ func (t *target) tcobjs(c *txnSrv, msg *cmn.TCOMsg, disableDM bool) (xid string,
 		if err := bckFrom.Validate(); err != nil {
 			return xid, err
 		}
+		if err := xact.ValidateNumWorkers(msg.NumWorkers); err != nil {
+			return xid, err
+		}
 		cs := fs.Cap()
 		if err := cs.Err(); err != nil {
 			return xid, err

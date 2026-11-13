@@ -5,6 +5,7 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
@@ -28,6 +29,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/tools/trand"
 	"github.com/NVIDIA/aistore/xact"
 )
 
@@ -821,6 +823,74 @@ func TestRemoteAISRateLimitError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInvalidNumWorkers(t *testing.T) {
+	const errInvalid = "invalid num-workers"
+	var (
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+		bck      = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		objName  = t.Name() + "/" + trand.String(8)
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+	tassert.CheckFatal(t, tools.PutObjRR(bp, bck, objName, cos.KiB, cos.ChecksumNone))
+
+	checkErr := func(t *testing.T, err error) {
+		tassert.Errorf(t, err != nil && strings.Contains(err.Error(), errInvalid), "expected %q, got %v", errInvalid, err)
+	}
+
+	t.Run("delete", func(t *testing.T) {
+		evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: []string{objName}}, NumWorkers: -10}
+		_, err := api.DeleteMultiObj(bp, bck, evdMsg)
+		checkErr(t, err)
+		checkLsoCount(t, bp, bck, 1)
+	})
+
+	t.Run("tco", func(t *testing.T) {
+		bckTo := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
+
+		msg := cmn.TCOMsg{ToBck: bckTo}
+		msg.ObjNames = []string{objName}
+		msg.NumWorkers = -2
+		_, err := api.CopyMultiObj(bp, bck, &msg)
+		checkErr(t, err)
+		checkLsoCount(t, bp, bck, 1)
+	})
+
+	t.Run("tcb", func(t *testing.T) {
+		bckTo := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
+
+		_, err := api.CopyBucket(bp, bck, bckTo, &apc.TCBMsg{NumWorkers: -2})
+		checkErr(t, err)
+		checkLsoCount(t, bp, bck, 1)
+	})
+
+	t.Run("shard-index", func(t *testing.T) {
+		_, err := api.IndexBucketShards(bp, bck, &apc.IndexShardMsg{NumWorkers: -2})
+		checkErr(t, err)
+		checkLsoCount(t, bp, bck, 1)
+	})
+
+	// -1 (no workers) is valid
+	t.Run("delete-none", func(t *testing.T) {
+		evdMsg := &apc.EvdMsg{ListRange: apc.ListRange{ObjNames: []string{objName}}, NumWorkers: xact.NwpNone}
+		xid, err := api.DeleteMultiObj(bp, bck, evdMsg)
+		tassert.CheckFatal(t, err)
+		args := xact.ArgsMsg{ID: xid, Kind: apc.ActDeleteObjects, Timeout: tools.RebalanceTimeout}
+		tassert.CheckFatal(t, api.WaitForXaction(bp, &args))
+		checkLsoCount(t, bp, bck, 0)
+	})
+}
+
+func checkLsoCount(t *testing.T, bp api.BaseParams, bck cmn.Bck, expected int) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	lst, err := api.ListObjects(bp, bck, nil, api.ListArgs{Context: ctx})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(lst.Entries) == expected, "expected %d object(s), got %d", expected, len(lst.Entries))
 }
 
 func TestPrefetchRange(t *testing.T) {

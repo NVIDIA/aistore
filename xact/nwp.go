@@ -6,6 +6,7 @@ package xact
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/load"
@@ -66,6 +67,15 @@ func DefaultNW(numMpaths int) int {
 	}
 }
 
+// user-specified num-workers must be -1 (none), 0 (default), or a positive number
+func ValidateNumWorkers(numWorkers int) error {
+	if numWorkers < NwpNone {
+		return fmt.Errorf("invalid num-workers %d: expecting %d (none), %d (default), or a positive number",
+			numWorkers, NwpNone, NwpDflt)
+	}
+	return nil
+}
+
 // estimate the requested number of workers given:
 // a) user-specified number, if any
 // b) current load, and
@@ -73,10 +83,15 @@ func DefaultNW(numMpaths int) int {
 //
 // used by all list-range type jobs, tcb, and blob-download
 // - xname: xaction name (for logging)
-// - numWorkers (when non-zero): requested number of workers
+// - numWorkers: requested number of workers (see ValidateNumWorkers)
 // - numMpaths: number of available mountpaths
 func TuneNumWorkers(xname string, numWorkers, numMpaths int) (int, error) {
 	const memExtremeMsg = "extreme memory pressure"
+
+	if err := ValidateNumWorkers(numWorkers); err != nil {
+		return 0, err
+	}
+
 	schLoad := load.Sched()
 
 	// 1. apply system default

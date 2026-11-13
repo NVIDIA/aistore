@@ -89,6 +89,10 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 		msg    = args.Msg
 	)
 
+	if err := xact.ValidateNumWorkers(msg.NumWorkers); err != nil {
+		return nil, err
+	}
+
 	// `NwpNone` means: no additional workers; joggers only (copy/transform happens in joggers);
 	// msg.NumWorkers == 0 triggers system tune-up (media + load) default.
 	numWorkers := msg.NumWorkers
