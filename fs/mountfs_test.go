@@ -5,6 +5,7 @@
 package fs_test
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -17,6 +18,8 @@ import (
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/trand"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestMountpathAddNonExisting(t *testing.T) {
@@ -323,6 +326,32 @@ func TestMountpathAddEnabledInit(t *testing.T) {
 	mi, err := fs.NewMountpath(t.TempDir(), cos.TestMpathLabel)
 	tassert.CheckFatal(t, err)
 	tassert.CheckFatal(t, mi.AddEnabled("", make(fs.MPI), make(fs.MPI), cmn.GCO.Get(), nil))
+}
+
+// reject another target's mountpath, then attach and stamp it after removing the foreign ID
+func TestMountpathAttachOtherTarget(t *testing.T) {
+	const (
+		tid      = "target01"
+		xattrTID = "user.ais.daemon_id"
+	)
+	initFS()
+	t.Cleanup(initFS)
+
+	mpath := t.TempDir()
+	tassert.CheckFatal(t, fs.SetXattr(mpath, xattrTID, []byte("target02")))
+	_, err := fs.AddMpath(tid, mpath, cos.TestMpathLabel, func() {})
+	sie, ok := errors.AsType[*fs.ErrStorageIntegrity](err)
+	tassert.Fatalf(t, ok && sie.Code == fs.SieMpathIDMismatch, "expected sie#%d, got %v", fs.SieMpathIDMismatch, err)
+	tools.AssertMountpathCount(t, 0, 0)
+
+	// same mountpath, now unstamped: attach and stamp
+	tassert.CheckFatal(t, unix.Removexattr(mpath, xattrTID))
+	_, err = fs.AddMpath(tid, mpath, cos.TestMpathLabel, func() {})
+	tassert.CheckFatal(t, err)
+	tools.AssertMountpathCount(t, 1, 0)
+	b, err := fs.GetXattr(mpath, xattrTID)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, string(b) == tid, "expected %q stamp, got %q", tid, b)
 }
 
 func initFS() {

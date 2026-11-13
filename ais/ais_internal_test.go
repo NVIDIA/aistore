@@ -32,6 +32,7 @@ import (
 
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -151,6 +152,37 @@ func TestPodIDSource(t *testing.T) {
 		tassert.Errorf(t, ok == test.ok, "%q: expected ok=%t, got %t", test.source, test.ok, ok)
 		tassert.Errorf(t, !ok || scope == test.scope, "%q: expected scope %q, got %q", test.source, test.scope, scope)
 	}
+}
+
+// ID source: environment, command line (takes precedence), and none
+func TestPodDaemonID(t *testing.T) {
+	const (
+		ns    = "ais"
+		pod   = "ais-target-1"
+		scope = "6f1c2b7e-3d4a-4c5b-9e8f-0a1b2c3d4e5f"
+	)
+	saved := daemon.cli.daemonIDSource
+	t.Cleanup(func() { daemon.cli.daemonIDSource = saved })
+	daemon.cli.daemonIDSource = ""
+	t.Setenv(daemonIDEnv, "")
+	t.Setenv(env.AisK8sPod, pod)
+	t.Setenv(env.AisK8sNamespace, ns)
+
+	t.Setenv(daemonIDSourceEnv, "")
+	id, podRef := podDaemonID(apc.Target)
+	tassert.Fatalf(t, id == "" && podRef == "", "expected no pod-derived ID, got %q (%q)", id, podRef)
+
+	t.Setenv(daemonIDSourceEnv, "k8s-pod:"+scope)
+	id, podRef = podDaemonID(apc.Target)
+	tassert.Fatalf(t, id == derivePodID(apc.Target, ns, pod, scope), "unexpected ID %q", id)
+	tassert.Fatalf(t, podRef == ns+"/"+pod, "unexpected pod reference %q", podRef)
+
+	pid, _ := podDaemonID(apc.Proxy)
+	tassert.Fatalf(t, pid == derivePodID(apc.Proxy, ns, pod, scope) && pid != id, "unexpected proxy ID %q", pid)
+
+	daemon.cli.daemonIDSource = "k8s-pod"
+	id, _ = podDaemonID(apc.Target)
+	tassert.Fatalf(t, id == derivePodID(apc.Target, ns, pod, ""), "command line must take precedence, got %q", id)
 }
 
 func TestPodDerivedID(t *testing.T) {

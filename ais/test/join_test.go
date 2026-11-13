@@ -21,10 +21,12 @@ import (
 	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
+	"github.com/NVIDIA/aistore/volume"
 )
 
 type joinTestBody struct {
@@ -187,6 +189,128 @@ func TestPodDerivedRejoin(t *testing.T) {
 	})
 	stopProxy := start(apc.Proxy, "ais-proxy-1", ports[7], ports[8])
 	checkRejoin(apc.Proxy, "ais-proxy-1", ports[7], ports[9], stopProxy, nil)
+}
+
+// pod-derived target restarts (SIGKILL) with its original mountpaths, one of which now stores a bad VMD copy:
+// - the target must derive the same ID, ignore the bad copy, and rejoin
+// - the bad copy must be replaced
+func TestPodDerivedRestartBadVMD(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+
+	config := tools.GetClusterConfig(t)
+	config.Version, config.UUID = 0, ""
+	host, scheme := "127.0.0.1", "http"
+	if config.Net.UseIPv6 {
+		host = "::1"
+	}
+	if config.Net.HTTP.UseHTTPS {
+		scheme = "https"
+	}
+	// reserve distinct ports for the private cluster
+	var listeners [4]net.Listener
+	var ports [len(listeners)]int
+	for i := range listeners {
+		listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+		tassert.CheckFatal(t, err)
+		t.Cleanup(func() { _ = listener.Close() })
+		listeners[i] = listener
+		ports[i] = listener.Addr().(*net.TCPAddr).Port
+	}
+	for _, listener := range listeners {
+		tassert.CheckFatal(t, listener.Close())
+	}
+	primaryURL := cmn.ProtoEndpoint(scheme, net.JoinHostPort(host, strconv.Itoa(ports[0])))
+	config.Proxy.PrimaryURL, config.Proxy.OriginalURL, config.Proxy.DiscoveryURL = primaryURL, primaryURL, primaryURL
+	t.Setenv(env.AisPrimaryEP, primaryURL)
+	t.Setenv(env.AisK8sNamespace, "ais-vmd-test")
+	t.Setenv("AIS_DAEMON_ID", "")
+
+	fspRoot := t.TempDir()
+	mpaths := []string{filepath.Join(fspRoot, "mp1"), filepath.Join(fspRoot, "mp2")}
+	for _, mpath := range mpaths {
+		tassert.CheckFatal(t, os.Mkdir(mpath, 0o755))
+	}
+	start := func(role, pod string, public, control int, fsp cmn.TestFSPConf, args ...string) func() {
+		t.Helper()
+		tlog.Logfln("Starting %s pod %s (public port %d, control port %d, mountpaths %d)", role, pod, public, control, fsp.Count)
+		t.Setenv(env.AisK8sPod, pod)
+		local := &cmn.LocalConfig{
+			ConfigDir: t.TempDir(),
+			LogDir:    t.TempDir(),
+			TestFSP:   fsp,
+			HostNet: cmn.LocalNetConfig{
+				Hostname: host, HostnameIntraControl: host, Port: public, PortIntraControl: control,
+			},
+		}
+		cfg := *config
+		pid := tools.DeployNode(t, &meta.Snode{DaeType: role}, &cfg, local, append(args, "-daemon_id_source=k8s-pod")...)
+		stop := func() {
+			if pid != 0 {
+				tools.CleanupNode(t, pid)
+				pid = 0
+			}
+		}
+		t.Cleanup(stop)
+		return stop
+	}
+	proxyRoot := t.TempDir()
+	tassert.CheckFatal(t, os.Mkdir(filepath.Join(proxyRoot, "mp1"), 0o755))
+	start(apc.Proxy, "ais-proxy-0", ports[0], ports[1], cmn.TestFSPConf{Root: proxyRoot, Count: 1}, "-ntargets=1")
+	targetFSP := cmn.TestFSPConf{Root: fspRoot, Count: len(mpaths)}
+	stop := start(apc.Target, "ais-target-0", ports[2], ports[3], targetFSP)
+
+	var (
+		bp      = tools.BaseAPIParams(primaryURL)
+		startup = tools.WaitRetryOpts{MaxRetries: 160, Interval: 250 * time.Millisecond}
+		target  *meta.Snode
+	)
+	ready := func(match func(*meta.Snode) bool) error {
+		return tools.WaitForCondition(func() bool {
+			smap, err := api.GetClusterMap(bp)
+			if err != nil {
+				return false
+			}
+			for _, node := range smap.Tmap {
+				if match(node) && api.GetProxyReadiness(tools.BaseAPIParams(node.PubNet.URL)) == nil {
+					target = node
+					return true
+				}
+			}
+			return false
+		}, startup)
+	}
+	tlog.Logfln("Waiting for the target to join private cluster %s", primaryURL)
+	tassert.CheckFatal(t, ready(func(*meta.Snode) bool { return true }))
+	old := target
+	tlog.Logfln("%s is ready", old.StringEx())
+
+	stop()
+	tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+		return api.Health(tools.BaseAPIParams(old.PubNet.URL)) != nil
+	}, startup))
+	vmd, err := volume.LoadVMDTest(old.ID(), mpaths...)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, vmd != nil, "%s: no VMD on %v", old.StringEx(), mpaths)
+	tlog.Logfln("%s is down, %s", old.StringEx(), vmd)
+
+	bad := filepath.Join(mpaths[1], fname.Vmd)
+	tassert.CheckFatal(t, cos.Stat(bad))
+	tlog.Logfln("Writing a bad VMD copy: %s", bad)
+	tassert.CheckFatal(t, os.WriteFile(bad, []byte("garbage"), 0o644))
+
+	start(apc.Target, "ais-target-0", ports[2], ports[3], targetFSP)
+	tlog.Logfln("Waiting for %s to restart and rejoin", old.StringEx())
+	err = ready(func(node *meta.Snode) bool { return node.ID() == old.ID() && !node.SameIncarnation(old) })
+	tassert.Fatalf(t, err == nil, "%s did not rejoin: %v", old.StringEx(), err)
+	tlog.Logfln("%s rejoined", target.StringEx())
+
+	after, err := volume.LoadVMDTest(old.ID(), mpaths...)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, after != nil && after.Version >= vmd.Version, "expected VMD version >= %d, got %v", vmd.Version, after)
+	repaired, err := volume.LoadVMDTest(old.ID(), mpaths[1])
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, repaired != nil && repaired.Version == after.Version, "%s: expected repaired VMD v%d, got %v", bad, after.Version, repaired)
+	tlog.Logfln("Bad copy replaced: %s", repaired)
 }
 
 func TestSlowKeepaliveDuplicateID(t *testing.T) {

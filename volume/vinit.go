@@ -8,6 +8,7 @@ package volume
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"slices"
 
@@ -51,12 +52,13 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 	// load VMD copies from the configured mountpaths
 	var (
 		vc      = newVcopies(len(config.FSP.Paths))
-		checked = make(cos.StrSet, len(config.FSP.Paths))
+		cpaths  = make([]string, 0, len(config.FSP.Paths))
+		checked = make(cos.StrSet, len(config.FSP.Paths)) // loaded after the filesystem check (below)
 	)
 	for mpath := range config.FSP.Paths {
-		checked.Set(filepath.Clean(mpath))
+		cpaths = append(cpaths, filepath.Clean(mpath))
 	}
-	vc.load(checked.ToSlice())
+	vc.load(cpaths)
 	if v, err := vc.newest(tid); err != nil {
 		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, ctx.ownershipError(err, tid), fspaths)
 	} else {
@@ -80,20 +82,13 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 		return true // created
 	}
 
-	// follow the newest copy: it may list mountpaths that store even newer copies
-	for {
-		mpaths := vmd.unchecked(checked)
-		if len(mpaths) == 0 {
-			break
-		}
-		vc.load(mpaths)
-		checked.Add(mpaths...)
-		v, err := vc.newest(tid)
-		if err != nil {
-			cos.ExitLogf("%s: %v (vmd-discovery, %+v, %s)", t, ctx.ownershipError(err, tid), ctx, vmd)
-		}
+	if v, err := vc.discover(tid, vmd, checked); err != nil {
+		cos.ExitLogf("%s: %v (vmd-discovery, %+v, %s)", t, ctx.ownershipError(err, tid), ctx, vmd)
+	} else {
 		vmd = v
 	}
+
+	vc.warnBad()
 
 	if err := initMPI(tid, config, blockDevs, vmd, checked, ctx.IgnoreMissing); err != nil {
 		cos.ExitLogf("%s: %v (vmd-init-mpi, %+v, %s)", t, ctx.ownershipError(err, tid), ctx, vmd)
@@ -129,6 +124,7 @@ func NewFromMPI(tid string) (vmd *VMD, err error) {
 	)
 	vc := newVcopies(len(avail))
 	vc.loadMPI(avail)
+	vc.warnBad()
 	if _, err := vc.newest(tid); err != nil {
 		nlog.Warningln(err) // TODO: handle
 	}
@@ -341,27 +337,36 @@ func loadVMD(tid string, available fs.MPI) (*VMD, error) {
 //
 
 type vcopies struct {
-	valid map[string]*VMD // mountpath => copy
-	bad   cos.StrSet      // mountpaths with unreadable or corrupted copies
+	valid map[string]*VMD  // mountpath => copy
+	bad   map[string]error // mountpath => unreadable or corrupted copy
 }
 
 func newVcopies(l int) *vcopies {
-	return &vcopies{valid: make(map[string]*VMD, l), bad: make(cos.StrSet, 2)}
+	return &vcopies{valid: make(map[string]*VMD, l), bad: make(map[string]error, 2)}
 }
 
 // load copies; skip missing, record bad
+// - the latest read of a given mountpath replaces the previous one
 func (vc *vcopies) load(mpaths []string) {
 	for _, mpath := range mpaths {
 		v := newVMD(0)
 		err := v.load(mpath)
+		delete(vc.valid, mpath)
+		delete(vc.bad, mpath)
 		switch {
 		case err == nil:
 			vc.valid[mpath] = v
 		case cos.IsNotExist(err):
 		default:
-			nlog.Warningf("ignoring bad VMD copy on %q: %v", mpath, err)
-			vc.bad.Set(mpath)
+			vc.bad[mpath] = err
 		}
+	}
+}
+
+// log bad copies (in mountpath order)
+func (vc *vcopies) warnBad() {
+	for _, mpath := range slices.Sorted(maps.Keys(vc.bad)) {
+		nlog.Warningf("ignoring bad VMD copy on %q: %v", mpath, vc.bad[mpath])
 	}
 }
 
@@ -373,6 +378,28 @@ func (vc *vcopies) loadMPI(mpi fs.MPI) {
 	vc.load(mpaths)
 }
 
+// follow the newest copy: it may list mountpaths that store even newer copies
+func (vc *vcopies) discover(tid string, vmd *VMD, checked cos.StrSet) (*VMD, error) {
+	for {
+		mpaths := vmd.unchecked(checked)
+		if len(mpaths) == 0 {
+			return vmd, nil
+		}
+		vc.load(mpaths)
+		checked.Add(mpaths...)
+		v, err := vc.newest(tid)
+		switch {
+		case err != nil:
+			return nil, err
+		case v == nil:
+			return nil, fmt.Errorf("VMD v%d disappeared during discovery; retry startup", vmd.Version)
+		case v.Version < vmd.Version:
+			return nil, fmt.Errorf("VMD version fell from %d to %d during discovery; retry startup", vmd.Version, v.Version)
+		}
+		vmd = v
+	}
+}
+
 // select the newest copy; independent of the order of loading
 // - fail on a copy of a different target (any version)
 // - fail on different copies of the newest version
@@ -380,11 +407,9 @@ func (vc *vcopies) loadMPI(mpi fs.MPI) {
 func (vc *vcopies) newest(tid string) (*VMD, error) {
 	if len(vc.valid) == 0 {
 		if len(vc.bad) > 0 {
-			bad := vc.bad.ToSlice()
-			slices.Sort(bad)
 			return nil, &fs.ErrStorageIntegrity{
 				Code: fs.SieMetaCorrupted,
-				Msg:  fmt.Sprintf("no valid VMD, bad copies on %v", bad),
+				Msg:  fmt.Sprintf("no valid VMD, bad copies on %v", slices.Sorted(maps.Keys(vc.bad))),
 			}
 		}
 		return nil, nil
@@ -436,7 +461,7 @@ func (vc *vcopies) stale(vmd *VMD, avail fs.MPI) (n int) {
 	for mpath := range avail {
 		if v, ok := vc.valid[mpath]; ok && v.Version < vmd.Version {
 			n++
-		} else if vc.bad.Contains(mpath) {
+		} else if _, ok := vc.bad[mpath]; ok {
 			n++
 		}
 	}
