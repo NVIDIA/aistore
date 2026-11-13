@@ -27,7 +27,7 @@ Callers see the same `read_all()` / `__iter__()` API regardless.
 One HTTP request. No shared memory.
 
 ```python
-read_all()    → resp.content                    → bytes
+read_all()    → client.get_content()            → bytes
 create_iter() → resp.iter_content(chunk_size)   → Generator[bytes]
 ```
 

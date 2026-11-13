@@ -222,10 +222,28 @@ class RequestClient:
             requests.exceptions.UnrewindableBodyError: An SDK network retry cannot
                 rewind the request body to its initial position.
         """
+        return self._request(method, path, endpoint, headers, **kwargs)
+
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _request(
+        self,
+        method: str,
+        path: str,
+        endpoint: Optional[str],
+        headers: Optional[Dict[str, Any]],
+        response_callback: Optional[Callable[[Response], T]] = None,
+        **kwargs,
+    ) -> Union[Response, T]:
+        """
+        Send a request with retries, as described in `request()`.
+
+        `response_callback`, if given, is called inside each retry attempt with the
+        validated response, and its return value is returned instead of the response.
+        """
         base = urljoin(endpoint, "v1") if endpoint else self.base_url
         url = f"{base}/{path.lstrip('/')}"
 
-        def request_op():
+        def request_op() -> Union[Response, T]:
             if url.startswith(HTTPS) and "data" in kwargs:
                 response = self._request_with_manual_redirect(
                     method=method, url=url, headers=headers, **kwargs
@@ -234,7 +252,8 @@ class RequestClient:
                 response = self._executor.request_absolute(
                     method=method, url=url, headers=headers, **kwargs
                 )
-            return self._response_handler.handle_response(response)
+            response = self._response_handler.handle_response(response)
+            return response_callback(response) if response_callback else response
 
         data = kwargs.get("data")
         if data is not None and (
@@ -249,9 +268,50 @@ class RequestClient:
             return self._request_with_stream_retry(request_op, data)
         return self._retry_manager.with_retry(request_op)
 
-    def _request_with_stream_retry(
-        self, request_op: Callable[[], Response], body: Any
-    ) -> Response:
+    def request_content(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, Any]] = None,
+    ) -> bytes:
+        """
+        Make a request like `request()` and return the complete response body.
+
+        Each retry attempt sends the request and reads the whole body, so a connection
+        lost mid-body is retried. A body of known length is read in one call, avoiding
+        the small-chunk reads and joining copy of `Response.content`.
+
+        Args:
+            method (str): HTTP method (e.g. POST, GET, PUT, DELETE).
+            path (str): URL path to call.
+            params (Dict[str, Any], optional): Query parameters for the request.
+            headers (Dict[str, Any], optional): Extra headers to be passed with the request.
+                Content-Type and User-Agent will be overridden by the executor.
+
+        Returns:
+            The decoded response body.
+
+        Raises:
+            ClientClosedError: The client has been closed.
+        """
+
+        def read(response: Response) -> bytes:
+            # Closes the response if the read fails, so a broken connection is not reused
+            with response:
+                return b"".join(response.iter_content(chunk_size=None))
+
+        return self._request(
+            method,
+            path,
+            endpoint=None,
+            headers=headers,
+            response_callback=read,
+            params=params,
+            stream=True,
+        )
+
+    def _request_with_stream_retry(self, request_op: Callable[[], T], body: Any) -> T:
         """Restore a streamed body before each SDK retry; reject unsafe replay."""
         body_position = None
         try:

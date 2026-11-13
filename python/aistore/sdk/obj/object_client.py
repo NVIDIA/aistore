@@ -153,6 +153,31 @@ class ObjectClient:
                 )
             raise
 
+    def get_content(self) -> bytes:
+        """
+        Fetch the object content, or its selected byte range, into memory.
+
+        Returns:
+            bytes: The object content.
+
+        Raises:
+            ErrObjNotFound: If the object is not found and cannot be retried.
+            requests.RequestException: For network-related errors.
+        """
+        headers = self._request_headers.copy() if self._request_headers else {}
+        try:
+            return self._request_client.request_content(
+                HTTP_METHOD_GET, self._request_path, self._request_params, headers
+            )
+        except ErrObjNotFound:
+            if not self._uname:
+                raise
+            # Same retry as _make_get_request; this replaces self._request_client
+            self._initialize_target_client(force=True)
+            return self._request_client.request_content(
+                HTTP_METHOD_GET, self._request_path, self._request_params, headers
+            )
+
     def get(self, stream: bool, offset: Optional[int] = None) -> requests.Response:
         """
         Fetch object content from AIS, applying an optional offset.

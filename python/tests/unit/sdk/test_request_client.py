@@ -6,6 +6,7 @@ from unittest.mock import patch, Mock, MagicMock, call, ANY
 
 from requests import Request, Response, Session
 from requests.exceptions import (
+    ChunkedEncodingError,
     ConnectionError as RequestsConnectionError,
     UnrewindableBodyError,
 )
@@ -175,6 +176,41 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable,t
                 headers=self.request_headers,
                 keyword=expected_kw,
             )
+
+    def test_request_content_failed_read(self):
+        """The body is read in one call; a failed read closes the response and is retried."""
+
+        def response(raw):
+            resp = Response()
+            resp.status_code, resp.raw = 200, raw
+            return resp
+
+        body = b"object content"
+        broken = Mock(spec=io.BytesIO)
+        broken.read.side_effect = ChunkedEncodingError("connection lost mid-body")
+        good = Mock(spec=io.BytesIO, wraps=io.BytesIO(body))
+        self.mock_session.request.side_effect = [response(broken), response(good)]
+        retry_config = RetryConfig.default()
+        retry_config.network_retry = retry_config.network_retry.copy(
+            wait=wait_none(), stop=stop_after_attempt(2), before_sleep=None
+        )
+        client = RequestClient(
+            "http://proxy", self.mock_session_manager, retry_config=retry_config
+        )
+
+        self.assertEqual(client.request_content("get", "objects/bck/obj"), body)
+        self.assertIs(self.mock_session.request.call_args.kwargs["stream"], True)
+        broken.close.assert_called_once()
+        good.read.assert_called_with(None)
+
+    def test_request_content_error_response(self):
+        """An error response raises before any body read."""
+        self.mock_response_handler.handle_response.side_effect = ErrObjNotFound(
+            404, "not found", "url", Mock()
+        )
+        with self.assertRaises(ErrObjNotFound):
+            self.default_request_client.request_content("get", "objects/bck/obj")
+        self.mock_response.iter_content.assert_not_called()
 
     def test_request_https_data(self):
         method = "request_method"

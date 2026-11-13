@@ -23,8 +23,8 @@ class ContentIterProvider(BaseContentIterProvider):
     """
 
     def read_all(self) -> bytes:
-        """Read all object content in a single non-streamed request."""
-        return self._client.get(stream=False).content
+        """Read all object content into memory in a single request."""
+        return self._client.get_content()
 
     def create_iter(
         self, offset: int = 0, bounds: Optional[StreamBounds] = None

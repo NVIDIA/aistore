@@ -44,19 +44,10 @@ class TestObjectReader(unittest.TestCase):
 
     def test_read_all(self):
         # read_all() delegates to the provider; verify content is returned correctly
-        chunk1 = b"chunk1"
-        chunk2 = b"chunk2"
-        mock_response = Mock(
-            spec=requests.Response,
-            content=chunk1 + chunk2,
-            headers=self.response_headers,
-        )
-        self.object_client.get.return_value = mock_response
+        self.object_client.get_content.return_value = b"content"
 
-        content = self.object_reader.read_all()
-
-        self.assertEqual(chunk1 + chunk2, content)
-        self.object_client.get.assert_called_with(stream=False)
+        self.assertEqual(b"content", self.object_reader.read_all())
+        self.object_client.get_content.assert_called_once_with()
 
     def test_stream(self):
         response = requests.Response()

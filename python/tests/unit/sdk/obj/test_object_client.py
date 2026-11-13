@@ -273,6 +273,40 @@ class TestObjectClient(unittest.TestCase):  # pylint: disable=too-many-instance-
         cloned_rc.get_smap.assert_called_with(True)
         self.assertIs(result, good_resp)
 
+    def test_get_content(self):
+        self.request_client.request_content.return_value = b"data"
+
+        self.assertEqual(self.object_client.get_content(), b"data")
+        self.request_client.request_content.assert_called_once_with(
+            HTTP_METHOD_GET, self.path, self.params, self.headers
+        )
+
+    def test_get_content_not_found_no_uname(self):
+        self.request_client.request_content.side_effect = ErrObjNotFound(
+            404, "nf", "url", Mock(spec=PreparedRequest)
+        )
+        with self.assertRaises(ErrObjNotFound):
+            self.object_client.get_content()
+        self.request_client.get_smap.assert_not_called()
+
+    def test_get_content_retries_after_404(self):
+        oc, _, cloned_rc, _ = self._create_client_with_uname()
+        cloned_rc.request_content.side_effect = [
+            ErrObjNotFound(404, "nf", "url", Mock(spec=PreparedRequest)),
+            b"data",
+        ]
+        smap2 = Mock()
+        smap2.get_target_for_object.return_value.public_net.direct_url = (
+            "http://target-2:8081"
+        )
+        cloned_rc.get_smap.return_value = smap2
+        cloned_rc.clone.return_value = cloned_rc
+
+        self.assertEqual(oc.get_content(), b"data")
+        cloned_rc.get_smap.assert_called_with(True)
+        cloned_rc.clone.assert_called_with(base_url="http://target-2:8081")
+        self.assertEqual(cloned_rc.request_content.call_count, 2)
+
     def test_get_raises_err_obj_not_found_no_uname(self):
         obj = ObjectClient(
             request_client=self.request_client,

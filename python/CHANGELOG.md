@@ -11,6 +11,8 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - **BREAKING**: The MCP server now requires MCP Python SDK 2.x (`mcp[cli]>=2,<3`).
   Existing environments with `mcp<2` must upgrade before starting the server:
   `python -m pip install --upgrade "mcp[cli]>=2,<3"`.
+- Custom `RetryConfig.network_retry` policies that retry on the result receive `bytes`,
+  not `requests.Response`, for sequential `ObjectReader.read_all()`.
 
 ### Added
 
@@ -23,6 +25,9 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 - Pickling or forking `SessionManager` no longer carries live sessions as the receiving process
   creates its own on first use.
+- Sequential `ObjectReader.read_all()` no longer reads the body in `requests`' small chunks.
+  A body of known length is read in one call and not copied again when joined, which makes
+  large reads faster and lowers peak memory usage.
 
 ### Fixed
 
