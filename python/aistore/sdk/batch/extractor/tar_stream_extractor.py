@@ -91,6 +91,8 @@ class TarStreamExtractor(ArchiveStreamExtractor):
                         index += 1
                         continue
 
+            self._check_complete(index, moss_req, EXT_TAR)
+
         except tarfile.TarError as e:
             # Handle tar stream errors (corrupt archive, etc.)
             logger.error("Failed to read tar archive: %s", str(e))

@@ -64,6 +64,12 @@ upgrading.
 - Added Python 3.15 support for the SDK, PyTorch integration, and pyaisloader,
   including the `Etl.init_class()` runtime and CI test coverage.
 
+- With `cont_on_err=False`, `Batch.get()` raises `BatchTruncatedError` (a `RuntimeError`)
+  if a TAR or ZIP archive ends before all requested entries, even when multipart metadata
+  also ends early. The error occurs during iteration, after entries already received are
+  yielded. Callers that collect results with `list()` must handle the error; no partial
+  list is returned. With `cont_on_err=True` (the default), the shortfall is only logged.
+
 ## [2.1.0] - 2026-10-28
 
 This release expands object streaming and blob-download controls, strengthens

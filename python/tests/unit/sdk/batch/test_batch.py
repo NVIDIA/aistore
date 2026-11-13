@@ -1141,21 +1141,35 @@ class TestBatch(unittest.TestCase):
         self.assertEqual(batch.request.moss_in[0].obj_name, "file1.txt")
         self.assertEqual(batch.request.moss_in[1].obj_name, "file2.txt")
 
+    @patch("aistore.sdk.batch.batch.MultipartDecoder")
     @patch("aistore.sdk.batch.batch.get_extractor")
-    def test_pending_result_keeps_request_metadata(self, mock_get_extractor):
+    def test_pending_result_keeps_request_metadata(
+        self, mock_get_extractor, mock_decoder
+    ):
         """Pending results survive reordering and a later clearing get()."""
         mock_get_extractor.return_value.extract.side_effect = (
             lambda _response, _stream, request, _metadata: (
                 request.moss_in[i].obj_name for i in range(2)
             )
         )
-        batch = Batch(self.mock_request_client, ["first", "second"], self.mock_bucket)
-        pending = batch.get(clear_batch=False)
-        batch.requests_list.reverse()
-        clearing = batch.get()
-        batch.add("third")
-        self.assertEqual(list(pending), ["first", "second"])
-        self.assertEqual(list(clearing), ["second", "first"])
+        mock_decoder.return_value.encoding = "utf-8"
+        mock_decoder.return_value.decode.side_effect = lambda _response: iter(
+            [({}, b"{}"), ({}, b"")]
+        )
+        for streaming in (True, False):
+            with self.subTest(streaming=streaming):
+                batch = Batch(
+                    self.mock_request_client,
+                    ["first", "second"],
+                    self.mock_bucket,
+                    streaming_get=streaming,
+                )
+                pending = batch.get(clear_batch=False)
+                batch.requests_list.reverse()
+                clearing = batch.get()
+                batch.add("third")
+                self.assertEqual(list(pending), ["first", "second"])
+                self.assertEqual(list(clearing), ["second", "first"])
 
     @patch("aistore.sdk.batch.batch.get_extractor")
     def test_get_clear_batch_false_allows_accumulation(self, mock_get_extractor):
