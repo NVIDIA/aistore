@@ -120,6 +120,7 @@ ETL_WS_PATH = "path"
 # URL Param values
 # See api/apc/query.go
 WHAT_SMAP = "smap"
+WHAT_SOFTWARE_VERSION = "software_version"
 WHAT_ONE_XACT_STATUS = "status"
 WHAT_ALL_XACT_STATUS = "status_all"
 WHAT_ALL_RUNNING_STATUS = "running_all"

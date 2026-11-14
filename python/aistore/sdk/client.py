@@ -16,6 +16,12 @@ from aistore.sdk.const import (
     AIS_MAX_CONN_POOL,
     EXT_TAR,
     NS_URL_PREFIXES,
+    HTTP_METHOD_GET,
+    URL_PATH_DAEMON,
+    QPARAM_WHAT,
+    WHAT_SOFTWARE_VERSION,
+    STATUS_FORBIDDEN,
+    STATUS_BAD_REQUEST,
 )
 from aistore.sdk.cluster import Cluster
 from aistore.sdk.client_state import ClientState
@@ -27,7 +33,7 @@ from aistore.sdk.job import Job
 from aistore.sdk.etl.etl import Etl
 from aistore.sdk.utils import parse_url
 from aistore.sdk.obj.object import Object
-from aistore.sdk.errors import InvalidURLException
+from aistore.sdk.errors import AISError, InvalidURLException
 from aistore.sdk.retry_config import RetryConfig
 from aistore.sdk.batch.batch import Batch
 
@@ -235,17 +241,67 @@ class Client:
         """Return whether this client is closed."""
         return self._state.closed
 
+    @property
+    def version(self) -> Optional[str]:
+        """Return the AIS cluster version if cached."""
+        return self._state.ais_version
+
+    def initialize(self) -> None:
+        """
+        Initialize this client for use with the configured AIS endpoint.
+
+        This optional call makes network requests using the configured connection
+        settings. Creating a Client does not make network requests; entering its
+        context calls initialize() automatically.
+
+        Once state is cached, later calls reuse it. If discovery is unsupported
+        (HTTP 400) or access is denied (HTTP 403), the client remains usable without
+        that state. Call initialize() again to retry. Other errors are raised to
+        the caller.
+
+        Cached state does not track cluster upgrades. Create and initialize a new
+        Client after an upgrade to fetch updated state.
+        """
+        self._state.ensure_open()
+        if self._state.ais_version is not None:
+            return
+
+        try:
+            response = self._request_client.request(
+                HTTP_METHOD_GET,
+                path=URL_PATH_DAEMON,
+                params={QPARAM_WHAT: WHAT_SOFTWARE_VERSION},
+            )
+        except AISError as err:
+            if err.status_code not in (STATUS_BAD_REQUEST, STATUS_FORBIDDEN):
+                raise
+        else:
+            version = response.text.strip()
+            if not version:
+                raise ValueError("AIS endpoint returned an empty software version.")
+            self._state.ais_version = version
+
     def __enter__(self) -> "Client":
         """
-        Enter the context without making any network requests.
+        Initialize this client and enter the context.
+
+        If initialization fails, close the client before propagating the error.
 
         Returns:
             Client: This client instance, bound to the context's ``as`` variable.
 
         Raises:
             ClientClosedError: The client has already been closed.
+            ValueError: The endpoint returns an empty software version.
+            requests.RequestException: The initialization request fails.
+            AISError: The cluster rejects initialization, except HTTP 400 or 403
+                during state discovery.
         """
-        self._state.ensure_open()
+        try:
+            self.initialize()
+        except BaseException:
+            self.close()
+            raise
         return self
 
     def __exit__(

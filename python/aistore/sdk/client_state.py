@@ -1,6 +1,8 @@
 #
 # Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
 #
+from typing import Optional
+
 from aistore.sdk.errors import ClientClosedError
 
 
@@ -9,6 +11,7 @@ class ClientState:
 
     def __init__(self):
         self._closed = False
+        self.ais_version: Optional[str] = None
 
     @property
     def closed(self) -> bool:

@@ -42,6 +42,22 @@ class TestAuthNAccess(AuthNTestBase):  # pylint: disable=too-many-public-methods
         client.bucket(self.bck.name).object(self.object.name).get_reader().read_all()
 
     @pytest.mark.authn
+    def test_initialize_with_object_get_only(self):
+        """Version discovery must not prevent an authorized object read."""
+        client = self._create_client_with_access([AccessAttr.GET])
+        self.addCleanup(client.close)
+        self._assert_forbidden(client.cluster().get_info)
+        client.initialize()
+        self.assertIsNone(client.version)
+        content = (
+            client.bucket(self.bck.name)
+            .object(self.object.name)
+            .get_reader()
+            .read_all()
+        )
+        self.assertEqual(content, b"Test-Data")
+
+    @pytest.mark.authn
     def test_access_obj_put(self):
         """Test object put permission."""
         client = self._create_client_with_access([AccessAttr.PUT])

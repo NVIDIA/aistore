@@ -6,6 +6,12 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added
+
+- `Client.initialize()` and `version` to fetch and cache the AIS software version.
+  Initialization is idempotent and runs automatically on context entry; the client
+  is closed if initialization fails during context entry.
+
 ## [2.2.0] - 2026-11-12
 
 This release adds an explicit client lifecycle (`Client.close()` and context

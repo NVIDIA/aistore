@@ -5,20 +5,36 @@
 import unittest
 import os
 import warnings
+from http import HTTPStatus
 from unittest.mock import patch, Mock, ANY
 from urllib3.util import Retry
+from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from tenacity import Retrying, stop_after_delay, wait_exponential
 from aistore.sdk import Client
 from aistore.sdk.cluster import Cluster
-from aistore.sdk.errors import ClientClosedError, InvalidURLException
+from aistore.sdk.errors import (
+    ClientClosedError,
+    InvalidURLException,
+    AISError,
+)
 from aistore.sdk.provider import Provider
 from aistore.sdk.etl.etl import Etl
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.types import Namespace
 from aistore.sdk.job import Job
 from aistore.sdk.retry_config import RetryConfig
-from aistore.sdk.const import AIS_CONNECT_TIMEOUT, AIS_READ_TIMEOUT, AIS_MAX_CONN_POOL
+from aistore.sdk.const import (
+    AIS_CONNECT_TIMEOUT,
+    AIS_READ_TIMEOUT,
+    AIS_MAX_CONN_POOL,
+    HTTP_METHOD_GET,
+    QPARAM_WHAT,
+    URL_PATH_DAEMON,
+    WHAT_SOFTWARE_VERSION,
+    STATUS_FORBIDDEN,
+    STATUS_BAD_REQUEST,
+)
 
 from tests.const import ETL_NAME
 from tests.utils import cases
@@ -31,6 +47,69 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable,too-many
         self.endpoint = "https://aistore-endpoint"
         self.client = Client(self.endpoint)
         self.addCleanup(self.client.close)
+
+    @patch("aistore.sdk.request_client.RequestClient.request")
+    def test_initialize(self, request):
+        """Initialization fetches the version once and rejects a closed client."""
+        self.assertIsNone(self.client.version)
+        request.return_value = Mock(text="5.1.rc1.fea74ec9b\n")
+        self.client.initialize()
+        self.client.initialize()
+        self.assertEqual(self.client.version, "5.1.rc1.fea74ec9b")
+        request.assert_called_once_with(
+            HTTP_METHOD_GET,
+            path=URL_PATH_DAEMON,
+            params={QPARAM_WHAT: WHAT_SOFTWARE_VERSION},
+        )
+        self.client.close()
+        with self.assertRaises(ClientClosedError):
+            self.client.initialize()
+        self.assertEqual(self.client.version, "5.1.rc1.fea74ec9b")
+        self.assertEqual(request.call_count, 1)
+
+    @cases(
+        None,
+        RequestsConnectionError("initialization failed"),
+        AISError(401, "token required", "", None),
+        AISError(HTTPStatus.NOT_FOUND, "not found", "", None),
+        AISError(500, "server error", "", None),
+    )
+    @patch("aistore.sdk.request_client.RequestClient.request")
+    def test_initialize_failure(self, error, request):
+        """An unsuccessful fetch leaves initialization retryable."""
+        client = Client(self.endpoint)
+        self.addCleanup(client.close)
+        request.side_effect = [
+            error or Mock(text=" \n"),
+            Mock(text="5.1.rc1.fea74ec9b"),
+        ]
+        with self.assertRaises(type(error) if error is not None else ValueError):
+            client.initialize()
+        self.assertIsNone(client.version)
+        client.initialize()
+        self.assertEqual(client.version, "5.1.rc1.fea74ec9b")
+        self.assertEqual(request.call_count, 2)
+
+    @cases(STATUS_BAD_REQUEST, STATUS_FORBIDDEN)
+    @patch("aistore.sdk.request_client.RequestClient.request")
+    def test_initialize_unavailable(self, status_code, request):
+        """Unavailable discovery permits client use and can be retried."""
+        client = Client(self.endpoint)
+        self.addCleanup(client.close)
+        request.side_effect = [
+            AISError(status_code, "discovery unavailable", "", None),
+            Mock(text="5.1.rc1.fea74ec9b"),
+        ]
+        client.initialize()
+        self.assertFalse(client.closed)
+        self.assertIsNone(client.version)
+        client.initialize()
+        self.assertEqual(client.version, "5.1.rc1.fea74ec9b")
+        client.initialize()
+        self.assertEqual(request.call_count, 2)
+        client.close()
+        with self.assertRaises(ClientClosedError):
+            client.initialize()
 
     @patch("aistore.sdk.client.SessionManager")
     @patch("aistore.sdk.client.RequestClient")
@@ -341,9 +420,14 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable,too-many
 
     def test_context_manager(self):
         """Context exit closes requests while handles remain accessible."""
-        with self.client as client:
-            self.assertIs(client, self.client)
-            self.assertFalse(client.closed)
+        with patch(
+            "aistore.sdk.request_client.RequestClient.request",
+            return_value=Mock(text="5.1.rc1.fea74ec9b"),
+        ) as request:
+            with self.client as client:
+                request.assert_called_once()
+                self.assertIs(client, self.client)
+                self.assertFalse(client.closed)
         self.client.close()
         self.assertTrue(self.client.closed)
         obj = self.client.bucket("test").object("object")
@@ -354,9 +438,26 @@ class TestClient(unittest.TestCase):  # pylint: disable=unused-variable,too-many
             with self.client:
                 self.fail("Closed client entered context")
 
-    def test_context_exception(self):
+    @patch("aistore.sdk.client.Client.initialize")
+    def test_context_exception(self, _initialize):
         """Exceptions propagate while context exit closes the client."""
         with self.assertRaisesRegex(ValueError, "context failure"):
             with self.client:
                 raise ValueError("context failure")
         self.assertTrue(self.client.closed)
+
+    @cases(RequestsConnectionError, KeyboardInterrupt)
+    def test_context_initialization_failure(self, error_type):
+        """Failed context entry closes the client and its HTTP session."""
+        client = Client(self.endpoint)
+        self.addCleanup(client.close)
+        session = client.cluster().client.session_manager.session
+        with (
+            patch.object(client, "initialize", side_effect=error_type),
+            patch.object(session, "close", wraps=session.close) as close,
+        ):
+            with self.assertRaises(error_type):
+                with client:
+                    self.fail("Context body ran after initialization failed")
+            close.assert_called_once_with()
+        self.assertTrue(client.closed)

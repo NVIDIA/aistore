@@ -26,6 +26,7 @@ class TestClient(unittest.TestCase):
         """Context exit blocks requests while handles and cached data remain accessible."""
         with Client(CLUSTER_ENDPOINT, retry_config=TEST_RETRY_CONFIG) as client:
             cluster = client.cluster()
+            self.assertTrue(client.version)
             clone = cluster.client.clone()
             uuid = cluster.get_info().uuid
             self.assertEqual(uuid, clone.get_smap().uuid)
