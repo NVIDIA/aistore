@@ -5,7 +5,6 @@
   - [CLI](#cli)
   - [aisloader](#aisloader)
   - [xmeta](#xmeta)
-  - [ishard](#ishard)
 - [aisinit](#aisinit)
 
 ## Executables
@@ -20,7 +19,6 @@
 | `cmd/aisinit` | `aisinit` | Kubernetes init container: generates `aisnode` config from pod environment (DNS, hostnames, networking mode) | [aisinit](https://github.com/NVIDIA/aistore/blob/main/cmd/aisinit/README.md) |
 | `cmd/authn` | `authn` | Standalone server providing token-based secure access to AIS clusters | [AuthN](/docs/authn.md) |
 | `cmd/xmeta` | `xmeta` | Utility to inspect, extract, format, and (in limited cases) edit internal AIS metadata structures (cluster map, bucket metadata, etc.) | [xmeta](https://github.com/NVIDIA/aistore/blob/main/cmd/xmeta/README.md) |
-| `cmd/ishard` | `ishard` | Utility to create well-formed shards from an original dataset | [ishard](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md) |
 
 **NOTE**: installed CLI executable is named `ais`.
 
@@ -122,22 +120,6 @@ OR, same:
 ```console
 $ cd cmd/xmeta
 $ go install
-```
-
-### ishard
-
-`ishard` is a utility to create well-formed shards from an original dataset - see [usage](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md).
-
-To install, run:
-
-```console
-$ make ishard
-```
-
-Or use `go install`:
-
-```console
-$ go install github.com/NVIDIA/aistore/cmd/ishard@latest
 ```
 
 ## aisinit

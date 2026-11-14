@@ -1,6 +1,6 @@
 # Working with Archives (Shards)
 
-In AIStore, *archives* (also called *shards*) are special objects that contain multiple files packaged together in formats like TAR, TGZ, ZIP, or TAR.LZ4. Working with archives is essential for efficiently managing collections of related files and for operations like distributed sorting.
+In AIStore, *archives* (also called *shards*) are special objects that contain multiple files packaged together in formats like TAR, TGZ, ZIP, or TAR.LZ4. Working with archives is essential for efficiently managing collections of related files and for machine learning data loading.
 
 In this document:
 * Commands to read, write, extract, and list *archives* - objects formatted as `TAR`, `TGZ` (or `TAR.GZ`) , `ZIP`, or `TAR.LZ4`.
@@ -936,7 +936,7 @@ $ ais archive get ais://abc/trunk-0123.tar 333.tar --archregx=subdir/ --archmode
 
 `ais archive gen-shards "BUCKET/TEMPLATE.EXT"`
 
-Put randomly generated shards that can be used for dSort testing.
+Put randomly generated shards for archive testing.
 The `TEMPLATE` must be bash-like brace expansion (see examples) and `.EXT` must be one of: `.tar`, `.tar.gz`.
 
 **Warning**: Remember to always quote the argument (`"..."`) otherwise the brace expansion will happen in terminal.
@@ -971,13 +971,13 @@ OPTIONS:
 
 #### Generate shards with varying numbers of files and file sizes
 
-Generate 10 shards each containing 100 files of size 256KB and put them inside `ais://dsort-testing` bucket (creates it if it does not exist).
+Generate 10 shards each containing 100 files of size 256KB and put them inside `ais://archive-testing` bucket (creates it if it does not exist).
 Shards will be named: `shard-0.tar`, `shard-1.tar`, ..., `shard-9.tar`.
 
 ```console
-$ ais archive gen-shards "ais://dsort-testing/shard-{0..9}.tar" --fsize 262144 --fcount 100
+$ ais archive gen-shards "ais://archive-testing/shard-{0..9}.tar" --fsize 262144 --fcount 100
 Shards created: 10/10 [==============================================================] 100 %
-$ ais ls ais://dsort-testing
+$ ais ls ais://archive-testing
 NAME		SIZE		VERSION
 shard-0.tar	25.05MiB	1
 shard-1.tar	25.05MiB	1
@@ -993,13 +993,13 @@ shard-9.tar	25.05MiB	1
 
 #### Generate shards using custom naming template
 
-Generates 100 shards each containing 5 files of size 256KB and put them inside `dsort-testing` bucket.
+Generates 100 shards each containing 5 files of size 256KB and put them inside `archive-testing` bucket.
 Shards will be compressed and named: `super_shard_000_last.tgz`, `super_shard_001_last.tgz`, ..., `super_shard_099_last.tgz`
 
 ```console
-$ ais archive gen-shards "ais://dsort-testing/super_shard_{000..099}_last.tar" --fsize 262144 --cleanup
+$ ais archive gen-shards "ais://archive-testing/super_shard_{000..099}_last.tar" --fsize 262144 --cleanup
 Shards created: 100/100 [==============================================================] 100 %
-$ ais ls ais://dsort-testing
+$ ais ls ais://archive-testing
 NAME				SIZE	VERSION
 super_shard_000_last.tgz	1.25MiB	1
 super_shard_001_last.tgz	1.25MiB	1

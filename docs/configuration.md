@@ -598,7 +598,7 @@ New section, additionally:
 1. Add `<Section>Conf` to `ClusterConfig` and `<Section>ConfToSet` to `ConfigToSet`.
 2. Add `allow:"cluster"` if per-node overrides must be rejected.
 3. Add an interface guard for its validator.
-4. Decide whether it qualifies for default omission - pointerizing alone does not make it omittable. `Tracing` and `Dsort` are the standing examples: both are `*Conf` with `omitempty`, neither implements `defaultOmittable`.
+4. Decide whether it qualifies for default omission - pointerizing alone does not make it omittable. `Tracing` is a `*Conf` with `omitempty` but does not implement `defaultOmittable`.
 5. Audit clone, startup, persistence, metasync, CLI, deployment generators, and compatibility.
 
 Tags:

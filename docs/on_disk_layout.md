@@ -47,8 +47,8 @@ Within each bucket directory, AIS organizes content by type:
 | `%mt` | `fs.ECMetaCT` | Erasure-coded metadata |
 | `%ch` | `fs.ChunkCT` | Chunked object data |
 | `%ut` | `fs.ChunkMetaCT` | Chunked object metadata |
-| `%ds` | `fs.DsortFileCT` | Distributed sort files |
-| `%dw` | `fs.DsortWorkCT` | Distributed sort work |
+| `%ds` | `fs.DsortFileCT` | Legacy distributed sort files (retained for compatibility) |
+| `%dw` | `fs.DsortWorkCT` | Legacy distributed sort workfiles (retained for compatibility) |
 
 > See the [source](https://github.com/NVIDIA/aistore/blob/main/fs/content.go) for the most updated enumeration.
 

@@ -7,34 +7,15 @@ The list of supported jobs can be viewed via the CLI `show` command and currentl
 ```console
 $ ais show job --help
 
+NAME:
    ais show job - Show running and/or finished jobs:
-     archive              blob-download  cleanup     copy-bucket   copy-objects   create-inventory
-     delete-objects       download       dsort       ec-bucket     ec-get         ec-put
-     ec-resp              elect-primary  etl-bucket  etl-inline    etl-objects    evict-objects
-     evict-remote-bucket  get-batch      list        lru-eviction  mirror         prefetch-objects
-     promote-files        put-copies     rebalance   rechunk       rename-bucket  resilver
-     summary              warm-up-metadata
-   (use any of these names with 'ais show job' command, or try shortcuts: "evict", "prefetch", "copy", "delete", "ec")
-
-   e.g.:
-     - show job prefetch-listrange           - show all running prefetch jobs;
-     - show job prefetch                     - same as above;
-     - show job prefetch --top 5             - show 5 most recent prefetch jobs;
-     - show job tco-cysbohAGL                - show a given (multi-object copy/transform) job identified by its unique ID;
-     - show job copy-listrange               - show all running multi-object copies;
-     - show job copy-objects                 - same as above (using display name);
-     - show job copy                         - show all copying jobs including both bucket-to-bucket and multi-object;
-     - show job copy-objects --all           - show both running and already finished (or stopped) multi-object copies;
-     - show job copy-objects --all --top 10  - show 10 most recent multi-object copy jobs;
-     - show job rechunk                      - show all running rechunk jobs;
-     - show job ec                           - show all erasure-coding;
-     - show job list                         - show all running list-objects jobs;
-     - show job ls                           - same as above;
-     - show job ls --refresh 10              - same as above with periodic _refreshing_ every 10 seconds;
-     - show job ls --refresh 10 --count 4    - same as above but only for the first four 10-seconds intervals;
-     - show job prefetch --refresh 1m        - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
-     - show job evict                        - all running bucket and/or data evicting jobs;
-     - show job --all                        - show absolutely all jobs, running and finished.
+     archive             blob-download  cleanup       copy-bucket    copy-objects      create-inventory
+     delete-objects      download       ec-bucket     ec-get         ec-put            ec-resp
+     elect-primary       etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
+     get-batch           list           lru-eviction  mirror         prefetch-objects  promote-files
+     put-copies          rebalance      rechunk       rename-bucket  resilver          shard-index
+     shard-index-demand  shard-summary  summary       warm-up-metadata
+...
 ```
 
 Terminology-wise, in the code we mostly call it _xaction_ by the name of the corresponding software abstraction. But elsewhere, it is simply a _job_ - the two terms are interchangeable.
@@ -53,10 +34,10 @@ $ ais job
 start   stop    wait    rm      show
 
 $ ais start <TAB-TAB>
-
-prefetch           dsort              rebalance          mirror             warm-up-metadata
-blob-download      lru                resilver           ec-encode          copy-bck
-download           etl                cleanup            rechunk            move-bck
+blob-download		ec-encode		move-bck		resilver
+cleanup			etl			prefetch		shard-index
+copy-bck		lru			rebalance		warm-up-metadata
+download		mirror			rechunk
 ```
 
 > Note that `ais start` is an [alias](/docs/cli/alias.md) for the `ais job start` command - both (versions) can be used interchangeably.
@@ -71,7 +52,7 @@ Complete and most recently updated list of supported jobs can be found in this [
 
 Last (but not the least) is - time. Job execution may take many seconds, sometimes minutes or hours.
 
-Examples include erasure coding or n-way mirroring a dataset, resharding and reshuffling a dataset and more.
+Examples include erasure coding, n-way mirroring, and copying or transforming a dataset.
 
 [Global rebalance](/docs/rebalance.md) gets automatically triggered by any membership changes (nodes joining, leaving, powercycling, etc.) that can be further visualized via `ais show rebalance` CLI.
 
@@ -83,7 +64,6 @@ This (election by simple majority) is also a _job_ that cannot be started via `a
 
 AIS subsystems integrate subsystem-specific stats - e.g.:
 
-* [dSort](/docs/dsort.md)
 * [Downloader](/docs/downloader.md)
 * [ETL](/docs/etl.md)
 

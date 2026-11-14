@@ -192,7 +192,6 @@ ais scrub gs --nr --refresh 20s --count 3
 - [Mountpath (disk) management](/docs/cli/storage.md)
 - [Attach, detach, and monitor remote clusters](/docs/cli/cluster.md)
 - [Start, stop, and monitor downloads](/docs/cli/download.md)
-- [Distributed shuffle](/docs/cli/dsort.md)
 - [User account and access management](/docs/cli/auth.md)
 - [Jobs](/docs/cli/job.md)
 - [AIS CLI Reference](/docs/cli.md)

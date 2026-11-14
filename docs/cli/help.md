@@ -52,21 +52,8 @@ But first, let's see all CLI top-level commands with brief descriptions.
 > The text below can serve as a 30-seconds brief introduction into CLI usage and its capabilities.
 
 ```console
-NAME:
-   ais - AIS CLI: command-line management utility for AIStore
-
-USAGE:
-   ais [global options] [arguments...]  command [command options]  
-
-VERSION:
-   1.18.605c658ff
-
-TAB completions (Bash and Zsh):
-   If <TAB-TAB> completion doesn't work:
-   * download https://github.com/NVIDIA/aistore/tree/main/cmd/cli/autocomplete
-   * run 'cmd/cli/autocomplete/install.sh'
-   To install CLI directly from GitHub: https://github.com/NVIDIA/aistore/blob/main/scripts/install_from_binaries.sh
-
+$ ais --help
+...
 COMMANDS:
    bucket          Create and destroy buckets, list bucket's content, show existing buckets and their properties
    object          PUT, GET, list, rename, remove, and other operations on objects
@@ -85,6 +72,7 @@ COMMANDS:
    performance     Show performance counters, throughput, latency, disks, used/available capacities (press <TAB-TAB> to select specific view)
    remote-cluster  Show attached AIS clusters
    ml              Machine learning operations: batch dataset operations, and ML-specific workflows
+   nbi             Manage native bucket inventory (NBI) - create (to facilitate faster list-objects), show, or remove bucket inventory snapshots
    alias           Manage top-level aliases
 
 GLOBAL OPTIONS:
@@ -92,12 +80,13 @@ GLOBAL OPTIONS:
    --version, -v  print the version
 
 ALIASES:
-   cp => 'bucket cp'; create => 'bucket create'; evict => 'bucket evict'; 
-   ls => 'bucket ls'; rmb => 'bucket rm'; start => 'job start'; 
-   blob-download => 'job start blob-download'; download => 'job start download'; 
-   dsort => 'job start dsort'; stop => 'job stop'; wait => 'job wait'; 
-   get => 'object get'; prefetch => 'object prefetch'; put => 'object put'; 
-   rmo => 'object rm'; space-cleanup => 'storage cleanup'; scrub => 'storage validate'
+   cp => 'bucket cp'; create => 'bucket create'; evict => 'bucket evict';
+   ls => 'bucket ls'; rmb => 'bucket rm'; start => 'job start';
+   blob-download => 'job start blob-download'; download => 'job start download';
+   stop => 'job stop'; wait => 'job wait'; get => 'object get';
+   mpu => 'object multipart-upload'; prefetch => 'object prefetch';
+   put => 'object put'; rmo => 'object rm'; space-cleanup => 'storage cleanup';
+   scrub => 'storage validate'
 ```
 
 

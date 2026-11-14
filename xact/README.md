@@ -7,16 +7,16 @@ prefetch, download, EC encode, mirroring, list-objects, get-batch, and more.
 
 ## Xaction kinds
 
-As of [4.5](https://github.com/NVIDIA/aistore/releases/tag/v1.4.5), AIS defines 33 xaction kinds. The canonical source is
+The canonical source for supported xaction kinds is
 `xact.Table`; the user-facing names are also visible via `ais show job --help`.
 
 ```text
-archive              blob-download  cleanup      copy-bucket  copy-objects  create-inventory
-delete-objects       download       dsort        ec-bucket    ec-get        ec-put
-ec-resp              elect-primary  etl-bucket   etl-inline   etl-objects   evict-objects
-evict-remote-bucket  get-batch      shard-index  list         lru-eviction  mirror
-prefetch-objects     promote-files  put-copies   rebalance    rechunk       rename-bucket
-resilver             summary        warm-up-metadata
+archive             blob-download  cleanup       copy-bucket    copy-objects      create-inventory
+delete-objects      download       ec-bucket     ec-get         ec-put            ec-resp
+elect-primary       etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
+get-batch           list           lru-eviction  mirror         prefetch-objects  promote-files
+put-copies          rebalance      rechunk       rename-bucket  resilver          shard-index
+shard-index-demand  shard-summary  summary       warm-up-metadata
 ```
 
 ## Subdirectories
@@ -86,7 +86,7 @@ Examples of non-generic start paths include:
 - PUT-triggered EC and mirroring lifecycles;
 - list-objects request handling;
 - GetBatch request handling;
-- action-specific managers such as dsort or download;
+- action-specific managers such as download;
 - periodic or resource-triggered background work.
 
 Therefore, do not interpret `Startable == false` as "not a real xaction" or
@@ -202,7 +202,7 @@ progress and also finalize on terminal state.
 `ICNone` can mean several different things depending on the xaction kind.
 The related reasons fall into three categories:
 * intrinsic (e.g., ScopeT)
-* action-specific machinery (e.g., dsort)
+* action-specific machinery (e.g., list-objects)
 * historical scope where IC reporting could be added later (e.g., multi-object kinds that may _idle_ between requests)
 
 Again, `ICNone` does not mean "no state" or "no status." It only means that
@@ -358,7 +358,6 @@ have their own manager, protocol, or aggregation model.
 
 Examples include:
 
-- dsort, which has its own manager and notification machinery;
 - list-objects, where clients stream pages directly and generic job display uses
   snapshots;
 - GetBatch/x-moss, which is proxy-coordinated and uses target-direct status;
@@ -443,7 +442,6 @@ status models.
 For user-facing commands, examples, and operational documentation, see:
 
 - `docs/cli/job.md`
-- `docs/cli/dsort.md`
 - `docs/cli/download.md`
 - `docs/rebalance.md`
 - `docs/batch.md`

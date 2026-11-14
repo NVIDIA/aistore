@@ -199,12 +199,6 @@ For convenience, a table that summarizes target metrics follows below.
 | `stream.in.size` | `stream_in_bytes` | size | intra-cluster streaming communications: total cumulative size (bytes) of all received objects | default |
 | `dl.size` | `dl_bytes` | size | total downloaded size (bytes) | default |
 | `dl.ns.total` | `dl_ns_total` | total | total downloading time (nanoseconds) | default |
-| `dsort.creation.req.n` | `dsort_creation_req_count` | counter | dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics | default |
-| `dsort.creation.resp.n` | `dsort_creation_resp_count` | counter | dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics | default |
-| `dsort.creation.resp.ns` | `dsort_creation_resp_ms` | latency | dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics | default |
-| `dsort.extract.shard.dsk.n` | `dsort_extract_shard_dsk_count` | counter | dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics | default |
-| `dsort.extract.shard.mem.n` | `dsort_extract_shard_mem_count` | counter | dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics | default |
-| `dsort.extract.shard.size` | `dsort_extract_shard_bytes` | size | dsort: see https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md#metrics | default |
 | `lcache.collision.n` | `lcache_collision_count` | counter | number of LOM cache collisions (core, internal) | default |
 | `lcache.evicted.n` | `lcache_evicted_count` | counter | number of LOM cache evictions (core, internal) | default |
 | `lcache.flush.cold.n` | `lcache_flush_cold_count` | counter | number of times a LOM from cache was written to stable storage (core, internal) | default |

@@ -446,28 +446,28 @@ Display the current CLI configuration. Use `--path` to show only the config file
 ```console
 $ ais config cli
 
-PROPERTY                         VALUE
-aliases                          cp => 'bucket cp'; create => 'bucket create'; evict => 'bucket evict';
-                                 ls => 'bucket ls'; rmb => 'bucket rm'; start => 'job start';
-                                 blob-download => 'job start blob-download'; download => 'job start download';
-                                 dsort => 'job start dsort'; stop => 'job stop'; wait => 'job wait';
-                                 get => 'object get'; mpu => 'object multipart-upload'; prefetch => 'object prefetch';
-                                 put => 'object put'; rmo => 'object rm'; space-cleanup => 'storage cleanup';
-                                 scrub => 'storage validate'
-auth.url                         http://127.0.0.1:52001
+PROPERTY			 VALUE
+aliases				 cp => 'bucket cp'; create => 'bucket create'; evict => 'bucket evict';
+				 ls => 'bucket ls'; rmb => 'bucket rm'; start => 'job start';
+				 blob-download => 'job start blob-download'; download => 'job start download';
+				 stop => 'job stop'; wait => 'job wait'; get => 'object get';
+				 mpu => 'object multipart-upload'; prefetch => 'object prefetch';
+				 put => 'object put'; rmo => 'object rm'; space-cleanup => 'storage cleanup';
+				 scrub => 'storage validate'
+auth.url			 http://127.0.0.1:52001
 cluster.client_ca_tls
 cluster.client_crt
 cluster.client_crt_key
-cluster.default_ais_host         http://127.0.0.1:8080
-cluster.default_docker_host      http://172.50.0.2:8080
-cluster.skip_verify_crt          false
-cluster.url                      http://127.0.0.1:8080
-default_provider                 ais
-no_color                         false
-no_more                          false
-timeout.http_timeout             0s
-timeout.tcp_timeout              60s
-verbose                          false
+cluster.default_ais_host	 http://127.0.0.1:8080
+cluster.default_docker_host	 http://172.50.0.2:8080
+cluster.skip_verify_crt		 false
+cluster.url			 http://127.0.0.1:8080
+default_provider		 ais
+no_color			 false
+no_more				 false
+timeout.http_timeout		 0s
+timeout.tcp_timeout		 60s
+verbose				 false
 ```
 
 ```console
@@ -477,12 +477,12 @@ $ ais config cli --path
 
 ### Update CLI configuration
 
-`ais config cli NAME=VALUE [NAME=VALUE...]`
+`ais config cli set NAME=VALUE [NAME=VALUE...]`
 
 The configuration file is updated only if all new options are applied without errors. If an option name doesn't exist or a value is incorrect, the operation is aborted.
 
 ```console
-$ ais config cli timeout.tcp_timeout 61s
+$ ais config cli set timeout.tcp_timeout=61s
 "timeout.tcp_timeout" set to: "61s" (was: "60s")
 
 $ ais config cli --json
@@ -497,28 +497,30 @@ $ ais config cli --json
         "skip_verify_crt": false
     },
     "timeout": {
-        "tcp_timeout": "60s",
+        "tcp_timeout": "61s",
         "http_timeout": "0s"
     },
     "auth": {
         "url": "http://127.0.0.1:52001"
     },
     "aliases": {
-        "wait": "job wait",
-        "cp": "bucket cp",
-        "ls": "bucket ls",
-        "prefetch": "object prefetch",
-        "rmo": "object rm",
-        "dsort": "job start dsort",
-        "get": "object get",
-        "rmb": "bucket rm",
-        "start": "job start",
-        "put": "object put",
-        "stop": "job stop",
         "blob-download": "job start blob-download",
+        "get": "object get",
+        "scrub": "storage validate",
+        "wait": "job wait",
         "create": "bucket create",
         "download": "job start download",
-        "evict": "bucket evict"
+        "rmb": "bucket rm",
+        "cp": "bucket cp",
+        "evict": "bucket evict",
+        "ls": "bucket ls",
+        "prefetch": "object prefetch",
+        "put": "object put",
+        "rmo": "object rm",
+        "space-cleanup": "storage cleanup",
+        "start": "job start",
+        "mpu": "object multipart-upload",
+        "stop": "job stop"
     },
     "default_provider": "ais",
     "no_color": false,

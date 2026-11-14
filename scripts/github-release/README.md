@@ -10,8 +10,8 @@ $ ./scripts/github-release/gosum.sh v1.5.2
 ```
 
 The input must be `v1.N.N`, with the `v` prefix and without leading zeros.
-The corresponding Git tag is `v1.N.N`. Nested modules (`cmd/cli`, `cmd/ishard`)
-are not tagged.
+The corresponding Git tag is `v1.N.N`. The nested module (`cmd/cli`)
+is not tagged.
 
 The wrapper changes to the repository root and requires a clean checkout,
 including staged and untracked files, a complete history, and no Git operation
@@ -30,7 +30,7 @@ separately. Checksums reach stdout only after the wrapper confirms HEAD and the
 clean checkout are unchanged.
 
 For a coordinated release, finish all root-module changes before hashing the
-root. Updating only `cmd/cli/` and `cmd/ishard/` afterward leaves the root
+root. Updating only `cmd/cli/` afterward leaves the root
 checksums unchanged, because Go excludes nested modules from the root ZIP.
 Recheck the root checksums after committing the nested modules' dependency
 update and before tagging the final commit.

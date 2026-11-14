@@ -30,7 +30,6 @@ Rest of this document covers starting, stopping, and otherwise managing job kind
 - [static descriptors (source code)](https://github.com/NVIDIA/aistore/blob/main/xact/api_table.go)
 - [`xact` package README](https://github.com/NVIDIA/aistore/blob/main/xact/README.md).
 - [`batch jobs`](/docs/batch.md)
-- [CLI: `dsort` (distributed shuffle)](/docs/cli/dsort.md)
 - [CLI: `download` from any remote source](/docs/cli/download.md)
 - [built-in `rebalance`](/docs/rebalance.md)
 
@@ -84,7 +83,6 @@ Notice, though, that `start`, stop`, and `wait` (verbs) have shorter versions, e
 - [Show job](#show-job)
   - [Show extended statistics](#show-extended-statistics)
 - [Wait for job](#wait-for-job)
-- [Distributed Sort](#distributed-sort)
 - [Downloader](#downloader)
 
 ## Start job
@@ -93,9 +91,8 @@ Notice, though, that `start`, stop`, and `wait` (verbs) have shorter versions, e
 
 Start a certain job. Some jobs require additional arguments such as bucket name to execute.
 
-Note: `job start download|dsort` have slightly different options. Please see their documentation for more:
+Note: `job start download` has slightly different options. See its documentation for more:
 * [`job start download`](download.md#start-download-job)
-* [`job start dsort`](dsort.md#start-dsort-job)
 
 ### Examples
 
@@ -223,7 +220,6 @@ OPTIONS:
 
 * `ais stop download JOB_ID`
 * `ais stop JOB_ID`
-* `ais stop dsort JOB_ID`
 
 ### Examples stopping multiple jobs:
 
@@ -233,9 +229,8 @@ OPTIONS:
 
 and more.
 
-Note: `job stop download|dsort` have slightly different options. Please see their documentation for more:
+Note: `job stop download` has slightly different options. See its documentation for more:
 * [`job stop download`](download.md#stop-download-job)
-* [`job stop dsort`](dsort.md#stop-dsort-job)
 
 ### More Examples
 
@@ -254,56 +249,65 @@ Stopped LRU eviction.
 
 ```console
 $ ais show job --help
+
 NAME:
    ais show job - Show running and/or finished jobs:
-     archive        blob-download  cleanup     copy-bucket       copy-objects   delete-objects
-     download       dsort          ec-bucket   ec-get            ec-put         ec-resp
-     elect-primary  etl-bucket     etl-inline  etl-objects       evict-objects  evict-remote-bucket
-     list           lru-eviction   mirror      prefetch-objects  promote-files  put-copies
-     rebalance      rechunk        rename-bucket  resilver       summary        warm-up-metadata
+     archive             blob-download  cleanup       copy-bucket    copy-objects      create-inventory
+     delete-objects      download       ec-bucket     ec-get         ec-put            ec-resp
+     elect-primary       etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
+     get-batch           list           lru-eviction  mirror         prefetch-objects  promote-files
+     put-copies          rebalance      rechunk       rename-bucket  resilver          shard-index
+     shard-index-demand  shard-summary  summary       warm-up-metadata
    (use any of these names with 'ais show job' command, or try shortcuts: "evict", "prefetch", "copy", "delete", "ec")
    e.g.:
-     - show job prefetch-listrange         - show all running prefetch jobs;
-     - show job prefetch                   - same as above;
-     - show job prefetch --top 5           - show 5 most recent prefetch jobs;
-     - show job tco-cysbohAGL              - show a given (multi-object copy/transform) job identified by its unique ID;
-     - show job copy-listrange             - show all running multi-object copies;
-     - show job copy-objects               - same as above (using display name);
-     - show job copy                       - show all copying jobs including both bucket-to-bucket and multi-object;
-     - show job copy-objects --all         - show both running and already finished (or stopped) multi-object copies;
-     - show job copy-objects --all --top 10 - show 10 most recent multi-object copy jobs;
-     - show job rechunk                    - show all running rechunk jobs;
-     - show job ec                         - show all erasure-coding;
-     - show job list                       - show all running list-objects jobs;
-     - show job ls                         - same as above;
-     - show job ls --refresh 10            - same as above with periodic _refreshing_ every 10 seconds;
-     - show job ls --refresh 10 --count 4  - same as above but only for the first four 10-seconds intervals;
-     - show job prefetch --refresh 1m      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
-     - show job evict                      - all running bucket and/or data evicting jobs;
-     - show job --all                      - show absolutely all jobs, running and finished.
+     - show job prefetch                  - show all running prefetch jobs;
+     - show job copy                      - show all copying jobs (bucket-to-bucket and multi-object);
+     - show job copy-objects              - show all running multi-object copies (canonical name for 'copy-listrange');
+     - show job ec                        - show all erasure-coding jobs;
+     - show job evict                     - show all running bucket and/or data evicting jobs;
+     - show job list (or: 'show job ls')  - show all running list-objects jobs;
+     - show job rechunk                   - show all running rechunk jobs;
+     - show job shard-index               - show all running shard-indexing jobs;
+     - show job tco-cysbohAGL             - show a specific job by its unique ID;
+     filtering and limiting:
+     - show job --all                        - include finished and aborted jobs (default: running only);
+     - show job prefetch --top 5             - show 5 most recent prefetch jobs;
+     - show job copy-objects --all --top 10  - 10 most recent multi-object copies, running or finished;
+     continuous monitoring:
+     - show job ls --refresh 10            - refresh every 10 seconds (until Ctrl-C);
+     - show job ls --refresh 10 --count 4  - same as above, limited to 4 iterations;
+     - show job prefetch --refresh 1m      - 1-minute refresh interval (until Ctrl-C).
+   alternative views:
+     - 'ais show rebalance'          - focused rebalance view with per-target send/receive table;
+     - 'ais performance intra-data'  - live peer-to-peer RX/TX counters and sizes.
 
 USAGE:
    ais show job [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
 
 OPTIONS:
-   --all             Include all jobs: running, finished, and aborted
-   --count value     Used together with '--refresh' to limit the number of generated reports, e.g.:
-                      '--refresh 10 --count 5' - run 5 times with 10s interval (default: 0)
-   --date-time       Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
-   --json, -j        JSON input/output
-   --log value       Filename to log metrics (statistics)
-   --no-headers, -H  Display tables without headers
-   --progress        Show progress bar(s) and progress of execution in real time
-   --refresh value   Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
-                     valid time units: ns, us (or µs), ms, s (default), m, h
-   --regex value     Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
-   --top value       Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)
-   --units value     Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
-                     iec - IEC format, e.g.: KiB, MiB, GiB (default)
-                     si  - SI (metric) format, e.g.: KB, MB, GB
-                     raw - do not convert to (or from) human-readable format
-   --verbose, -v     Show extended statistics
-   --help, -h        Show help
+   refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
+                 valid time units: ns, us (or µs), ms, s (default), m, h
+   count         Used together with '--refresh' to limit the number of generated reports, e.g.:
+                  '--refresh 10 --count 5' - run 5 times with 10s interval
+   json,j        JSON input/output
+   all           Include all jobs: running, finished, and aborted
+   regex         Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
+   filter        Regular expression to filter job table rows based on column values, format: "COLUMN=PATTERN", e.g.:
+                 --filter "STATE=Running" - show only running jobs
+                 --filter "NODE=(kXRtfPUg|jpJtCQyq)" - show jobs for specific nodes
+                 --filter "BUCKET=.*ais-.*" - show jobs for buckets matching pattern
+                 --filter "KIND=rebalance.*" - show only rebalance jobs
+                 note: use --all to include finished jobs in any filter
+   no-headers,H  Display tables without headers
+   verbose,v     Show extended statistics
+   units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
+                 iec - IEC format, e.g.: KiB, MiB, GiB (default)
+                 si  - SI (metric) format, e.g.: KB, MB, GB
+                 raw - do not convert to (or from) human-readable format
+   date-time     Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
+   top           Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)
+   progress      Show progress bar(s) and progress of execution in real time; 'object get' with multiple objects: show number of objects processed
+   help, h       Show help
 ```
 
 You can show jobs by any combination of the optional (filtering) arguments: NAME, JOB_ID, etc..
@@ -312,9 +316,8 @@ Use `--all` option to include finished (or aborted) jobs.
 
 As usual, press `<TAB-TAB> to select and see `--help` for details.
 
-> `job show download|dsort` have slightly different options. Please see their documentation for more:
+> `job show download` has slightly different options. See its documentation for more:
 * [`job show download`](download.md#show-download-jobs-and-job-status)
-* [`job show dsort`](dsort.md#show-dsort-jobs-and-job-status)
 
 ### Show extended statistics
 
@@ -450,9 +453,8 @@ out.obj.size             0
 
 Wait for the specified job to finish.
 
-> `job wait download|dsort` have slightly different options. Please see their documentation for more:
+> `job wait download` has slightly different options. See its documentation for more:
 * [`job wait download`](download.md#wait-for-download-job)
-* [`job wait dsort`](dsort.md#wait-for-dsort-job)
 
 ### Options
 
@@ -473,13 +475,6 @@ OPTIONS:
                     valid time units: ns, us (or µs), ms, s (default), m, h
    --help, -h       Show help
 ```
-
-## Distributed Sort
-
-`ais start dsort`
-
-Run [dSort](/docs/dsort.md).
-[Further reference for this command can be found here.](dsort.md)
 
 ## Downloader
 

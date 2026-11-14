@@ -236,8 +236,8 @@ The system automatically generates API tags (groupings) based on the endpoint pa
 
 Operation IDs are automatically generated from function names:
 - Simple case: `ListBuckets` → `ListBuckets`
-- Multiple endpoints per function: `dsortHandler` + `POST` + `/sort` → `dsortHandlerpostsort`
-- Different methods on same path: `dsortHandler` + `GET` + `/sort` → `dsortHandlergetsort`
+- Multiple endpoints per function: `exampleHandler` + `POST` + `/example` → `exampleHandlerpostexample`
+- Different methods on same path: `exampleHandler` + `GET` + `/example` → `exampleHandlergetexample`
 
 
 ### Example 1: GET Endpoint with Query Parameters

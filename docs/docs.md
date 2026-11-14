@@ -171,4 +171,3 @@ Use this page as a quick orientation and navigation map:
 - [Custom transformers](https://github.com/NVIDIA/ais-etl/tree/main/transformers)
 - [ETL Python webserver SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/etl/webserver/README.md)
 - [ETL Go webserver package](https://github.com/NVIDIA/aistore/blob/main/ext/etl/webserver/README.md)
-- [Initial sharding utility (`ishard`)](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)

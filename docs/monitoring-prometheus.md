@@ -143,7 +143,7 @@ AIS organizes metrics into **four major groups**, reflected in the codebase and 
 | ---------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | **1. Datapath**                    | GET/PUT counters, sizes, latencies, rate-limiting, I/O errors                          | `ais_target_get_count`, `ais_target_put_bytes`, `ais_target_ratelim_retry_get_count` |
 | **2. Metadata (in-memory)**        | Lcache activity (evictions, collisions)                                                | `ais_target_lcache_evicted_count`                                              |
-| **3. Extended Actions (xactions)** | Background & multi-object jobs: LRU, EC, rebalance, ETL, Download, DSort, **GetBatch** | `ais_target_lru_evict_count`, `ais_target_getbatch_count`                              |
+| **3. Extended Actions (xactions)** | Background & multi-object jobs: LRU, EC, rebalance, ETL, Download, **GetBatch** | `ais_target_lru_evict_count`, `ais_target_getbatch_count`                              |
 | **4. Streams**                     | Long-lived peer-to-peer (SharedDM) streaming channels                                  | `ais_target_stream_out_count`                                                 |
 
 > For GetBatch observability, see

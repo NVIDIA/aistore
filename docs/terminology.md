@@ -132,8 +132,6 @@ In short, sharding:
 Further reading:
 * [Archive support](/docs/archive.md)
 * [CLI archive command](/docs/cli/archive.md)
-* [`ishard` tool](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
-* [Distributed Shuffle](/docs/cli/dsort.md)
 * WebDataset format: [Hugging Face WebDataset docs](https://huggingface.co/docs/hub/datasets-webdataset)
 
 ---
@@ -163,16 +161,18 @@ If the remote `PUT` fails, the whole operation fails and AIS rolls back locally.
 
 Xaction (*eXtended action*) is AIStore’s abstraction for asynchronous batch jobs. All xactions expose a uniform [API](/docs/overview.md#aistore-apis) and [CLI](/docs/overview.md#cli) for starting, stopping, waiting, and reporting both generic and job-specific statistics.
 
-Common jobs include erasure coding (EC), n-way mirroring, resharding, transforming a given virtual directory, archiving ([sharding](#shard)) multiple objects, copying remote bucket, and more:
+Common jobs include erasure coding (EC), n-way mirroring, transforming a given virtual directory, archiving ([sharding](#shard)) multiple objects, copying remote bucket, and more:
 
 ```console
 $ ais show job --help
+
 NAME:
    ais show job - Show running and/or finished jobs:
-
-     archive        blob-download  cleanup     copy-bucket       copy-objects      delete-objects
-     download       dsort          ec-bucket   ec-get            ec-put            ec-resp
-     elect-primary  etl-bucket     etl-inline  etl-objects       evict-objects     evict-remote-bucket
-     list           lru-eviction   mirror      prefetch-objects  promote-files     put-copies
-     rebalance      rename-bucket  resilver    summary           warm-up-metadata
+     archive             blob-download  cleanup       copy-bucket    copy-objects      create-inventory
+     delete-objects      download       ec-bucket     ec-get         ec-put            ec-resp
+     elect-primary       etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
+     get-batch           list           lru-eviction  mirror         prefetch-objects  promote-files
+     put-copies          rebalance      rechunk       rename-bucket  resilver          shard-index
+     shard-index-demand  shard-summary  summary       warm-up-metadata
+...
 ```

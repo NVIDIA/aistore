@@ -57,9 +57,3 @@ The second option is the current default.
 
 To build from source, add `etl` to `TAGS` (for example, `TAGS=etl make node`).
 Release automation publishes a versioned `aistorage/aisnode` image with the `-etl` suffix for every release, as well as `aistorage/aisnode:latest-etl`.
-
-## Dsort (distributed shuffle)
-
-| build tag | comment |
-| --- | --- |
-| `dsort`| Build `aisnode` with dsort runtime enabled and the respective APIs not stubbed; for details, see docs/dsort.md, api/dsort.go (Go), and python/aistore/sdk/dsort (Python) |

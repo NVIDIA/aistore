@@ -20,8 +20,6 @@ and cluster deployment:
 
 ```bash
 make cli lint-cli
-# Optional-feature example; omit unused tags.
-TAGS='dsort' make cli lint-cli
 ```
 
 Before E2E tests, deploy per root instructions and put rebuilt `ais` on `PATH`.

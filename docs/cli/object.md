@@ -1308,10 +1308,7 @@ Waiting time may be even greater if you are copying data to an AIStore `s3://`, 
 
 Copying, or generally, working in any shape and form with many (millions of) small files comes with significant and unavoidable overhead, both networking and storage-wise.
 
-Use our `ishard` tool to convert and serialize your data using the preferred formatting (a.k.a. WebDataset convention):
-
-* [`ishard` readme](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
-* [`ishard` blog](https://aistore.nvidia.com/blog/2024/08/16/ishard)
+Use the Python SDK [dataset writer](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/dataset/README.md#writing-datasets) to create WebDataset-formatted shards from local files.
 
 # Promote files and directories
 
@@ -2401,12 +2398,12 @@ removed files in the range 'test-{001..003}' from ais://mybucket bucket
 And one other example (that also includes generating .tar shards):
 
 ```console
-$ ais archive gen-shards "ais://dsort-testing/shard-{001..999}.tar" --fcount 256
+$ ais archive gen-shards "ais://archive-testing/shard-{001..999}.tar" --fcount 256
 Shards created: 999/999 [==============================================================] 100 %
 
 # NOTE: make sure to use double or single quotations to specify the template (aka "range")
-$ ais object rm ais://dsort-testing --template 'shard-{900..999}.tar'
-removed from ais://dsort-testing objects in the range "shard-{900..999}.tar", use 'ais job show xaction EH291ljOy' to monitor the progress
+$ ais object rm ais://archive-testing --template 'shard-{900..999}.tar'
+removed from ais://archive-testing objects in the range "shard-{900..999}.tar", use 'ais job show xaction EH291ljOy' to monitor the progress
 ```
 
 ### See also:

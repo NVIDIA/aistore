@@ -57,7 +57,7 @@ For example: `/v1/cluster` where `v1` is the API version and `cluster` is the re
 | `buckets` | create, destroy, rename, copy, transform buckets; list objects; get bucket names and properties |
 | `objects` | datapath request to GET, PUT and DELETE objects, read their properties |
 | `download` | download external datasets and/or selected files from remote buckets |
-| `sort` | distributed shuffle |
+| `sort` | deprecated compatibility stub in AIStore 5.3: GET returns `[]`; other methods return HTTP 501 (dSort removed) |
 
 For the most recently updated URL paths, see:
 

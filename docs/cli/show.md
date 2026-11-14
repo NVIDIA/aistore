@@ -7,9 +7,6 @@ The command is a "hub" for all information-viewing commands that are currently s
 ```console
 $ ais show --help
 
-COMMANDS:
-$ ais show --help
-
 NAME:
    ais show - Show configuration, buckets, jobs, etc. - all managed entities in the cluster, and the cluster itself
 
@@ -17,29 +14,87 @@ USAGE:
    ais show command [arguments...]  [command options]
 
 COMMANDS:
-   auth            Show entity in authn
-   object          Show object properties
-   bucket          Show bucket properties
-   cluster         Show cluster: health, version and build, and nodes (including capacity and memory, load averages and alerts)
-   dashboard       Show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more
-   performance     Show performance counters, throughput, latency, disks, used/available capacities (press <TAB-TAB> to select specific view)
-   storage         Show storage usage and utilization, disks and mountpaths
-   rebalance       show rebalance status and stats
+   auth         Show entity in authn
+   object       Show object properties
+   bucket       Show bucket properties
+   cluster      Show cluster summary by default: health, version/build, and nodes including capacity, memory, CPU utilization, and alerts.
+                Use subcommands to drill down into specific views (Smap, BMD, config, stats, CPU, memory).
+                Examples:
+                - ais show cluster                - show the default cluster summary;
+                - ais show cluster t[abc]         - same as above, but only for the selected target;
+                - ais show cluster proxy          - show proxies only;
+                - ais show cluster proxy p[xyz]   - show specific proxy;
+                - ais show cluster smap           - show cluster map (Smap);
+                - ais show cluster smap t[xyz]    - ask selected target to show its copy of the Smap;
+                - ais show cluster config         - show cluster and node configuration;
+                - ais show cluster stats          - show performance counters and related stats;
+                - ais show cluster cpu            - show detailed CPU view for all nodes;
+                - ais show cluster memory t[abc]  - show detailed memory view for the selected target.
+   placement    Show target placement weights and normalized shares
+   dashboard    Show cluster at-a-glance dashboard: node counts, capacity, performance, health, software version, and more
+   performance  Show performance counters, throughput, latency, disks, used/available capacities (press <TAB-TAB> to select specific view)
+   storage      Show storage usage and utilization, disks and mountpaths
+   rebalance    Show global rebalance status and per-target stats.
+   e.g.:
+     - show rebalance                         - show the most recent rebalance (running or finished);
+     - show rebalance g21                     - show a specific rebalance by ID;
+     - show rebalance --refresh 10            - continuous monitoring with 10s refresh (until Ctrl-C);
+     - show rebalance --refresh 10 --count 5  - same as above, limited to 5 iterations;
+     - show rebalance --all                   - include all rebalances: running, finished, and aborted
+                                                (note: 'rebalance --cleanup' generations render with a cleanup-mode template).
+   for alternative views, see also:
+                   - 'ais show job'                - all running jobs (possibly including rebalance) across the cluster;
+                   - 'ais performance intra-data'  - live peer-to-peer RX/TX counters and sizes (rebalance generates intra-cluster traffic).
    config          Show CLI, cluster, or node configurations (nodes inherit cluster and have local)
    remote-cluster  Show attached remote AIS clusters
    remote          Show remote cluster information and statistics
-
-   job      Show running and/or finished jobs:
-            archive              blob-download  cleanup     copy-bucket   copy-objects   create-inventory
-            delete-objects       download       dsort       ec-bucket     ec-get         ec-put
-            ec-resp              elect-primary  etl-bucket  etl-inline    etl-objects    evict-objects
-            evict-remote-bucket  get-batch      list        lru-eviction  mirror         prefetch-objects
-            promote-files        put-copies     rebalance   rechunk       rename-bucket  resilver
-            summary              warm-up-metadata
-
+   job             Show running and/or finished jobs:
+                   archive             blob-download  cleanup       copy-bucket    copy-objects      create-inventory
+                   delete-objects      download       ec-bucket     ec-get         ec-put            ec-resp
+                   elect-primary       etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
+                   get-batch           list           lru-eviction  mirror         prefetch-objects  promote-files
+                   put-copies          rebalance      rechunk       rename-bucket  resilver          shard-index
+                   shard-index-demand  shard-summary  summary       warm-up-metadata
+   (use any of these names with 'ais show job' command, or try shortcuts: "evict", "prefetch", "copy", "delete", "ec")
+   e.g.:
+     - show job prefetch                  - show all running prefetch jobs;
+     - show job copy                      - show all copying jobs (bucket-to-bucket and multi-object);
+     - show job copy-objects              - show all running multi-object copies (canonical name for 'copy-listrange');
+     - show job ec                        - show all erasure-coding jobs;
+     - show job evict                     - show all running bucket and/or data evicting jobs;
+     - show job list (or: 'show job ls')  - show all running list-objects jobs;
+     - show job rechunk                   - show all running rechunk jobs;
+     - show job shard-index               - show all running shard-indexing jobs;
+     - show job tco-cysbohAGL             - show a specific job by its unique ID;
+     filtering and limiting:
+     - show job --all                        - include finished and aborted jobs (default: running only);
+     - show job prefetch --top 5             - show 5 most recent prefetch jobs;
+     - show job copy-objects --all --top 10  - 10 most recent multi-object copies, running or finished;
+     continuous monitoring:
+     - show job ls --refresh 10            - refresh every 10 seconds (until Ctrl-C);
+     - show job ls --refresh 10 --count 4  - same as above, limited to 4 iterations;
+     - show job prefetch --refresh 1m      - 1-minute refresh interval (until Ctrl-C).
+   alternative views:
+        - 'ais show rebalance'          - focused rebalance view with per-target send/receive table;
+        - 'ais performance intra-data'  - live peer-to-peer RX/TX counters and sizes.
+   log  For a given node: show its current log (use '--refresh' to update, '--help' for details)
    tls  Show TLS certificate's version, issuer's common name, from/to validity bounds
-   etl  Show ETL(s)
-   nbi  Show bucket inventory
+   etl  Show ETL(s).
+   Examples:
+        - 'ais etl show'                             list all ETL jobs with their status and details;
+        - 'ais etl show my-etl'                      show detailed specification for a specific ETL job;
+        - 'ais etl show my-etl another-etl'          show detailed specifications for multiple ETL jobs;
+        - 'ais etl show errors my-etl'               show transformation errors for inline object transformations;
+        - 'ais etl show errors my-etl job-123'       show errors for a specific offline (bucket-to-bucket) transform job.
+   nbi  Show bucket inventory or all matching inventories,
+   e.g.:
+     * ais nbi show                                         - show all inventories in the cluster;
+     * ais nbi show s3:                                     - show inventories for all s3:// buckets;
+     * ais nbi show s3://abc                                - show inventory details for the bucket;
+     * ais nbi show s3://abc --inv-name my-first-inventory  - show specific named inventory.
+
+OPTIONS:
+   --help, -h  Show help
 ```
 
 For easy usage, all `show` commands have been aliased to their respective top-level counterparts:
@@ -167,54 +222,64 @@ Use `ais show performance` and its variations in combination with `ais show job`
 
 ```console
 $ ais show job --help
+
 NAME:
    ais show job - Show running and/or finished jobs:
-     archive        blob-download  cleanup     copy-bucket       copy-objects   delete-objects
-     download       dsort          ec-bucket   ec-get            ec-put         ec-resp
-     elect-primary  etl-bucket     etl-inline  etl-objects       evict-objects  evict-remote-bucket
-     list           lru-eviction   mirror      prefetch-objects  promote-files  put-copies
-     rebalance      rename-bucket  resilver    summary           warm-up-metadata
+     archive             blob-download  cleanup       copy-bucket    copy-objects      create-inventory
+     delete-objects      download       ec-bucket     ec-get         ec-put            ec-resp
+     elect-primary       etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
+     get-batch           list           lru-eviction  mirror         prefetch-objects  promote-files
+     put-copies          rebalance      rechunk       rename-bucket  resilver          shard-index
+     shard-index-demand  shard-summary  summary       warm-up-metadata
    (use any of these names with 'ais show job' command, or try shortcuts: "evict", "prefetch", "copy", "delete", "ec")
    e.g.:
-     - show job prefetch-listrange         - show all running prefetch jobs;
-     - show job prefetch                   - same as above;
-     - show job prefetch --top 5           - show 5 most recent prefetch jobs;
-     - show job tco-cysbohAGL              - show a given (multi-object copy/transform) job identified by its unique ID;
-     - show job copy-listrange             - show all running multi-object copies;
-     - show job copy-objects               - same as above (using display name);
-     - show job copy                       - show all copying jobs including both bucket-to-bucket and multi-object;
-     - show job copy-objects --all         - show both running and already finished (or stopped) multi-object copies;
-     - show job copy-objects --all --top 10 - show 10 most recent multi-object copy jobs;
-     - show job ec                         - show all erasure-coding;
-     - show job list                       - show all running list-objects jobs;
-     - show job ls                         - same as above;
-     - show job ls --refresh 10            - same as above with periodic _refreshing_ every 10 seconds;
-     - show job ls --refresh 10 --count 4  - same as above but only for the first four 10-seconds intervals;
-     - show job prefetch --refresh 1m      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
-     - show job evict                      - all running bucket and/or data evicting jobs;
-     - show job --all                      - show absolutely all jobs, running and finished.
+     - show job prefetch                  - show all running prefetch jobs;
+     - show job copy                      - show all copying jobs (bucket-to-bucket and multi-object);
+     - show job copy-objects              - show all running multi-object copies (canonical name for 'copy-listrange');
+     - show job ec                        - show all erasure-coding jobs;
+     - show job evict                     - show all running bucket and/or data evicting jobs;
+     - show job list (or: 'show job ls')  - show all running list-objects jobs;
+     - show job rechunk                   - show all running rechunk jobs;
+     - show job shard-index               - show all running shard-indexing jobs;
+     - show job tco-cysbohAGL             - show a specific job by its unique ID;
+     filtering and limiting:
+     - show job --all                        - include finished and aborted jobs (default: running only);
+     - show job prefetch --top 5             - show 5 most recent prefetch jobs;
+     - show job copy-objects --all --top 10  - 10 most recent multi-object copies, running or finished;
+     continuous monitoring:
+     - show job ls --refresh 10            - refresh every 10 seconds (until Ctrl-C);
+     - show job ls --refresh 10 --count 4  - same as above, limited to 4 iterations;
+     - show job prefetch --refresh 1m      - 1-minute refresh interval (until Ctrl-C).
+   alternative views:
+     - 'ais show rebalance'          - focused rebalance view with per-target send/receive table;
+     - 'ais performance intra-data'  - live peer-to-peer RX/TX counters and sizes.
 
 USAGE:
    ais show job [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
 
 OPTIONS:
-   all           Include all jobs: running, finished, and aborted
-   count         Used together with '--refresh' to limit the number of generated reports, e.g.:
-                  '--refresh 10 --count 5' - run 5 times with 10s interval
-   date-time     Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
-   json,j        JSON input/output
-   log           Filename to log metrics (statistics)
-   no-headers,H  Display tables without headers
-   progress      Show progress bar(s) and progress of execution in real time
    refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                  valid time units: ns, us (or µs), ms, s (default), m, h
+   count         Used together with '--refresh' to limit the number of generated reports, e.g.:
+                  '--refresh 10 --count 5' - run 5 times with 10s interval
+   json,j        JSON input/output
+   all           Include all jobs: running, finished, and aborted
    regex         Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
-   top           Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)
+   filter        Regular expression to filter job table rows based on column values, format: "COLUMN=PATTERN", e.g.:
+                 --filter "STATE=Running" - show only running jobs
+                 --filter "NODE=(kXRtfPUg|jpJtCQyq)" - show jobs for specific nodes
+                 --filter "BUCKET=.*ais-.*" - show jobs for buckets matching pattern
+                 --filter "KIND=rebalance.*" - show only rebalance jobs
+                 note: use --all to include finished jobs in any filter
+   no-headers,H  Display tables without headers
+   verbose,v     Show extended statistics
    units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                  iec - IEC format, e.g.: KiB, MiB, GiB (default)
                  si  - SI (metric) format, e.g.: KB, MB, GB
                  raw - do not convert to (or from) human-readable format
-   verbose,v     Show extended statistics
+   date-time     Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
+   top           Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)
+   progress      Show progress bar(s) and progress of execution in real time; 'object get' with multiple objects: show number of objects processed
    help, h       Show help
 ```
 
@@ -258,54 +323,64 @@ Here's at a glance:
 
 ```console
 $ ais show job --help
+
 NAME:
    ais show job - Show running and/or finished jobs:
-     archive        blob-download  cleanup     copy-bucket       copy-objects   delete-objects
-     download       dsort          ec-bucket   ec-get            ec-put         ec-resp
-     elect-primary  etl-bucket     etl-inline  etl-objects       evict-objects  evict-remote-bucket
-     list           lru-eviction   mirror      prefetch-objects  promote-files  put-copies
-     rebalance      rename-bucket  resilver    summary           warm-up-metadata
+     archive             blob-download  cleanup       copy-bucket    copy-objects      create-inventory
+     delete-objects      download       ec-bucket     ec-get         ec-put            ec-resp
+     elect-primary       etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
+     get-batch           list           lru-eviction  mirror         prefetch-objects  promote-files
+     put-copies          rebalance      rechunk       rename-bucket  resilver          shard-index
+     shard-index-demand  shard-summary  summary       warm-up-metadata
    (use any of these names with 'ais show job' command, or try shortcuts: "evict", "prefetch", "copy", "delete", "ec")
    e.g.:
-     - show job prefetch-listrange         - show all running prefetch jobs;
-     - show job prefetch                   - same as above;
-     - show job prefetch --top 5           - show 5 most recent prefetch jobs;
-     - show job tco-cysbohAGL              - show a given (multi-object copy/transform) job identified by its unique ID;
-     - show job copy-listrange             - show all running multi-object copies;
-     - show job copy-objects               - same as above (using display name);
-     - show job copy                       - show all copying jobs including both bucket-to-bucket and multi-object;
-     - show job copy-objects --all         - show both running and already finished (or stopped) multi-object copies;
-     - show job copy-objects --all --top 10 - show 10 most recent multi-object copy jobs;
-     - show job ec                         - show all erasure-coding;
-     - show job list                       - show all running list-objects jobs;
-     - show job ls                         - same as above;
-     - show job ls --refresh 10            - same as above with periodic _refreshing_ every 10 seconds;
-     - show job ls --refresh 10 --count 4  - same as above but only for the first four 10-seconds intervals;
-     - show job prefetch --refresh 1m      - show all running prefetch jobs at 1 minute intervals (until Ctrl-C);
-     - show job evict                      - all running bucket and/or data evicting jobs;
-     - show job --all                      - show absolutely all jobs, running and finished.
+     - show job prefetch                  - show all running prefetch jobs;
+     - show job copy                      - show all copying jobs (bucket-to-bucket and multi-object);
+     - show job copy-objects              - show all running multi-object copies (canonical name for 'copy-listrange');
+     - show job ec                        - show all erasure-coding jobs;
+     - show job evict                     - show all running bucket and/or data evicting jobs;
+     - show job list (or: 'show job ls')  - show all running list-objects jobs;
+     - show job rechunk                   - show all running rechunk jobs;
+     - show job shard-index               - show all running shard-indexing jobs;
+     - show job tco-cysbohAGL             - show a specific job by its unique ID;
+     filtering and limiting:
+     - show job --all                        - include finished and aborted jobs (default: running only);
+     - show job prefetch --top 5             - show 5 most recent prefetch jobs;
+     - show job copy-objects --all --top 10  - 10 most recent multi-object copies, running or finished;
+     continuous monitoring:
+     - show job ls --refresh 10            - refresh every 10 seconds (until Ctrl-C);
+     - show job ls --refresh 10 --count 4  - same as above, limited to 4 iterations;
+     - show job prefetch --refresh 1m      - 1-minute refresh interval (until Ctrl-C).
+   alternative views:
+     - 'ais show rebalance'          - focused rebalance view with per-target send/receive table;
+     - 'ais performance intra-data'  - live peer-to-peer RX/TX counters and sizes.
 
 USAGE:
    ais show job [NAME] [JOB_ID] [NODE_ID] [BUCKET] [command options]
 
 OPTIONS:
-   all           Include all jobs: running, finished, and aborted
-   count         Used together with '--refresh' to limit the number of generated reports, e.g.:
-                  '--refresh 10 --count 5' - run 5 times with 10s interval
-   date-time     Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
-   json,j        JSON input/output
-   log           Filename to log metrics (statistics)
-   no-headers,H  Display tables without headers
-   progress      Show progress bar(s) and progress of execution in real time
    refresh       Time interval for continuous monitoring; can be also used to update progress bar (at a given interval);
                  valid time units: ns, us (or µs), ms, s (default), m, h
+   count         Used together with '--refresh' to limit the number of generated reports, e.g.:
+                  '--refresh 10 --count 5' - run 5 times with 10s interval
+   json,j        JSON input/output
+   all           Include all jobs: running, finished, and aborted
    regex         Regular expression to select jobs by name, kind, or description, e.g.: --regex "ec|mirror|elect"
-   top           Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)
+   filter        Regular expression to filter job table rows based on column values, format: "COLUMN=PATTERN", e.g.:
+                 --filter "STATE=Running" - show only running jobs
+                 --filter "NODE=(kXRtfPUg|jpJtCQyq)" - show jobs for specific nodes
+                 --filter "BUCKET=.*ais-.*" - show jobs for buckets matching pattern
+                 --filter "KIND=rebalance.*" - show only rebalance jobs
+                 note: use --all to include finished jobs in any filter
+   no-headers,H  Display tables without headers
+   verbose,v     Show extended statistics
    units         Show statistics and/or parse command-line specified sizes using one of the following units of measurement:
                  iec - IEC format, e.g.: KiB, MiB, GiB (default)
                  si  - SI (metric) format, e.g.: KB, MB, GB
                  raw - do not convert to (or from) human-readable format
-   verbose,v     Show extended statistics
+   date-time     Override the default hh:mm:ss (hours, minutes, seconds) time format - include calendar date as well
+   top           Show top N most recent jobs (e.g., --top 5 to show the 5 most recent jobs)
+   progress      Show progress bar(s) and progress of execution in real time; 'object get' with multiple objects: show number of objects processed
    help, h       Show help
 ```
 
@@ -423,7 +498,6 @@ qVJt8087         g15     rebalance       694             1.02MiB         13:40:5
 
 - [definitions: `xaction` vs `job`](/docs/batch.md)
 - [CLI: `ais job` command](/docs/cli/job.md)
-- [CLI: `dsort` (distributed shuffle)](/docs/cli/dsort.md)
 - [CLI: `download` from any remote source](/docs/cli/download.md)
 - [built-in `rebalance`](/docs/rebalance.md)
 - [multi-object operations](/docs/cli/object.md#operations-on-lists-and-ranges-and-entire-buckets)

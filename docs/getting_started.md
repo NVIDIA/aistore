@@ -812,7 +812,7 @@ To that end, each AIS node at startup loads and parses [cgroup](https://www.kern
 
 Further, given the container's cgroup/memory limitation, each AIS node adjusts the amount of memory available for itself.
 
-> Memory limits may affect [dSort](/docs/dsort.md) performance forcing it to "spill" the content associated with in-progress resharding into local drives. The same is true for erasure-coding which also requires memory to rebuild objects from slices, etc.
+> Erasure coding requires memory to rebuild objects from slices; account for this when setting memory limits.
 
 > For technical details on AIS memory management, please see [this readme](/memsys/README.md).
 

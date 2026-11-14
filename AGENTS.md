@@ -11,7 +11,7 @@ cmd/        node, CLI, utility executables
 cmn/        shared configuration, types, utilities
 core/       object/cluster metadata, internal APIs
 ec/         erasure coding
-ext/        ETL, dSort, downloader
+ext/        ETL, downloader
 fs/         mountpaths, object file layout
 hk/         periodic housekeeping callbacks
 ios/        disk I/O stats, OS storage interfaces
@@ -29,8 +29,8 @@ volume/     volume configuration and metadata
 xact/       background jobs, registry, implementations
 ```
 
-Before changing, building, or testing CLI/iShard, read [CLI](cmd/cli/AGENTS.md)
-or [iShard](cmd/ishard/AGENTS.md) instructions. Elsewhere, check for local instructions.
+Before changing, building, or testing CLI, read [CLI](cmd/cli/AGENTS.md)
+instructions. Elsewhere, check for local instructions.
 Flag conflicts and cite the relevant document before work.
 
 Consult these references as needed for the task:

@@ -20,7 +20,6 @@ The rest of this document is structured as follows:
 - [Scale-Out](#scale-out)
 - [Networking](#networking)
 - [HA](#ha)
-- [Sharding extensions: dSort and iShard](#sharding-extensions-dsort-and-ishard)
 - [ETL](#etl)
 - [_No limitations_ principle](#no-limitations-principle)
 
@@ -93,20 +92,14 @@ $ ais --help
 One notable feature of AIS CLI is its Bash-style auto-completions), which allow users to easily navigate supported operations and options by simply pressing the TAB key:
 
 ```console
-$ ais  <TAB-TAB>
-advanced         bucket           download         help             performance      rmo              start
-alias            cluster          dsort            job              prefetch         scrub            stop
-archive          config           etl              log              put              search           storage
-auth             cp               evict            ls               remote-cluster   show             tls
-blob-download    create           get              object           rmb              space-cleanup    wait
-
-$ ais cluster <TAB-TAB>
-show                   rebalance              shutdown               reset-stats
-remote-attach          set-primary            decommission           drop-lcache
-remote-detach          download-logs          add-remove-nodes       reload-backend-creds
-$ ais cluster
-
-## and so on...
+$ ais <TAB-TAB>
+advanced	config		help		object		scrub		tls
+alias		cp		job		performance	search		wait
+archive		create		log		prefetch	show
+auth		download	ls		put		space-cleanup
+blob-download	etl		ml		remote-cluster	start
+bucket		evict		mpu		rmb		stop
+cluster		get		nbi		rmo		storage
 ```
 
 AIS CLI is actively being maintained, improved, and extended. For more information, please see the [CLI overview](/docs/cli.md).
@@ -386,20 +379,6 @@ Gateways can be ad hoc added and removed, deployed remotely and/or locally to th
 AIS can be deployed as a fast tier in front of any of the supported [backends](/docs/providers.md).
 
 As a fast tier, AIS populates itself on demand (via *cold* GETs) and/or via its own *prefetch* API (see [List/Range Operations](batch.md#listrange-operations)) that runs in the background to download batches of objects.
-
-## Sharding extensions: dSort and iShard
-
-Distributed shuffle (codename dSort) “views” AIS data as named shards that comprise archived key/value data. The service supports tar, zip, tar-gzip, and tar-lz4 formats and a variety of built-in sorting algorithms; it is designed, though, to incorporate other popular archival formats including `tf.Record` and `tf.Example` ([TensorFlow](https://www.tensorflow.org/tutorials/load_data/tfrecord)) and [MessagePack](https://msgpack.org/index.html).
-
-User runs dSort by specifying an input dataset, by-key or by-value (i.e., by content) sorting algorithm, and a desired size of the resulting shards. The rest is done automatically and in parallel by the AIS storage targets, with no part of the processing that’d involve a single-host centralization and with dSort stage and progress-within-stage that can be monitored via user-friendly statistics.
-
-Each dSort job (note that multiple jobs can execute in parallel) generates a massively-parallel intra-cluster workload where each AIS target communicates with all other targets and executes a proportional "piece" of a job. This ultimately results in a *transformed* dataset optimized for subsequent training and inference by deep learning apps.
-
-Initial Sharding (`ishard`) utility will generate WebDataset-formatted shards from the original file-based dataset without splitting computable samples. The ultimate goal is to allow users to treat AIStore as a vast data lake, where they can easily upload training data in its raw format, regardless of size and directory structure.
-
-For more details, see:
-* [dSort](/docs/dsort.md)
-* [ishard](https://github.com/NVIDIA/aistore/blob/main/cmd/ishard/README.md)
 
 ## ETL
 

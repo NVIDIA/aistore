@@ -40,7 +40,7 @@
 
 ## Optional
 
-- [Distributed Sort (dSort)](https://aistore.nvidia.com/docs/dsort): Reshard and shuffle massive datasets
+- [dSort and iShard retirement](https://aistore.nvidia.com/docs/dsort): Removal in AIStore 5.3 and compatibility for older clients
 - [Blob Downloader](https://aistore.nvidia.com/docs/blob_downloader): Chunked parallel downloads of large remote objects
 - [Get-Batch](https://aistore.nvidia.com/docs/get_batch): Bulk object retrieval for training data pipelines
 - [Networking](https://aistore.nvidia.com/docs/networking): Multi-homing, network separation, IPv6

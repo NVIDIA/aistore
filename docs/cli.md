@@ -7,13 +7,13 @@ With shell completion installed, press `<TAB-TAB>` to discover commands. Output 
 
 ```console
 $ ais <TAB-TAB>
-
-advanced         cluster          etl              ls               prefetch         search           tls
-alias            config           evict            ml               put              show             wait
-archive          cp               get              mpu              remote-cluster   space-cleanup
-auth             create           help             nbi              rmb              start
-blob-download    download         job              object           rmo              stop
-bucket           dsort            log              performance      scrub            storage
+advanced	config		help		object		scrub		tls
+alias		cp		job		performance	search		wait
+archive		create		log		prefetch	show
+auth		download	ls		put		space-cleanup
+blob-download	etl		ml		remote-cluster	start
+bucket		evict		mpu		rmb		stop
+cluster		get		nbi		rmo		storage
 ```
 
 ### CLI namespaces
@@ -140,13 +140,13 @@ The recommended and quickest way to get started with CLI is to type `ais` and pr
 
 ```console
 $ ais <TAB-TAB>
-
-advanced         cluster          etl              ls               remote-cluster   space-cleanup
-alias            config           evict            ml               rmb              start
-archive          cp               get              object           rmo              stop
-auth             create           help             performance      scrub            storage
-blob-download    download         job              prefetch         search           tls
-bucket           dsort            log              put              show             wait
+advanced	config		help		object		scrub		tls
+alias		cp		job		performance	search		wait
+archive		create		log		prefetch	show
+auth		download	ls		put		space-cleanup
+blob-download	etl		ml		remote-cluster	start
+bucket		evict		mpu		rmb		stop
+cluster		get		nbi		rmo		storage
 ```
 
 Each command has `--help` for its subcommands and flags. The following is a brief **summary**:
@@ -186,7 +186,6 @@ Other CLI documentation:
 - [Mountpath (disk) management](/docs/cli/storage.md)
 - [Attach, detach, and monitor remote clusters](/docs/cli/cluster.md)
 - [Start, stop, and monitor downloads](/docs/cli/download.md)
-- [Distributed shuffle](/docs/cli/dsort.md)
 - [User account and access management](/docs/cli/auth.md)
 - [Jobs](/docs/cli/job.md)
 
@@ -205,7 +204,7 @@ Notice:
 
 When used the very first time, *or* if the `$HOME/.config/ais/cli/cli.json` does not exist, the latter will be created with default parameters:
 
-```json
+```console
 $ ais config cli --json
 
 {
@@ -226,21 +225,23 @@ $ ais config cli --json
         "url": "http://127.0.0.1:52001"
     },
     "aliases": {
-        "dsort": "job start dsort",
-        "prefetch": "object prefetch",
-        "rmo": "object rm",
-        "get": "object get",
-        "ls": "bucket ls",
-        "wait": "job wait",
-        "create": "bucket create",
-        "download": "job start download",
-        "start": "job start",
-        "stop": "job stop",
-        "blob-download": "job start blob-download",
-        "cp": "bucket cp",
         "evict": "bucket evict",
+        "ls": "bucket ls",
+        "prefetch": "object prefetch",
+        "download": "job start download",
+        "get": "object get",
+        "blob-download": "job start blob-download",
+        "create": "bucket create",
         "put": "object put",
-        "rmb": "bucket rm"
+        "space-cleanup": "storage cleanup",
+        "stop": "job stop",
+        "wait": "job wait",
+        "cp": "bucket cp",
+        "mpu": "object multipart-upload",
+        "rmb": "bucket rm",
+        "rmo": "object rm",
+        "scrub": "storage validate",
+        "start": "job start"
     },
     "default_provider": "ais",
     "no_color": false,

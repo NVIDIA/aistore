@@ -212,11 +212,11 @@ Global rebalance normally starts automatically - triggered by a topology change 
 Like a few other AIS xactions, rebalance is directly startable from the CLI:
 
 ```console
-$ ais start <TAB>  ## select one of the startable jobs - a strict subset of all supported xactions
-
-prefetch           dsort              rebalance          mirror             warm-up-metadata
-blob-download      lru                resilver           ec-encode          copy-bck
-download           etl                cleanup            rechunk            move-bck
+$ ais start <TAB-TAB>
+blob-download		ec-encode		move-bck		resilver
+cleanup			etl			prefetch		shard-index
+copy-bck		lru			rebalance		warm-up-metadata
+download		mirror			rechunk
 ```
 
 The `rebalance` command also supports (advanced-usage) bucket-scoped operation and related synchronization/versioning options:

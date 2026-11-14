@@ -41,12 +41,14 @@ AIS consistently shows [balanced I/O distribution and linear scalability](https:
 $ ais show job --help
 
 NAME:
-    archive              blob-download       cleanup        copy-bucket   copy-objects      create-inventory
-    delete-objects       download            dsort          ec-bucket     ec-get            ec-put
-    ec-resp              elect-primary       etl-bucket     etl-inline    etl-objects       evict-objects
-    evict-remote-bucket  get-batch           list           lru-eviction  mirror            prefetch-objects
-    promote-files        put-copies          rebalance      rechunk       rename-bucket     resilver
-    shard-index          shard-index-demand  shard-summary  summary       warm-up-metadata
+   ais show job - Show running and/or finished jobs:
+     archive             blob-download  cleanup       copy-bucket    copy-objects      create-inventory
+     delete-objects      download       ec-bucket     ec-get         ec-put            ec-resp
+     elect-primary       etl-bucket     etl-inline    etl-objects    evict-objects     evict-remote-bucket
+     get-batch           list           lru-eviction  mirror         prefetch-objects  promote-files
+     put-copies          rebalance      rechunk       rename-bucket  resilver          shard-index
+     shard-index-demand  shard-summary  summary       warm-up-metadata
+...
 ```
 
 > The feature set continues to grow and also includes: [shard index](/docs/shard_index.md); [placement weights](/docs/placement.md) (experimental); [native bucket inventory (NBI)](/docs/nbi.md); [blob-downloader](/docs/blob_downloader.md); [AuthN - authentication and authorization server](/docs/authn.md); runtime management of [TLS certificates](/docs/cli/x509.md); full support for [adding/removing nodes at runtime](/docs/lifecycle_node.md); adaptive [rate limiting](/docs/rate_limit.md); and more.
@@ -74,13 +76,13 @@ AIS includes an integrated, scriptable [CLI](/docs/cli.md) for managing clusters
 
 ```console
 $ ais <TAB-TAB>
-
-advanced         cluster          etl              ls               prefetch         search           tls
-alias            config           evict            ml               put              show             wait
-archive          cp               get              mpu              remote-cluster   space-cleanup
-auth             create           help             nbi              rmb              start
-blob-download    download         job              object           rmo              stop
-bucket           dsort            log              performance      scrub            storage
+advanced	config		help		object		scrub		tls
+alias		cp		job		performance	search		wait
+archive		create		log		prefetch	show
+auth		download	ls		put		space-cleanup
+blob-download	etl		ml		remote-cluster	start
+bucket		evict		mpu		rmb		stop
+cluster		get		nbi		rmo		storage
 ```
 
 ## Developer Tools
@@ -106,7 +108,7 @@ AIS supports multiple ingestion modes:
 * ✅ **Copy:** Full buckets, virtual subdirectories (recursively or non-recursively), lists or ranges (via Bash expansion).
 * ✅ **Download:** HTTP(S)-accessible datasets and objects.
 * ✅ **Prefetch:** Remote buckets or selected objects (from remote buckets), including subdirectories, lists, and/or ranges.
-* ✅ **Archive:** [Group and store](https://aistore.nvidia.com/blog/2024/08/16/ishard) related small files from an original dataset.
+* ✅ **Archive:** [Group and store](/docs/archive.md) related small files from an original dataset.
 
 ## Install from Release Binaries
 
