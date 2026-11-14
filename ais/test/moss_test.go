@@ -1631,3 +1631,73 @@ func TestMossZeroSizeCounters(t *testing.T) {
 		})
 	}
 }
+
+// ContinueOnErr=false: a missing object fails GetBatch regardless of its owning target
+func TestMossMissingNoContinueOnErr(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+
+	const numMissing = 12 // spread across targets
+	var (
+		bp      = tools.BaseAPIParams()
+		bck     = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		present = "present.bin"
+	)
+	t.Cleanup(stopMossJobs)
+	tools.CreateBucket(t, bp.URL, bck, nil, true /*cleanup*/)
+	_, err := api.PutObject(&api.PutArgs{
+		BaseParams: bp, Bck: bck, ObjName: present, Reader: _mossBody(cos.KiB, 1), Size: cos.KiB,
+	})
+	tassert.CheckFatal(t, err)
+
+	for _, streaming := range []bool{false, true} {
+		desc := "multipart"
+		if streaming {
+			desc = "streaming"
+		}
+		t.Run(desc, func(t *testing.T) {
+			for j := range numMissing {
+				in := []apc.MossIn{
+					{ObjName: present},
+					{ObjName: fmt.Sprintf("%s%02d%s", mossMissingPrefix, j, mossMissingSuffix)},
+				}
+				req := &apc.MossReq{In: in, StreamingGet: streaming}
+				if streaming {
+					_mossCheckFailedStream(t, bck, req)
+				} else {
+					var buf bytes.Buffer
+					_, err := api.GetBatch(bp, bck, req, &buf)
+					tassert.Errorf(t, err != nil, "%s: expected GetBatch to fail with ContinueOnErr=false", in[1].ObjName)
+				}
+			}
+		})
+	}
+}
+
+// streaming GetBatch may fail after the response has started:
+// accept an error or a short archive, but never a "missing" placeholder
+func _mossCheckFailedStream(t *testing.T, bck cmn.Bck, req *apc.MossReq) {
+	t.Helper()
+	rc, _, err := api.GetBatchStream(baseParams, bck, req)
+	if err != nil {
+		return
+	}
+	defer rc.Close()
+	var (
+		tr = tar.NewReader(rc)
+		n  int
+	)
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return // stream error: failed as expected
+		}
+		tassert.Errorf(t, !strings.HasPrefix(hdr.Name, apc.MossMissingDir+"/"),
+			"%s: unexpected placeholder %q with ContinueOnErr=false", req.In[1].ObjName, hdr.Name)
+		n++
+	}
+	tassert.Errorf(t, n < len(req.In), "%s: expected GetBatch to fail with ContinueOnErr=false, got all %d entries",
+		req.In[1].ObjName, n)
+}
