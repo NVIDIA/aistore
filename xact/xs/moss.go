@@ -2061,6 +2061,9 @@ func (wi *basewi) flushRx() error {
 			return nil
 		}
 		if entry.mopaque.missing {
+			if !wi.req.ContinueOnErr {
+				return cos.NewErrNotFound(nil, entry.mopaque.emsg)
+			}
 			wi.soft++
 			if limit := wi.config.GetBatch.MaxSoftErrs; wi.soft > limit {
 				return wi._errSoft(limit)
