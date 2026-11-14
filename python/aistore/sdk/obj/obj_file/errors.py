@@ -1,6 +1,8 @@
 #
-# Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
 #
+
+from aistore.sdk.errors import _pickle_exception
 
 
 class ObjectFileReaderMaxResumeError(Exception):
@@ -14,6 +16,9 @@ class ObjectFileReaderMaxResumeError(Exception):
             f"ObjectFileReader exceeded max number of stream resumptions: {max_retries}"
         )
 
+    def __reduce__(self):
+        return _pickle_exception(self)
+
 
 class ObjectFileReaderUnexpectedEOF(Exception):
     """
@@ -26,6 +31,9 @@ class ObjectFileReaderUnexpectedEOF(Exception):
         super().__init__(
             f"Object stream ended early at byte {actual}; expected byte {expected}"
         )
+
+    def __reduce__(self):
+        return _pickle_exception(self)
 
 
 class ObjectFileReaderStreamError(Exception):

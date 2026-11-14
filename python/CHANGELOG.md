@@ -12,6 +12,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   Initialization is idempotent and runs automatically on context entry; the client
   is closed if initialization fails during context entry.
 
+### Fixed
+
+- Fixed SDK exception pickling to preserve error types, messages, and attributes
+  when errors pass between processes.
 ### Deprecated
 
 - Deprecated `Client.dsort()`, all `aistore.sdk.dsort` APIs and models, and dSort

@@ -4,13 +4,20 @@
 import requests
 
 
+def _pickle_exception(exc):
+    """Restore saved arguments and attributes without rerunning the constructor."""
+    return (BaseException.__new__, (type(exc), *exc.args), exc.__dict__)
+
+
 class ClientClosedError(RuntimeError):
     """Raised when an operation requires a client that has been closed."""
 
 
 class APIRequestError(Exception):
     """
-    Base class for errors from HTTP servers, e.g. AIS or AuthN
+    Base class for errors from HTTP servers, e.g. AIS or AuthN.
+
+    Pickling requires the attached request and its body to be pickleable.
     """
 
     def __init__(
@@ -25,6 +32,9 @@ class APIRequestError(Exception):
         self.req_url = req_url
         self.req = req
         super().__init__(f"STATUS:{status_code}, MESSAGE:{message}, REQ_URL:{req_url}")
+
+    def __reduce__(self):
+        return _pickle_exception(self)
 
 
 class AISError(APIRequestError):
@@ -47,6 +57,9 @@ class InvalidBckProvider(Exception):
 
     def __init__(self, provider):
         super().__init__(f"Invalid bucket provider: '{provider}'")
+
+    def __reduce__(self):
+        return _pickle_exception(self)
 
 
 # pylint: disable=unused-variable
@@ -106,6 +119,9 @@ class Timeout(Exception):
     def __init__(self, action, message=""):
         super().__init__(f"Timed out while waiting for {action}. {message}")
 
+    def __reduce__(self):
+        return _pickle_exception(self)
+
 
 # pylint: disable=unused-variable
 class InvalidObjectRangeIndex(Exception):
@@ -116,6 +132,9 @@ class InvalidObjectRangeIndex(Exception):
     def __init__(self, message):
         super().__init__(f"Invalid argument provided for object range index: {message}")
 
+    def __reduce__(self):
+        return _pickle_exception(self)
+
 
 class JobInfoNotFound(Exception):
     """
@@ -124,6 +143,9 @@ class JobInfoNotFound(Exception):
 
     def __init__(self, message):
         super().__init__(f"Job information not found on the cluster: {message}")
+
+    def __reduce__(self):
+        return _pickle_exception(self)
 
 
 class UnexpectedHTTPStatusCode(Exception):
@@ -141,6 +163,9 @@ class UnexpectedHTTPStatusCode(Exception):
             )
         )
 
+    def __reduce__(self):
+        return _pickle_exception(self)
+
 
 class InvalidURLException(Exception):
     """
@@ -152,6 +177,9 @@ class InvalidURLException(Exception):
             f"Invalid URL: '{url}'. Ensure it follows the format 'provider://bucket/object'."
         )
 
+    def __reduce__(self):
+        return _pickle_exception(self)
+
 
 class NoTargetError(Exception):
     """
@@ -162,6 +190,9 @@ class NoTargetError(Exception):
         super().__init__(
             f"No available targets in the cluster map. Total nodes: {total_nodes}"
         )
+
+    def __reduce__(self):
+        return _pickle_exception(self)
 
 
 class InvalidPipelineError(ValueError):
@@ -195,3 +226,6 @@ class ETLDirectPutTransientError(Exception):
         super().__init__(
             f"direct_put to {url!r} failed with transient error: {type(cause).__name__}({cause})"
         )
+
+    def __reduce__(self):
+        return _pickle_exception(self)

@@ -5,13 +5,24 @@
 
 import pickle
 import unittest
-from multiprocessing import get_all_start_methods
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_all_start_methods, get_context
+
+from tenacity import stop_after_attempt
 
 from aistore.sdk import Client
-from aistore.sdk.errors import ClientClosedError
+from aistore.sdk.errors import ClientClosedError, ErrObjNotFound
+from aistore.sdk.retry_config import RetryConfig
 from tests.integration import CLUSTER_ENDPOINT
 from tests.integration.sdk import DEFAULT_TEST_CLIENT, TEST_RETRY_CONFIG
-from tests.utils import run_forked_test
+from tests.utils import run_forked_test, random_string
+
+
+def _get_missing_object(endpoint, bucket_name):
+    retry_config = RetryConfig.default()
+    retry_config.network_retry.stop = stop_after_attempt(1)
+    with Client(endpoint, retry_config=retry_config) as client:
+        client.bucket(bucket_name).object("missing").get_reader().read_all()
 
 
 class TestClient(unittest.TestCase):
@@ -45,6 +56,18 @@ class TestClient(unittest.TestCase):
             with self.subTest(operation=operation.__name__):
                 with self.assertRaises(ClientClosedError):
                     operation(**kwargs)
+
+    def test_worker_error_preserves_pool(self):
+        bucket = self.client.bucket(f"test-error-pickle-{random_string(8)}").create()
+        self.addCleanup(bucket.delete)
+        with ProcessPoolExecutor(
+            max_workers=1, mp_context=get_context("spawn")
+        ) as pool:
+            with self.assertRaises(ErrObjNotFound) as caught:
+                pool.submit(_get_missing_object, CLUSTER_ENDPOINT, bucket.name).result()
+            self.assertEqual(caught.exception.status_code, 404)
+            self.assertIn("missing", caught.exception.req_url)
+            self.assertEqual(pool.submit(abs, -1).result(), 1)
 
     def test_client_pickle(self):
         """Original and deserialized clients can query the same cluster."""
