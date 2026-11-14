@@ -114,6 +114,7 @@ func TestGetFromArch(t *testing.T) {
 				nested     bool   // subdirs
 				autodetect bool   // auto-detect by magic
 				mime       bool   // specify mime type
+				ctype      bool   // specify mime type as Content-Type (see archive.ContentTypeFromExt)
 				idx        string // "none" | "fresh" | "stale"
 			}{
 				{
@@ -153,6 +154,15 @@ func TestGetFromArch(t *testing.T) {
 					ext: archive.ExtTarLz4, nested: true, autodetect: true, mime: true,
 				},
 				{
+					ext: archive.ExtTgz, nested: true, autodetect: true, ctype: true,
+				},
+				{
+					ext: archive.ExtTarGz, nested: true, autodetect: true, ctype: true,
+				},
+				{
+					ext: archive.ExtTarLz4, nested: true, autodetect: true, ctype: true,
+				},
+				{
 					ext: archive.ExtTar, nested: false, autodetect: false, mime: false, idx: "fresh",
 				},
 				{
@@ -176,6 +186,9 @@ func TestGetFromArch(t *testing.T) {
 				idxLabel = "none"
 			}
 			tname := fmt.Sprintf("%s/nested=%t/detect=%t/mime=%t/idx=%s", test.ext, test.nested, test.autodetect, test.mime, idxLabel)
+			if test.ctype {
+				tname += "/ctype"
+			}
 			for _, tf := range []tar.Format{tar.FormatUnknown, tar.FormatGNU, tar.FormatPAX} {
 				tarFormat := tf
 				t.Run(path.Join(tname, "format-"+tarFormat.String()), func(t *testing.T) {
@@ -272,6 +285,9 @@ func TestGetFromArch(t *testing.T) {
 						var mime string
 						if test.mime {
 							mime = "application/x-" + test.ext[1:]
+						}
+						if test.ctype {
+							mime = archive.ContentTypeFromExt(test.ext)
 						}
 						getArgs := api.GetArgs{
 							Query: url.Values{

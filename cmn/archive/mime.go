@@ -94,6 +94,10 @@ func normalize(mime string) (string, error) {
 		return ExtTarGz, nil
 	case strings.Contains(mime, ExtTarLz4[1:]): // ditto
 		return ExtTarLz4, nil
+	case strings.Contains(mime, "gzip"): // e.g. "application/gzip" (contains "zip")
+		return ExtTgz, nil
+	case strings.HasPrefix(mime, "application/x-lz4") || strings.HasPrefix(mime, "application/lz4"): // see ContentTypeFromExt
+		return ExtTarLz4, nil
 	default:
 		for _, ext := range FileExtensions {
 			if strings.Contains(mime, ext[1:]) {
