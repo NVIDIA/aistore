@@ -907,7 +907,8 @@ $ aisloader -bucket=ais://images -pctput=0 -duration=10s -cleanup=false -json -s
 * The two options can be combined, saving identical statistics to both destinations.
 * `-stats-output-obj` cannot be combined with `-s3endpoint`.
 * `-cleanup=true` is rejected when the destination is the benchmark bucket.
-* Without `-stats-output`, object uploads use a temporary file while statistics also print to standard output. If closing the file or uploading it fails, aisloader keeps it and reports its path.
+* Without `-stats-output`, object uploads use a temporary file while statistics also print to standard output. If writing, closing, or uploading the file fails, aisloader keeps it and reports its path along with the errors.
+* If writing statistics fails, aisloader stops the run, exits with an error, and prints the final totals to standard error.
 
 ### StatsD
 

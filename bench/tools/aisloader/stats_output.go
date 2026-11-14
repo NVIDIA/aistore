@@ -5,6 +5,7 @@
 package aisloader
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -18,7 +19,7 @@ import (
 type statsOutput struct {
 	file     *os.File
 	filePath string // local filename (or stdout) for upload, cleanup, and recovery
-	writer   io.Writer
+	writer   *bufio.Writer
 
 	// object upload fields
 	isTmp   bool // file is a temporary file
@@ -72,10 +73,11 @@ func (p *params) openStatsOutput() (*statsOutput, error) {
 	if o.isTmp {
 		fmt.Fprintln(os.Stderr, "Statistics recovery path:", o.filePath)
 	}
-	o.writer = o.file
+	var writer io.Writer = o.file
 	if p.statsOutput == "" && p.statsOutputObj != "" {
-		o.writer = cos.NewWriterMulti(o.file, os.Stdout)
+		writer = cos.NewWriterMulti(o.file, os.Stdout)
 	}
+	o.writer = bufio.NewWriter(writer) // remembers first write error for easier error reporting
 	return o, nil
 }
 
@@ -87,6 +89,15 @@ func (o *statsOutput) close() error {
 	// clear handle so deferred cleanup does not close it again
 	o.file = nil
 	return f.Close()
+}
+
+func (o *statsOutput) closeAndRetain(errWrite error) error {
+	o.retain = true // keep incomplete statistics
+	err := errors.Join(fmt.Errorf("failed to write statistics output: %w", errWrite), o.close())
+	if o.filePath != os.Stdout.Name() {
+		err = fmt.Errorf("%w; incomplete statistics retained at %s", err, o.filePath)
+	}
+	return err
 }
 
 func (o *statsOutput) closeAndUpload(bp api.BaseParams) error {

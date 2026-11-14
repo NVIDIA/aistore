@@ -222,8 +222,7 @@ func writeStatsJSON(to io.Writer, s *sts, withcomma ...bool) {
 }
 
 func fprintf(w io.Writer, format string, a ...any) {
-	_, err := fmt.Fprintf(w, format, a...)
-	debug.AssertNoErr(err)
+	fmt.Fprintf(w, format, a...)
 }
 
 //nolint:dupl // format PUT and GET stats: minor field differences justify seemingly duplicated code blocks

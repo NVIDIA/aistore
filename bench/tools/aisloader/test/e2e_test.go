@@ -581,6 +581,36 @@ func TestAISLoaderStatsOutputObj(t *testing.T) {
 			tassert.Fatalf(t, !exists, "invalid stats path created benchmark bucket %s", runner.bck.String())
 		})
 	}
+
+	t.Run("Write Failure is not Uploaded", func(t *testing.T) {
+		const devFull = "/dev/full" // every write fails with ENOSPC
+		if _, err := os.Stat(devFull); err != nil {
+			t.Skipf("requires %s: %v", devFull, err)
+		}
+		runner := newE2ERunner(t, "stats-write-failure")
+		statsBck := cmn.Bck{Name: "aisloader-stats-" + strings.ToLower(trand.String(10)), Provider: apc.AIS}
+		tools.CreateBucket(t, runner.proxyURL, statsBck, nil, true)
+
+		object := runner.rootPrefix + "/stats.json"
+		args := append(slices.Clone(runner.baseArgs),
+			"-subdir="+runner.rootPrefix+"/data",
+			"-pctput=100", "-maxsize=64KiB", "-duration=3s", "-cleanup=false",
+			"-stats-output="+devFull,
+			"-stats-output-obj="+statsBck.Cname(object),
+		)
+		output, err := runner.exec(t, "stats-write-failure", time.Minute, args...)
+
+		var exitErr *exec.ExitError
+		tassert.Fatalf(t, errors.As(err, &exitErr) && exitErr.ExitCode() == 1, "expected exit code 1: %v\n%s", err, output)
+		const wantErr = "exited with error: failed to write statistics output"
+		tassert.Fatalf(t, strings.Contains(string(output), wantErr), "missing %q:\n%s", wantErr, output)
+		const wantTotals = "Final statistics (failed to write statistics output)"
+		tassert.Fatalf(t, strings.Contains(string(output), wantTotals), "missing %q:\n%s", wantTotals, output)
+		tassert.Fatalf(t, !strings.Contains(string(output), "Stats written to"), "reported incomplete statistics as saved:\n%s", output)
+
+		_, err = api.HeadObjectV2(tools.BaseAPIParams(runner.proxyURL), statsBck, object, apc.GetPropsName, api.HeadArgs{Silent: true})
+		tassert.Fatalf(t, cmn.IsErrHTTPNotFound(err), "expected %s to be absent: %v", statsBck.Cname(object), err)
+	})
 }
 
 func configuredDuration(t *testing.T) time.Duration {

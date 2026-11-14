@@ -431,6 +431,9 @@ func Start(version, buildtime string) (err error) {
 	}
 
 	preWriteStats(statsWriter, runParams.jsonFormat)
+	if err := statsWriter.Flush(); err != nil {
+		goto Done
+	}
 
 	// Get the workers started
 	for range runParams.numWorkers {
@@ -451,10 +454,10 @@ MainLoop:
 		// Prioritize showing stats otherwise we will dropping the stats intervals.
 		select {
 		case <-statsTicker.C:
-			accumulatedStats.aggregate(&intervalStats)
-			writeStats(statsWriter, runParams.jsonFormat, false /* final */, &intervalStats, &accumulatedStats)
-			sendStatsdStats(&intervalStats)
-			intervalStats = newStats(time.Now())
+			showIntervalStats(statsWriter)
+			if err := statsWriter.Flush(); err != nil {
+				break MainLoop
+			}
 		default:
 		}
 
@@ -473,10 +476,10 @@ MainLoop:
 				break MainLoop
 			}
 		case <-statsTicker.C:
-			accumulatedStats.aggregate(&intervalStats)
-			writeStats(statsWriter, runParams.jsonFormat, false /* final */, &intervalStats, &accumulatedStats)
-			sendStatsdStats(&intervalStats)
-			intervalStats = newStats(time.Now())
+			showIntervalStats(statsWriter)
+			if err := statsWriter.Flush(); err != nil {
+				break MainLoop
+			}
 		case sig := <-osSigChan:
 			switch sig {
 			case syscall.SIGHUP:
@@ -508,7 +511,14 @@ Done:
 	}
 
 	finalizeStats(statsWriter)
-	err = errors.Join(err, output.closeAndUpload(runParams.bp))
+	if errFlush := statsWriter.Flush(); errFlush != nil {
+		fmt.Fprintln(os.Stderr, "\nFinal statistics (failed to write statistics output):")
+		writeFinalStats(os.Stderr, runParams.jsonFormat, &accumulatedStats)
+		fmt.Fprintln(os.Stderr)
+		err = errors.Join(err, output.closeAndRetain(errFlush))
+	} else {
+		err = errors.Join(err, output.closeAndUpload(runParams.bp))
+	}
 
 	if runParams.cleanUp.Val {
 		cleanup(created)
@@ -521,6 +531,13 @@ Done:
 
 func epochLimitReached() bool {
 	return epochReadsPosted >= runParams.epochReadLimit
+}
+
+func showIntervalStats(to io.Writer) {
+	accumulatedStats.aggregate(&intervalStats)
+	writeStats(to, runParams.jsonFormat, false /* final */, &intervalStats, &accumulatedStats)
+	sendStatsdStats(&intervalStats)
+	intervalStats = newStats(time.Now())
 }
 
 func isDirectS3() bool {
