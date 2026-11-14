@@ -1027,16 +1027,22 @@ test:long:k8s:all:
     - kubectl apply -f kube-prometheus/manifests/setup && kubectl apply -f kube-prometheus/manifests && rm -rf kube-prometheus
   script:
     - |
+      failed=""
       echo "----- RUNNING K8S TESTS -----"
-      BUCKET="aws://ais-blossom" RE="TestETL|TestConfig|TestMountpath|TestBlobDownload" make test-run
-      exit_code=$?
-      result=$((result + exit_code))
+      exit_code=0
+      BUCKET="aws://ais-blossom" RE="TestETL|TestConfig|TestMountpath|TestBlobDownload" make test-run || exit_code=$?
       echo "----- K8S TESTS FINISHED WITH: ${exit_code} -----"
-    - |
+      [[ ${exit_code} -eq 0 ]] || failed="${failed} k8s"
+
       for bucket in ${CLOUD_BCKS}; do
         echo "----- RUNNING LONG TESTS WITH: ${bucket} -----"
-        BUCKET=${bucket} make test-long
-        exit_code=$?
-        result=$((result + exit_code))
+        exit_code=0
+        BUCKET=${bucket} make test-long || exit_code=$?
         echo "----- LONG TESTS FINISHED WITH: ${exit_code} -----"
+        [[ ${exit_code} -eq 0 ]] || failed="${failed} ${bucket}"
       done
+
+      if [[ -n ${failed} ]]; then
+        echo "----- FAILED:${failed} -----"
+        exit 1
+      fi
