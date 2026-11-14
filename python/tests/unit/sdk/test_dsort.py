@@ -64,7 +64,10 @@ class TestDsort(unittest.TestCase):  # pylint: disable=too-many-public-methods
     def setUp(self) -> None:
         self.mock_client = Mock()
         self.dsort_id = "123"
-        self.dsort = Dsort(client=self.mock_client, dsort_id=self.dsort_id)
+        with self.assertWarnsRegex(
+            DeprecationWarning, "AIStore 5.3 and later do not support dSort"
+        ):
+            self.dsort = Dsort(client=self.mock_client, dsort_id=self.dsort_id)
 
         # For testing ExternalKeyMap
         self.valid_key = "valid_key"

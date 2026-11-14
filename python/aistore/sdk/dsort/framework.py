@@ -14,6 +14,8 @@ from aistore.sdk.dsort.ekm import ExternalKeyMap
 # pylint: disable=redefined-builtin,too-few-public-methods
 class DsortShardsGroup:
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Represents the configuration for the input or output of a shard group in a dSort job
     """
 
@@ -56,6 +58,8 @@ class DsortShardsGroup:
 
 class DsortAlgorithm(BaseModel):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Represents the algorithm used in a Dsort job
     """
 
@@ -100,6 +104,8 @@ class DsortAlgorithm(BaseModel):
 
 class DsortFramework:
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Represents the framework for a dSort job, including input and output shard configurations.
     """
 

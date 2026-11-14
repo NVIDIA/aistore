@@ -16,7 +16,6 @@ In future we are planning to expand our dataset module with several exciting fea
 
 - **Dataset Reader**: Enabling efficient reading and manipulation of datasets stored in AIStore directly through our Python SDK.
 - **ETL Operations**: Integrating [ETL](https://aistore.nvidia.com/docs/etl) capabilities to facilitate complex data transformations and processing, enhancing data preparation workflows.
-- **Dsort**: Implementing [Dsort](https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md) to provide high-performance, scalable sorting solutions, optimizing data organization and retrieval processes within AIStore.
 
 ## Writing Datasets
 

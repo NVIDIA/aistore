@@ -11,6 +11,8 @@ from aistore.sdk.types import BucketModel
 
 class TimeStats(BaseModel):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Statistics for time spent on tasks
     """
 
@@ -23,6 +25,8 @@ class TimeStats(BaseModel):
 
 class ThroughputStats(BaseModel):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Statistics on task throughput
     """
 
@@ -35,12 +39,16 @@ class ThroughputStats(BaseModel):
 
 class DetailedStats(TimeStats, ThroughputStats):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Include fields from both time and throughput stats
     """
 
 
 class PhaseInfo(BaseModel):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Stats for a specific dSort phase
     """
 
@@ -53,6 +61,8 @@ class PhaseInfo(BaseModel):
 
 class LocalExtraction(PhaseInfo):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Metrics for first phase of dSort
     """
 
@@ -67,6 +77,8 @@ class LocalExtraction(PhaseInfo):
 
 class MetaSorting(PhaseInfo):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Metrics for second phase of dSort
     """
 
@@ -76,6 +88,8 @@ class MetaSorting(PhaseInfo):
 
 class ShardCreation(PhaseInfo):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Metrics for final phase of dSort
     """
 
@@ -91,6 +105,8 @@ class ShardCreation(PhaseInfo):
 
 class DsortMetrics(BaseModel):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     All stats for a dSort run
     """
 
@@ -107,6 +123,8 @@ class DsortMetrics(BaseModel):
 
 class JobInfo(BaseModel):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     Info about a dsort Job, including metrics
     """
 

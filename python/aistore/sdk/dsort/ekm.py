@@ -7,6 +7,8 @@ EKM_FILE_NAME = "ekm-file.json"
 
 class ExternalKeyMap(Dict[str, ObjectNames]):
     """
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
     A dictionary-like class for managing external key mappings in dSort operations
     """
 

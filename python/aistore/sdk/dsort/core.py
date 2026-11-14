@@ -1,4 +1,5 @@
 import logging
+import warnings
 import time
 import json
 from typing import Dict, Union
@@ -27,10 +28,18 @@ from aistore.sdk.utils import validate_file, probing_frequency
 
 class Dsort:
     """
-    Class for managing jobs for the dSort extension: https://github.com/NVIDIA/aistore/blob/main/docs/cli/dsort.md
+    Deprecated: retained for AIStore before 5.3; removal is planned for a future SDK release.
+
+    Class for managing dSort jobs on older AIStore servers.
     """
 
     def __init__(self, client: RequestClient, dsort_id: str = ""):
+        warnings.warn(
+            "dSort is deprecated in the Python SDK and will be removed in a future release. "
+            "AIStore 5.3 and later do not support dSort.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._client = client
         self._dsort_id = dsort_id
 

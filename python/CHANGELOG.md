@@ -12,6 +12,14 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   Initialization is idempotent and runs automatically on context entry; the client
   is closed if initialization fails during context entry.
 
+### Deprecated
+
+- Deprecated `Client.dsort()`, all `aistore.sdk.dsort` APIs and models, and dSort
+  constants in `sdk.const` and `sdk.xact_const`. They remain available for older
+  servers and will be removed in a future SDK release. Creating a `Dsort` handle
+  directly or via `Client.dsort()` emits `DeprecationWarning`. AIStore 5.3 removes
+  dSort.
+
 ## [2.2.0] - 2026-11-12
 
 This release adds an explicit client lifecycle (`Client.close()` and context

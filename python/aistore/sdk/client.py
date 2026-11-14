@@ -401,6 +401,9 @@ class Client:
 
     def dsort(self, dsort_id: str = ""):
         """
+        Deprecated: dSort was removed in AIStore 5.3. This factory and the dSort
+        SDK will be removed in a future release. Creating a handle emits DeprecationWarning.
+
         Factory constructor for dSort object.
         Contains APIs related to AIStore dSort operations.
         Does not make any HTTP request, only instantiates a dSort object.

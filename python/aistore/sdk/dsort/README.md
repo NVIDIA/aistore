@@ -1,5 +1,12 @@
 # Using the DsortFramework in Python SDK
 
+> **Deprecated:** AIStore 5.3 removes dSort. All APIs, models, and constants in
+> `aistore.sdk.dsort`, `Client.dsort()`, and dSort constants in `sdk.const` and
+> `sdk.xact_const` are deprecated and will be removed in a future SDK release.
+> They remain available for older servers. Creating a `Dsort` handle directly or
+> through `Client.dsort()` emits `DeprecationWarning`. See the
+> [AIStore 5.3 release notes](https://aistore.nvidia.com/docs/relnotes/5.3#dsort-and-ishard-removed).
+
 ## DsortFramework
 
 The `DsortFramework` class in the Python SDK enables you to define and manage dSort jobs. As a framework, `DsortFramework` itself does not make any HTTP requests until it is passed to the `Client.dsort` instance. It provides an abstracted way to configure your desired dSort job in a Pythonic manner, consistent with the AIStore SDK style. Below are instructions on how to construct a `DsortFramework` instance and start a dSort job directly from the Python SDK.
@@ -157,4 +164,4 @@ ekm["output-shard-1"] = ObjectNames(names=["file3.txt", "file4.txt"])
 print(ekm.as_dict())
 ```
 
-For more detailed information, refer to the original [dSort documentation](https://github.com/NVIDIA/aistore/blob/main/docs/dsort.md). Also see the [dSort CLI](https://github.com/NVIDIA/aistore/blob/main/docs/cli/dsort.md).
+For more detailed information, refer to the AIStore 5.2 [dSort documentation](https://github.com/NVIDIA/aistore/blob/v1.5.2/docs/dsort.md). Also see the [AIStore 5.2 dSort CLI](https://github.com/NVIDIA/aistore/blob/v1.5.2/docs/cli/dsort.md).
