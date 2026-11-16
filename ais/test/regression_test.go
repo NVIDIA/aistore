@@ -1176,9 +1176,10 @@ func TestBackendRateLimitBackoffRemoteAIS(t *testing.T) {
 			}})
 			tassert.CheckFatal(t, err)
 			if tc.remoteTokenInterval != 0 {
+				remoteMaxTokens := 8 * remoteSmap.CountActivePs()
 				_, err = api.SetBucketProps(remoteBP, remoteBck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
 					Frontend: &cmn.BurstyToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
-						Enabled: apc.Ptr(true), MaxTokens: apc.Ptr(8 * remoteSmap.CountActivePs()),
+						Enabled: apc.Ptr(true), MaxTokens: apc.Ptr(remoteMaxTokens),
 						Interval: apc.Ptr(cos.Duration(tc.remoteTokenInterval)),
 					}, Size: apc.Ptr(1)},
 				}})
@@ -1191,7 +1192,7 @@ func TestBackendRateLimitBackoffRemoteAIS(t *testing.T) {
 					herr := cmn.AsErrHTTP(getErr)
 					tassert.Fatalf(t, herr != nil && herr.Status == http.StatusTooManyRequests, "expected remote 429, got %v", getErr)
 					return true
-				}, tools.WaitRetryOpts{MaxRetries: 32, Interval: time.Millisecond}))
+				}, tools.WaitRetryOpts{MaxRetries: 2 * remoteMaxTokens, Interval: time.Millisecond}))
 			}
 			args := &api.GetArgs{Context: t.Context()}
 			wantSize := int64(cos.KiB)
@@ -1335,6 +1336,144 @@ func TestBackendRateLimitJitterRemoteAIS(t *testing.T) {
 			tassert.Fatalf(t, retried == 1 && valid, "expected one jittered retry around %v with minimum %v, got %d with %v sleep",
 				tc.base, tc.minimum, retried, sleep)
 			tlog.Logfln("retry sleep %v", sleep)
+		})
+	}
+}
+
+func TestPrefetchRetryRemoteAIS(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
+	bp := tools.BaseAPIParams(tools.RandomProxyURL(t))
+	remoteBP := tools.BaseAPIParams(tools.RemoteCluster.URL)
+	remoteSmap, err := api.GetClusterMap(remoteBP)
+	tassert.CheckFatal(t, err)
+	numTargets := tools.GetClusterMap(t, bp.URL).CountActiveTs()
+
+	for _, tc := range []struct {
+		name        string
+		prefix      string
+		numRetries  int
+		enabled     bool
+		onDemand    bool
+		blob        bool
+		unlimited   bool
+		wantFailure bool
+	}{
+		{name: "unthrottled-with-policy-disabled", unlimited: true},
+		{name: "unthrottled-on-demand-runs-without-pacing", enabled: true, onDemand: true, unlimited: true},
+		{name: "cold-get-with-policy-disabled", wantFailure: true},
+		{name: "on-demand-with-policy-disabled-does-not-retry", onDemand: true, wantFailure: true},
+		{name: "cold-get-with-proactive-policy", enabled: true},
+		{name: "cold-get-with-on-demand-policy", enabled: true, onDemand: true},
+		{name: "on-demand-honors-one-retry-budget", enabled: true, onDemand: true, numRetries: 1, wantFailure: true},
+		{name: "prefix-cold-get-with-on-demand-policy", prefix: "objects/", enabled: true, onDemand: true},
+		{name: "blob-with-policy-disabled", blob: true, wantFailure: true},
+		{name: "blob-with-on-demand-policy", enabled: true, onDemand: true, blob: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tools.CheckSkip(t, &tools.SkipTestArgs{Long: tc.blob || tc.unlimited})
+			if tc.unlimited {
+				tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+			}
+			numObjects := 16
+			if tc.unlimited {
+				numObjects = 100 * numTargets
+			}
+			objSize := uint64(16 * cos.KiB)
+			if tc.blob {
+				objSize = 2 * cos.MiB
+			}
+			remoteBck := cmn.Bck{Name: "prefetch-retry-" + cos.GenTie(), Provider: apc.AIS}
+			tools.CreateBucket(t, remoteBP.URL, remoteBck, nil, true)
+			names, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
+				Context: t.Context(), ProxyURL: remoteBP.URL, Bck: remoteBck, ObjPath: tc.prefix,
+				ObjCnt: numObjects, ObjSize: objSize, FixedSize: true, CksumType: cos.ChecksumOneXxh,
+			})
+			tassert.CheckFatal(t, err)
+			bck := remoteBck
+			bck.Ns.UUID = tools.RemoteCluster.UUID
+			props, err := api.HeadBucket(bp, bck, false)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { tassert.CheckError(t, api.EvictRemoteBucket(bp, bck, false)) })
+			tassert.Fatalf(t, !props.RateLimit.Frontend.Enabled && !props.RateLimit.Backend.Enabled,
+				"local rate limiting must be disabled: %+v", props.RateLimit)
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+				Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+					Enabled: apc.Ptr(tc.enabled), MaxTokens: apc.Ptr(10_000),
+					Interval: apc.Ptr(cos.Duration(time.Second)),
+				}, OnDemand: apc.Ptr(tc.onDemand), NumRetries: apc.Ptr(cos.NonZero(tc.numRetries, cos.DfltRateMaxRetries))},
+			}})
+			tassert.CheckFatal(t, err)
+
+			if !tc.unlimited {
+				remoteMaxTokens := 4 * remoteSmap.CountActivePs()
+				_, err = api.SetBucketProps(remoteBP, remoteBck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+					Frontend: &cmn.BurstyToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+						Enabled: apc.Ptr(true), MaxTokens: apc.Ptr(remoteMaxTokens),
+						Interval: apc.Ptr(cos.Duration(time.Second)),
+					}, Size: apc.Ptr(1)},
+				}})
+				tassert.CheckFatal(t, err)
+				tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+					_, getErr := api.GetObject(remoteBP, remoteBck, names[0], nil)
+					if getErr == nil {
+						return false
+					}
+					herr := cmn.AsErrHTTP(getErr)
+					tassert.Fatalf(t, herr != nil && herr.Status == http.StatusTooManyRequests,
+						"expected remote frontend 429, got %v", getErr)
+					return true
+				}, tools.WaitRetryOpts{MaxRetries: 2 * remoteMaxTokens, Interval: time.Millisecond}))
+			}
+
+			msg := apc.PrefetchMsg{ListRange: apc.ListRange{ObjNames: names}, NumWorkers: 4}
+			if tc.prefix != "" {
+				msg.ListRange = apc.ListRange{Template: tc.prefix}
+			}
+			if tc.blob {
+				msg.BlobThreshold, msg.BlobChunkSize, msg.BlobNumWorkers = cos.MiB, cos.MiB, 2
+			}
+			xid, err := api.Prefetch(bp, bck, &msg)
+			tassert.CheckFatal(t, err)
+			args := &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: 2 * time.Minute}
+			t.Cleanup(func() { _ = api.AbortXaction(bp, args) })
+			snaps, err := api.WaitForSnaps(bp, args, args.Finished())
+			tassert.CheckFatal(t, err)
+			var fetched, size int64
+			var failedTargets int
+			var elapsed time.Duration
+			for _, targetSnaps := range snaps {
+				for _, snap := range targetSnaps {
+					tassert.Fatalf(t, !snap.IsAborted(), "unexpected prefetch abort: %s", snap.AbortErr)
+					fetched += snap.Stats.Objs
+					size += snap.Stats.Bytes
+					elapsed = max(elapsed, snap.EndTime.Sub(snap.StartTime))
+					if snap.Err != "" {
+						tassert.Fatalf(t, tc.wantFailure,
+							"unexpected prefetch error: %s", snap.Err)
+						failedTargets++
+					}
+				}
+			}
+			cached, err := api.ListObjects(bp, bck, &apc.LsoMsg{Flags: apc.LsCached, Props: apc.GetPropsName}, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			tlog.Logfln("enabled=%t, on-demand=%t, blob=%t: prefetched %d/%d objects, cached=%d, targets reporting errors=%d",
+				tc.enabled, tc.onDemand, tc.blob, fetched, numObjects, len(cached.Entries), failedTargets)
+			tassert.Fatalf(t, int64(len(cached.Entries)) == fetched, "cached objects disagree with prefetch statistics")
+			if tc.wantFailure {
+				tassert.Fatalf(t, failedTargets > 0 && fetched < int64(numObjects), "expected failed, incomplete prefetch")
+				return
+			}
+			tassert.Fatalf(t, fetched == int64(numObjects) && size == int64(numObjects)*int64(objSize),
+				"incomplete prefetch: %d objects, %d bytes", fetched, size)
+			if tc.unlimited {
+				minimumPacedDuration := time.Duration(numObjects/numTargets-1) * (cos.DfltRateMinBtwn >> 1)
+				tlog.Logfln("unthrottled prefetch duration=%v, minimum when paced=%v", elapsed, minimumPacedDuration)
+				tassert.Fatalf(t, elapsed < minimumPacedDuration, "prefetch paced before any 429: %v >= %v", elapsed, minimumPacedDuration)
+			}
+			for _, name := range names {
+				_, err := api.GetObjectWithValidation(bp, bck, name, nil)
+				tassert.CheckFatal(t, err)
+			}
 		})
 	}
 }

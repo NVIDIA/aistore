@@ -52,7 +52,8 @@ import (
 type (
 	rlbackend struct {
 		core.Backend
-		t *target
+		t   *target
+		arl *cos.AdaptRateLim // optional owner-supplied limiter; nil selects the bucket/verb limiter
 	}
 )
 
@@ -201,7 +202,16 @@ func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) 
 // apply (compare with ais/prate_limit)
 //
 
+func (t *target) RateLimitBackend(bp core.Backend, arl *cos.AdaptRateLim) core.Backend {
+	return &rlbackend{Backend: bp, t: t, arl: arl}
+}
+
 func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim) {
+	// Pace requests with the owner's limiter, independent of bucket rate-limit configuration.
+	if bp.arl != nil {
+		bp.arl.RetryAcquire(time.Second)
+		return bp.arl
+	}
 	if !bck.Props.RateLimit.Backend.Enabled {
 		return nil
 	}
