@@ -357,7 +357,7 @@ const (
 )
 
 func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
-	ctx := r.parent.Context()
+	ctx := r.parent.BackendCtx()
 	ecode, err = bp.ListObjects(ctx, r.bck, lsmsg, lst)
 	if err == nil || !tooManyReqs(ecode, err) || r.parent.IsAborted() {
 		return ecode, err
@@ -379,7 +379,10 @@ func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (eco
 		sleep = hk.Jitter(sleep+sleep/2, now+int64(sleep))
 		select {
 		case <-ctx.Done():
-			return 0, r.parent.AbortErr()
+			if err := r.parent.AbortErr(); err != nil {
+				return 0, err
+			}
+			return 0, ctx.Err()
 		case <-time.After(sleep):
 		}
 		total += sleep

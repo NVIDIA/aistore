@@ -306,6 +306,9 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 
 func (r *XactTCO) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
+	if r.sntl.nat > 1 {
+		go bcastOnAbort(&r.Base, r.sntl.smap)
+	}
 	wg.Done()
 outer:
 	for {
@@ -319,7 +322,7 @@ outer:
 			}
 			if r.p.dm != nil {
 				// Per-transaction OpcDone: finished sending objects for this txn
-				r.sntl.bcast(msg.TxnUUID, r.p.dm, nil)
+				r.sntl.bcastDone(msg.TxnUUID, r.p.dm)
 			}
 		case <-r.IdleTimer():
 			break outer
@@ -330,19 +333,13 @@ outer:
 	r.DemandBase.Stop() // prevent new requests from reusing this xaction
 
 	// quiesce and close DM (compare w/ tcb.go)
-	if r.p.dm != nil {
-		abortErr := r.AbortErr()
+	if r.p.dm != nil && !r.IsAborted() {
 		// Xaction-level OpcDone: whole xaction is done, entering Quiesce
-		r.sntl.bcast(r.ID(), r.p.dm, abortErr)
-		if abortErr == nil { // done
-			r.sntl.initLast(mono.NanoTime())
-			qui := r.Quiesce(r.sntl.qival(), r.sntl.qcb) // wait for others
-			if qui == core.QuiAborted {
-				err := r.AbortErr()
-				nlog.Errorln(err)
-				r.sntl.bcast(r.ID(), r.p.dm, err) // broadcast: abort
-			}
-		}
+		r.sntl.bcastDone(r.ID(), r.p.dm)
+		r.sntl.initLast(mono.NanoTime())
+		r.Quiesce(r.sntl.qival(), r.sntl.qcb) // wait for others
+	}
+	if r.p.dm != nil {
 		r.p.dm.Close(r.AbortErr())
 		r.p.dm.UnregRecv()
 	}
@@ -400,21 +397,17 @@ func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 			wi, ok := r.pend.m[uuid]
 			r.pend.mtx.Unlock()
 			if ok {
-				// (1) Per-txn OpcDone (sent after doMsg, see: sntl.bcast(msg.TxnUUID...))
+				// (1) Per-txn OpcDone (sent after doMsg, see: sntl.bcastDone(msg.TxnUUID...))
 				//     Sender finished copying objects for this specific transaction.
 				n := wi.pend.n.Dec()
 				if n == 0 {
 					r.wiCnt.Dec()
 				}
 			} else {
-				// (2) Xaction-level OpcDone (sent before Quiesce, see: sntl.bcast(r.ID()...))
+				// (2) Xaction-level OpcDone (sent before Quiesce, see: sntl.bcastDone(r.ID()...))
 				//     Sender's whole xaction is done; mark them complete for Quiesce.
 				r.sntl.rxDone(hdr)
 			}
-		case transport.OpcAbort:
-			uuid := cos.UnsafeS(hdr.Opaque)
-			debug.Func(func() { debug.Assert(uuid == r.ID(), uuid, " vs ", r.ID()) })
-			r.sntl.rxAbort(hdr)
 		case transport.OpcRequest:
 			// progress request during quiesce - respond with current count
 			o := transport.AllocSend()

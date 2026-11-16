@@ -105,8 +105,8 @@ mloop:
 		case <-d.xdl.IdleTimer():
 			nlog.Infoln(d.xdl.Name(), "idle timeout")
 			break mloop
-		case errCause := <-d.xdl.ChanAbort():
-			nlog.Infoln(d.xdl.Name(), "aborted:", errCause)
+		case <-d.xdl.ChanAbort():
+			nlog.Infoln(d.xdl.Name(), "aborted:", d.xdl.AbortErr())
 			break mloop
 		case <-ctx.Done():
 			break mloop
@@ -123,8 +123,8 @@ mloop:
 				nlog.Infoln(d.xdl.Name(), "idle timeout")
 				d.abandon(job)
 				break mloop
-			case errCause := <-d.xdl.ChanAbort():
-				nlog.Infoln(d.xdl.Name(), "aborted:", errCause)
+			case <-d.xdl.ChanAbort():
+				nlog.Infoln(d.xdl.Name(), "aborted:", d.xdl.AbortErr())
 				d.abandon(job)
 				break mloop
 			case <-ctx.Done():

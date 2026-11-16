@@ -9,7 +9,6 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
-	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
@@ -161,10 +160,6 @@ func (r *registry) _renewLocked(entry Renewable, flt *Flt) (rns RenewRes, aborte
 		}
 	}
 	if err = entry.Start(); err != nil {
-		// Start may fail after InitBase creates the lifecycle context.
-		if xctn := entry.Get(); xctn != nil && !cos.IsTypedNil(xctn) {
-			xctn.CancelContext()
-		}
 		return RenewRes{Err: err}, false
 	}
 

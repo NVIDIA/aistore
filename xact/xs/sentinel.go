@@ -5,7 +5,6 @@
 package xs
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -56,7 +55,6 @@ func (s *sentinel) init(r core.Xact, base *xact.Base, dm *bundle.DM, config *cmn
 	if nat <= 1 {
 		return // single-target (no peers to coordinate with)
 	}
-	context.AfterFunc(base.Context(), func() { base.BcastAbort(smap) })
 	if dm == nil {
 		return
 	}
@@ -76,26 +74,15 @@ func (s *sentinel) cleanup() {
 	s.pend.p = s.pend.p[:0]
 }
 
-func (s *sentinel) bcast(uuid string, dm *bundle.DM, abortErr error) {
-	if abortErr != nil && s.base.SkipAbortBcast(abortErr) {
-		return // peers abort via another source (see SkipAbortBcast)
-	}
-
+func (s *sentinel) bcastDone(uuid string, dm *bundle.DM) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = transport.OpcDone
 	if uuid != "" {
 		o.Hdr.Opaque = cos.UnsafeB(uuid)
 	}
-	if abortErr != nil {
-		o.Hdr.Opcode = transport.OpcAbort
-		o.Hdr.ObjName = abortErr.Error() // (compare w/ sendTerm)
-	}
-
 	err := dm.Bcast(o, nil /*roc*/)
 
 	switch {
-	case abortErr != nil:
-		nlog.WarningDepth(1, s.r.Name(), "aborted [", abortErr, err, "]")
 	case err != nil:
 		nlog.WarningDepth(1, s.r.Name(), err)
 	default:
@@ -217,17 +204,6 @@ func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
 	if cmn.Rom.V(4, cos.ModXs) {
 		nlog.InfoDepth(1, s.r.Name(), "recv 'done' from:", meta.Tname(hdr.SID), s.pend.n.Load())
 	}
-}
-
-func (s *sentinel) rxAbort(hdr *transport.ObjHdr) {
-	r := s.r
-	if r.IsAborted() || r.IsDone() {
-		return
-	}
-	errCause := hdr.ObjName // see s.bcast(abortErr)
-	err := s.base.NewErrRecvAbortXact(hdr.SID, errCause)
-	r.Abort(err)
-	nlog.WarningDepth(1, err)
 }
 
 func (s *sentinel) rxProgress(hdr *transport.ObjHdr) {

@@ -382,7 +382,7 @@ func (r *XactNsumm) runCloudBck(bck *meta.Bck, res *cmn.BsummResult) {
 		}
 		page = page[:0]
 
-		lst, err := npg.nextPageR(r.Context(), page)
+		lst, err := npg.nextPageR(r.BackendCtx(), page)
 		if err != nil {
 			r.AddErr(err)
 			return

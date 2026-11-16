@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -157,7 +158,7 @@ func (t *target) blobdlBackground(params *core.BlobParams, oa *cmn.ObjAttrs) (st
 	}
 
 	if oa == nil {
-		oa, _, err = t.HeadCold(lom, nil /*origReq*/)
+		oa, _, err = t.HeadCold(context.Background(), lom, nil /*origReq*/)
 		if err != nil {
 			return "", nil, err
 		}
@@ -238,7 +239,7 @@ do:
 		lom.Unlock(false)
 		return "", nil, err
 	default:
-		oa, _, err = t.HeadCold(lom, nil /*origReq*/)
+		oa, _, err = t.HeadCold(context.Background(), lom, nil /*origReq*/)
 		if err != nil {
 			lom.Unlock(false)
 			return "", nil, err

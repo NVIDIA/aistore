@@ -202,7 +202,7 @@ func (reb *Reb) recvObjRegular(hdr *transport.ObjHdr, objReader io.Reader, xreb 
 		}
 
 		if lom.Bck().IsRemote() && latestVer {
-			oa, ecode, err := core.T.HeadCold(lom, nil)
+			oa, ecode, err := core.T.HeadCold(context.Background(), lom, nil)
 			if err == nil {
 				switch {
 				case oa.CheckEq(&hdr.ObjAttrs) == nil:

@@ -15,7 +15,15 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/stats"
+	"github.com/NVIDIA/aistore/xact"
 )
+
+// watch the abort channel independently of the data path
+// (normal Finish() closes `abort.ch` as well)
+func bcastOnAbort(base *xact.Base, smap *meta.Smap) {
+	<-base.ChanAbort()
+	base.BcastAbort(smap)
+}
 
 func rgetstats(bp core.Backend, vlabs map[string]string, size, started int64) {
 	tstats := core.T.StatsUpdater()

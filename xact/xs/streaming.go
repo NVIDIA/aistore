@@ -149,37 +149,23 @@ func (r *streamingX) TxnAbort(err error) {
 	r.Base.Finish()
 }
 
-// - cnt (optional) - number of objects sent to tsi (in ObjName of OpcDone)
+// per-transaction 'done' to the responsible target, w/ the number of objects sent (in ObjName)
 // TODO:
-// - dup sentinel.bcast
-// - both sentinel.bcast and this code must transition to use T2T off-streams control path
-func (r *streamingX) sendTerm(uuid string, tsi *meta.Snode, abortErr error, cnt ...int64) {
+// - dup sentinel.bcastDone
+// - both must transition to the T2T off-streams control path
+func (r *streamingX) sendDone(uuid string, tsi *meta.Snode, cnt int64) {
 	if r.p.dm == nil { // single target
 		return
 	}
 	o := transport.AllocSend()
 	o.Hdr.SID = core.T.SID()
 	o.Hdr.Opaque = cos.UnsafeB(uuid)
-	if abortErr == nil {
-		o.Hdr.Opcode = transport.OpcDone
-		if len(cnt) > 0 {
-			o.Hdr.ObjName = strconv.FormatInt(cnt[0], 10)
-		}
-	} else {
-		o.Hdr.Opcode = transport.OpcAbort
-		o.Hdr.ObjName = abortErr.Error() // (see NewErrRecvAbort)
-	}
+	o.Hdr.Opcode = transport.OpcDone
+	o.Hdr.ObjName = strconv.FormatInt(cnt, 10)
 
-	var err error
-	if tsi != nil {
-		err = r.p.dm.Send(o, nil, tsi) // to the responsible target
-	} else {
-		err = r.p.dm.Bcast(o, nil) // to all
-	}
+	err := r.p.dm.Send(o, nil, tsi)
 
 	switch {
-	case abortErr != nil:
-		nlog.WarningDepth(1, r.String(), "aborted [", abortErr, err, "]")
 	case err != nil:
 		nlog.WarningDepth(1, r.String(), err)
 	default:

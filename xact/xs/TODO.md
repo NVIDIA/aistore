@@ -157,15 +157,15 @@ and still draining any work deferred by callbacks; prefer a count-based protocol
 
 ## Out-of-band control for all xactions
 
-Replace in-stream control opcodes (`transport.OpcDone`, `OpcAbort`, `OpcRequest`, `OpcResponse`) with
+Replace in-stream control opcodes (`transport.OpcDone`, `OpcRequest`, `OpcResponse`) with
 T2T control (xact/t2tctrl.go: `POST /v1/xactions/t2tctrl/{xkind}/{xid}/{wid}/{opcode}`; `SendCtrl`, `BcastCtrl`).
 
 Goal: reliable control, independent of data streams and DM. HTTP alone does not supply delivery or completion guarantees.
 
 - today, `target.xactCtrl` (ais/tgtxact.go) dispatches to x-moss (moss.go; ais/ml.go), and aborts
   other kinds on `xact.OpcodeAbortXact` (see `xact.RecvAbortXact`)
-- sentinel abort goes both via T2T (`xact.Base.BcastAbort`, upon abort) and in-stream (`sentinel.bcast`, upon fini);
-  x-list abort: `xact.Base.BcastAbort` (designated target, upon abort) and in-stream (`LsoXact.sendAbort`)
+- abort: T2T only (`xact.Base.BcastAbort`, gated by `SkipAbortBcast`) - tcb, tco, archive, and
+  x-list (designated target) start a `ChanAbort` watcher in `Run` (see `bcastOnAbort`)
 - still in-stream only: sentinel.go (done, progress), archive.go (done)
 - x-list page timeout: the proxy sends one asynchronous `Abort2PC` to the designated target if its
   page call times out. peers waiting for the page can time out locally

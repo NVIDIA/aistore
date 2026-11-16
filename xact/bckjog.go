@@ -42,7 +42,8 @@ func (r *BckJog) NumVisits() int64 {
 
 func (r *BckJog) Wait() error {
 	select {
-	case errCause := <-r.ChanAbort():
+	case <-r.ChanAbort():
+		errCause := r.AbortErr()
 		r.joggers.Stop()
 		if cmn.IsErrAborted(errCause) {
 			return errCause

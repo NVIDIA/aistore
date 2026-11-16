@@ -43,17 +43,6 @@ func (p *fakeRenewable) Bucket() *meta.Bck                      { return p.Renew
 func (p *fakeRenewable) UUID() string                           { return p.xctn.ID() }
 func (p *fakeRenewable) Start() error                           { return p.startErr }
 
-func TestRenewStartFailureCancelsContext(t *testing.T) {
-	TestReset()
-	startErr := errors.New("start failed")
-	entry := newFakeEntry(apc.ActLRU).(*fakeRenewable)
-	entry.startErr = startErr
-	rns := dreg.renew(entry, nil)
-	tassert.Fatalf(t, errors.Is(rns.Err, startErr), "expected %v, got %v", startErr, rns.Err)
-	tassert.Fatalf(t, errors.Is(entry.xctn.Context().Err(), context.Canceled),
-		"expected canceled context, got %v", entry.xctn.Context().Err())
-}
-
 func TestRenewStartFailureWithTypedNilXact(t *testing.T) {
 	TestReset()
 	startErr := errors.New("start failed")

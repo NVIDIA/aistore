@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -179,10 +178,6 @@ func (p *lsoFactory) Start() error {
 		}
 		if r.walk.this {
 			r.page = make(cmn.LsoEntries, 0, iniPageCap) // reuse across all remote pages (may grow in cap)
-			if p.dm != nil {
-				// TODO: r.smap misses a target that joins after Start (it waits for list_timeout)
-				context.AfterFunc(r.Context(), func() { r.BcastAbort(r.smap) }) // including abort between pages
-			}
 		}
 
 		// engage local page iterator (lpi)
@@ -309,6 +304,10 @@ func (r *LsoXact) CtlMsg() string {
 }
 
 func (r *LsoXact) Run(wg *sync.WaitGroup) {
+	// TODO: r.smap misses a target that joins after Start (it waits for list_timeout)
+	if r.walk.this && r.p.dm != nil {
+		go bcastOnAbort(&r.Base, r.smap)
+	}
 	if r.adv.Sleep > 0 {
 		time.Sleep(r.adv.Sleep)
 	}
@@ -595,9 +594,6 @@ func (r *LsoXact) nextPageR() (err error) {
 		smapCurr := core.T.Sowner().Get()
 		if err := r.smap.CheckSameTargets(smapCurr, r.Name()); err != nil {
 			r.Abort(err)
-			if r.walk.this {
-				r.sendAbort()
-			}
 			return err
 		}
 	}
@@ -650,7 +646,7 @@ func (r *LsoXact) thisPageR(npg *npgCtx) (page *cmn.LsoRes, err error) {
 		aborted bool
 		entries = r.page[:0] // reusing the same (backing) slice between remote pages
 	)
-	page, err = npg.nextPageR(r.Context(), entries)
+	page, err = npg.nextPageR(r.BackendCtx(), entries)
 	if err != nil {
 		goto rerr
 	}
@@ -681,18 +677,7 @@ rerr:
 		err = r.AbortErr()
 	}
 	r.Abort(err)
-	if r.p.dm != nil {
-		r.sendAbort()
-	}
 	return page, err
-}
-
-func (r *LsoXact) sendAbort() {
-	err := r.AbortErr()
-	if r.SkipAbortBcast(err) {
-		return // peers abort via another source (see SkipAbortBcast)
-	}
-	r.sendTerm(r.msg.UUID, nil, err)
 }
 
 func (r *LsoXact) bcast(page *cmn.LsoRes) (err error) {
@@ -980,15 +965,6 @@ func (r *LsoXact) Snap() *core.Snap { return r.Base.NewSnap(r) }
 func (r *LsoXact) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) error {
 	debug.Assert(r.walk.remote)
 
-	if hdr.Opcode == transport.OpcAbort {
-		errCause := hdr.ObjName // (see streamingX.sendTerm)
-		err = r.NewErrRecvAbortXact(hdr.SID, errCause)
-		transport.FreeRecv(objReader) // header only (hdr invalid hereafter)
-		if !r.Abort(err) {
-			return nil // duplicate
-		}
-		return err
-	}
 	if err != nil && !cos.IsOkEOF(err) {
 		nlog.Errorln(core.T.String(), r.String(), len(r.remtCh), err)
 		r.Abort(err)

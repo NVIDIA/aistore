@@ -149,7 +149,7 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 	}
 
 	// sentinels, to coordinate finishing, aborting, and progress;
-	// use DM to communicate sentinel opcodes (transport.OpcDone, transport.OpcAbort, ...)
+	// use DM to communicate sentinel opcodes (transport.OpcDone, OpcRequest, OpcResponse)
 	r.sntl.init(r, &r.Base, r.dm, r.Config, smap, nat)
 	return r, nil
 }
@@ -258,6 +258,10 @@ func (r *XactTCB) init(uuid, kind string, config *cmn.Config, smap *meta.Smap, n
 
 // sub-routine that does the core copy bucket logic; doesn't include the Finish() call and abort check
 func (r *XactTCB) run(wg *sync.WaitGroup) {
+	if r.sntl.nat > 1 {
+		go bcastOnAbort(&r.Base, r.sntl.smap)
+	}
+
 	// make sure `nat` hasn't changed between Start and now (highly unlikely)
 	if r.dm != nil {
 		smap := core.T.Sowner().Get()
@@ -286,19 +290,12 @@ func (r *XactTCB) run(wg *sync.WaitGroup) {
 		nlog.Warningln(r.Name(), errJog, "- benign?")
 	}
 
+	if r.dm != nil && !r.IsAborted() {
+		r.sntl.bcastDone("", r.dm)
+		r.sntl.initLast(mono.NanoTime())
+		r.Base.Quiesce(r.sntl.qival(), r.sntl.qcb) // when done: wait for others
+	}
 	if r.dm != nil {
-		abortErr := r.AbortErr()
-		r.sntl.bcast("", r.dm, abortErr) // broadcast: done | abort
-		if abortErr == nil {             // done
-			r.sntl.initLast(mono.NanoTime())
-			qui := r.Base.Quiesce(r.sntl.qival(), r.sntl.qcb) // when done: wait for others
-			if qui == core.QuiAborted {
-				err := r.AbortErr()
-				debug.Assert(err != nil)
-				r.sntl.bcast("", r.dm, err) // broadcast: abort
-			}
-		}
-		// close
 		r.dm.Close(r.AbortErr())
 		r.dm.UnregRecv()
 	}
@@ -363,8 +360,6 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		switch hdr.Opcode {
 		case transport.OpcDone:
 			r.sntl.rxDone(hdr)
-		case transport.OpcAbort:
-			r.sntl.rxAbort(hdr)
 		case transport.OpcRequest:
 			o := transport.AllocSend()
 			o.Hdr.Opcode = transport.OpcResponse

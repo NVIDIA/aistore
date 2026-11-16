@@ -95,7 +95,8 @@ type (
 		woff        int64
 		memInflight int64 // admitted-but-unallocated streaming memory; see blobMemInflight
 		numWorkers  int
-		nreaders    int // extra range readers counted in core.RR
+		nreaders    int             // extra range readers counted in core.RR
+		rctx        context.Context // range reads (see runWorkers)
 	}
 )
 
@@ -272,7 +273,7 @@ func (p *blobFactory) Start() (err error) {
 	debug.Func(func() { debug.Assert(lom.IsLocked() == apc.LockWrite) })
 	r.cname = lom.Cname()
 	bck := lom.Bck()
-	r.InitBase(r.args.Context, p.Args.UUID, p.Kind(), bck)
+	r.InitBase(nil, p.Args.UUID, p.Kind(), bck) //nolint:staticcheck // no parent here
 
 	r.bp = core.T.Backend(bck)
 
@@ -613,14 +614,24 @@ func (r *XactBlobDl) runWorkers() (err error) {
 		completed bool
 	)
 
+	// range reads: canceled upon abort and finish (see BackendCtx) and when the caller's
+	// context is canceled
+	rctx, cancel := context.WithCancel(r.BackendCtx())
+	r.rctx = rctx
+	if parent := r.args.Context; parent != nil { // (see "no parent" above)
+		stop := context.AfterFunc(parent, cancel)
+		defer stop()
+	}
+
 	// resilient shutdown: cancel, close workCh, wait for workers, close doneCh
 	defer func() {
 		if !completed {
-			r.CancelContext()
+			cancel() // stop in-flight range reads
 		}
 		close(r.workCh)
 		r.wg.Wait()
 		close(r.doneCh)
+		cancel()
 		if !completed && done != nil {
 			done.cleanup()
 		}
@@ -1016,7 +1027,7 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 	}
 
 	// 2. Get object range reader. The context covers both reader acquisition and response-body copy.
-	parentCtx := w.parent.Context()
+	parentCtx := w.parent.rctx
 	debug.Assert(parentCtx != nil)
 
 	ctx, cancel := context.WithTimeout(parentCtx, w.parent.timeout)

@@ -140,8 +140,8 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 	}
 	defer idx.Free()
 
-	if err := r.Context().Err(); err != nil {
-		r.addIndexErr(err, core.ShardIndexNone)
+	if r.IsAborted() {
+		r.addIndexErr(r.AbortErr(), core.ShardIndexNone)
 		return nil
 	}
 	if err := lom.SaveShardIndex(idx); err != nil {
@@ -177,14 +177,14 @@ func (r *xactShardIndex) do(lom *core.LOM, _ []byte) error {
 // - existing index: verify unless SkipVerify, cache if requested (see checkIdx)
 // - stale or corrupt: rebuild
 func (r *xactShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, core.ShardIndexStatus, error) {
-	if err := r.Context().Err(); err != nil {
-		return nil, core.ShardIndexNone, err
+	if r.IsAborted() {
+		return nil, core.ShardIndexNone, r.AbortErr()
 	}
 
 	lom.Lock(false)
 	defer lom.Unlock(false)
-	if err := r.Context().Err(); err != nil {
-		return nil, core.ShardIndexNone, err
+	if r.IsAborted() {
+		return nil, core.ShardIndexNone, r.AbortErr()
 	}
 	// jogger does not preload - load under our own lock
 	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {
@@ -261,7 +261,7 @@ func idxLoadStatus(err error) (core.ShardIndexStatus, error) {
 func (r *xactShardIndex) cacheSavedIdx(lom *core.LOM) error {
 	lom.Lock(false)
 	defer lom.Unlock(false)
-	if r.Context().Err() != nil {
+	if r.IsAborted() {
 		return nil
 	}
 	if err := lom.Load(false /*cache*/, true /*locked*/); err != nil {

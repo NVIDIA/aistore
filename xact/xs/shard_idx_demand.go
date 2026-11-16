@@ -300,16 +300,16 @@ func (r *XactDemandShardIndex) do(lif core.LIF) {
 		defer idx.Free()
 	}
 
-	switch ctxErr := r.Context().Err(); {
+	switch {
 	case err != nil:
 		// build or verification failed
 	case idx == nil:
 		if status == core.ShardIndexExisting {
 			r.stats.skipHasIdx.Inc()
 		}
-	case ctxErr != nil:
-		// canceled before saving
-		err = ctxErr
+	case r.IsAborted():
+		// aborted before saving
+		err = r.AbortErr()
 	default:
 		// save the new index
 		err = lom.SaveShardIndex(idx)
@@ -348,9 +348,9 @@ done:
 // try the source read lock, then load and build (the caller owns the returned)
 // index and reports errors after return, when the source lock has been released
 func (r *XactDemandShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, core.ShardIndexStatus, error) {
-	// if canceled skip
-	if err := r.Context().Err(); err != nil {
-		return nil, core.ShardIndexNone, err
+	// if aborted skip
+	if r.IsAborted() {
+		return nil, core.ShardIndexNone, r.AbortErr()
 	}
 
 	// only handle regular TAR shards
@@ -365,9 +365,9 @@ func (r *XactDemandShardIndex) buildIdx(lom *core.LOM) (*archive.ShardIndex, cor
 	}
 	defer lom.Unlock(false)
 
-	// again, if canceled skip
-	if err := r.Context().Err(); err != nil {
-		return nil, core.ShardIndexNone, err
+	// again, if aborted skip
+	if r.IsAborted() {
+		return nil, core.ShardIndexNone, r.AbortErr()
 	}
 
 	// load lom since lif only gets obj handle

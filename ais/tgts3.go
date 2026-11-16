@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -369,7 +370,7 @@ func (t *target) headObjS3(w http.ResponseWriter, r *http.Request, items []strin
 		op = *lom.ObjAttrs()
 	} else {
 		// cold HEAD
-		objAttrs, ecode, err := t.HeadCold(lom, r)
+		objAttrs, ecode, err := t.HeadCold(context.Background(), lom, r)
 		if err != nil {
 			ei := s3.ErrInfo{Err: err, Status: ecode}
 			if ecode == http.StatusNotFound {

@@ -51,7 +51,7 @@ type (
 	BlobParams struct {
 		Lom     *LOM
 		Msg     *apc.BlobMsg
-		Context context.Context // optional; defaults to context.Background()
+		Context context.Context // optional; cancels range reads (client request, parent xaction)
 
 		BlobThreshold int64 // minimum remote object size (bytes); zero disables threshold selection
 
@@ -139,7 +139,7 @@ type (
 
 		GetCold(ctx context.Context, lom *LOM, xkind string, owt cmn.OWT) (ecode int, err error)
 
-		HeadCold(lom *LOM, origReq *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error)
+		HeadCold(ctx context.Context, lom *LOM, origReq *http.Request) (objAttrs *cmn.ObjAttrs, ecode int, err error)
 
 		Promote(params *PromoteParams) (ecode int, err error)
 		HeadObjT2T(lom *LOM, tsi *meta.Snode, reqProps ...string) (*cmn.ObjectPropsV2, error)

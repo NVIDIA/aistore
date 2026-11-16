@@ -443,9 +443,7 @@ func TestBlobDownloadParentCancellation(t *testing.T) {
 		snaps, err = api.WaitForSnaps(bp, xargs, blobdlFinished)
 		tassert.CheckFatal(t, err)
 		tassert.Fatalf(t, len(snaps[tid]) == 1, "expected blob download %s on %s", xargs.ID, tid)
-		// parent's abort reaches the child two ways - whichever comes first:
-		// - context cancellation (the child's context derives from the parent's)
-		// - explicit abort (see xs/prefetch pebl)
+		// the child can finish on I/O cancellation before prefetch explicitly aborts it
 		fin := snaps[tid][0]
 		tassert.Fatalf(t, fin.AbortedX || strings.Contains(fin.Err, context.Canceled.Error()),
 			"expected blob download aborted or context-canceled, got err=%q, abort-err=%q", fin.Err, fin.AbortErr)

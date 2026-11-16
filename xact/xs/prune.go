@@ -152,7 +152,7 @@ func (rp *prune) do(dst *core.LOM, _ []byte) error {
 		}
 		err = src.Load(false, false)
 	} else {
-		_, ecode, err = core.T.HeadCold(src, nil /*origReq*/)
+		_, ecode, err = core.T.HeadCold(rp.r.BackendCtx(), src, nil /*origReq*/)
 	}
 
 	if (err == nil && ecode == 0) || !cos.IsNotExist(err, ecode) /*not complaining*/ {

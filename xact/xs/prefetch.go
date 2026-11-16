@@ -154,7 +154,7 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 		stats.VlabBucket: bck.Cname(""),
 		stats.VlabXkind:  r.Kind(),
 	}
-	r.ctx = xact.WithCtxVlabs(r.Context(), r.xlabs)
+	r.ctx = xact.WithCtxVlabs(r.BackendCtx(), r.xlabs)
 
 	if r.msg.BlobThreshold > 0 {
 		r.pebl.init(r)
@@ -223,7 +223,7 @@ func (r *prefetch) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	// find the size iff blob-download is an option; retain the attrs for it
 	blobOK := r.msg.BlobThreshold > 0 && !r.pebl.busy()
 	if blobOK && oa == nil {
-		oa, ecode, err = core.T.HeadCold(lom, nil /*origReq*/)
+		oa, ecode, err = core.T.HeadCold(r.BackendCtx(), lom, nil /*origReq*/)
 		if err != nil {
 			// listed (not range or prefix) and not found remotely - an error
 			if !cos.IsNotExist(err, ecode) || lrit.lrp == lrpList {
@@ -351,7 +351,7 @@ func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 	// bucket auto-chunking has already taken precedence in prfFactory.Start
 	params := &core.BlobParams{
 		Lom:     &core.LOM{ObjName: lom.ObjName},
-		Context: r.Context(),
+		Context: r.BackendCtx(), // stop range reads while the iterator is still unwinding
 		Msg: &apc.BlobMsg{
 			ChunkSize:  r.msg.BlobChunkSize,
 			NumWorkers: r.msg.BlobNumWorkers,

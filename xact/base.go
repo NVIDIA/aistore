@@ -33,8 +33,8 @@ const finishSentinel = uint64(1)
 type (
 	// Base must be initialized via InitBase before use.
 	Base struct {
-		ctx    context.Context
-		cancel context.CancelFunc
+		ctx    context.Context    // backend calls only (see BackendCtx)
+		cancel context.CancelFunc // (abort, finish)
 		notif  *NotifXact
 		bck    meta.Bck
 		abort  struct {
@@ -102,16 +102,9 @@ func (xctn *Base) Kind() string { return xctn.kind }
 
 func (xctn *Base) Bck() *meta.Bck { return &xctn.bck }
 
-// Context returns the xaction lifecycle context. It is created during init,
-// canceled if startup fails, and otherwise remains active until finish or abort.
-// The lifecycle is managed internally, but xactions may cancel it earlier when needed
-func (xctn *Base) Context() context.Context { return xctn.ctx }
-
-func (xctn *Base) CancelContext() {
-	if xctn.cancel != nil {
-		xctn.cancel()
-	}
-}
+// context for backend calls - canceled upon abort and finish
+// - not a lifecycle signal: use ChanAbort, IsAborted, IsDone
+func (xctn *Base) BackendCtx() context.Context { return xctn.ctx }
 
 // return true if 'stopping' OR 'finished'
 func (xctn *Base) IsDone() bool { return xctn.eutime.Load() != 0 }

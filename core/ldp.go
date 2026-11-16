@@ -171,7 +171,7 @@ func (lom *LOM) CheckRemoteMD(locked, sync bool, origReq *http.Request) (res CRM
 		return CRMD{Eq: true}
 	}
 
-	oa, ecode, err := T.HeadCold(lom, origReq)
+	oa, ecode, err := T.HeadCold(context.Background(), lom, origReq)
 	if err == nil {
 		e := lom.CheckEq(oa)
 		if !lom.IsFeatureSet(feat.DisableColdGET) || e == nil {

@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -72,7 +73,7 @@ func (t *target) objHeadV2(r *http.Request, whdr http.Header, dpq *dpq, bck *met
 	var attrs *cmn.ObjAttrs
 	latest := dpq.latestVer
 	if !exists || latest {
-		oa, ecode, err := t.HeadCold(lom, r)
+		oa, ecode, err := t.HeadCold(context.Background(), lom, r)
 		if err != nil {
 			switch {
 			case ecode == http.StatusTooManyRequests || ecode == http.StatusServiceUnavailable:

@@ -368,6 +368,9 @@ func (r *XactArch) CtlMsg() string {
 
 func (r *XactArch) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
+	if r.sntl.nat > 1 {
+		go bcastOnAbort(&r.Base, r.sntl.smap)
+	}
 	wg.Done()
 
 	select {
@@ -379,18 +382,12 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 	r.pending.mtx.Unlock()
 
 	// quiesce and close DM (compare w/ tcb.go, tcobjs.go)
+	if r.p.dm != nil && !r.IsAborted() {
+		r.sntl.bcastDone("", r.p.dm)
+		r.sntl.initLast(mono.NanoTime())
+		r.Quiesce(r.sntl.qival(), r.sntl.qcb) // wait for others
+	}
 	if r.p.dm != nil {
-		abortErr := r.AbortErr()
-		r.sntl.bcast("", r.p.dm, abortErr) // broadcast: done | abort
-		if abortErr == nil {               // done
-			r.sntl.initLast(mono.NanoTime())
-			qui := r.Quiesce(r.sntl.qival(), r.sntl.qcb) // wait for others
-			if qui == core.QuiAborted {
-				err := r.AbortErr()
-				nlog.Errorln(err)
-				r.sntl.bcast("", r.p.dm, err) // broadcast: abort
-			}
-		}
 		r.p.dm.Close(r.AbortErr())
 		r.p.dm.UnregRecv()
 	}
@@ -468,7 +465,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 			r.pending.mtx.Unlock()
 			if ok {
 				// (1) Per-txn OpcDone: sender finished archiving for this transaction
-				// ObjName carries the number of objects sent (see sendTerm)
+				// ObjName carries the number of objects sent (see sendDone)
 				if hdr.ObjName != "" {
 					n, err := strconv.ParseInt(hdr.ObjName, 10, 64)
 					if err != nil {
@@ -484,8 +481,6 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 				// (2) Xaction-level OpcDone: sender's whole xaction is done
 				r.sntl.rxDone(hdr)
 			}
-		case transport.OpcAbort:
-			r.sntl.rxAbort(hdr)
 		case transport.OpcRequest:
 			// progress request during quiesce - respond with current count
 			o := transport.AllocSend()
@@ -716,7 +711,7 @@ func (j *jogger) do(archtask *archtask) {
 	if core.T.SID() == wi.tsi.ID() {
 		go wi.r.finalize(wi)
 	} else {
-		wi.r.sendTerm(wi.msg.TxnUUID, wi.tsi, nil, int64(wi.cnt.Load()))
+		wi.r.sendDone(wi.msg.TxnUUID, wi.tsi, int64(wi.cnt.Load()))
 		wi.r.pending.mtx.Lock()
 		delete(wi.r.pending.m, wi.msg.TxnUUID)
 		wi.r.wiCnt.Dec()
@@ -819,7 +814,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		if err := wi.r.doSend(lom, wi, lh); err != nil {
 			wi.r.AddErr(err, 5, cos.ModXs)
 		} else {
-			wi.cnt.Inc() // see sendTerm
+			wi.cnt.Inc() // see sendDone
 		}
 		lom.Unlock(false)
 		return

@@ -1525,7 +1525,7 @@ func (t *target) objHead(r *http.Request, whdr http.Header, dpq *dpq, bck *meta.
 	// 4. Cold HEAD: check remote backend if object not found locally or if latest version requested
 	latest := dpq.latestVer
 	if !exists || latest {
-		oa, ecode, err := t.HeadCold(lom, r)
+		oa, ecode, err := t.HeadCold(context.Background(), lom, r)
 		if err != nil {
 			switch {
 			case ecode == http.StatusTooManyRequests || ecode == http.StatusServiceUnavailable:

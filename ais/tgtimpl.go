@@ -205,13 +205,13 @@ func (t *target) GetColdBlob(params *core.BlobParams, oa *cmn.ObjAttrs) (xctn co
 	return xblob, nil
 }
 
-func (t *target) HeadCold(lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
+func (t *target) HeadCold(ctx context.Context, lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
 	var (
 		bp    = t.Backend(lom.Bck())
 		now   = mono.NanoTime()
 		vlabs = map[string]string{stats.VlabBucket: lom.Bck().Cname("")}
 	)
-	oa, ecode, err = bp.HeadObj(context.Background(), lom, origReq)
+	oa, ecode, err = bp.HeadObj(ctx, lom, origReq)
 	if err != nil {
 		t.statsT.IncWith(stats.ErrHeadCount, vlabs)
 	} else {

@@ -208,7 +208,7 @@ func (r *XactNBI) Run(wg *sync.WaitGroup) {
 			dst := all[idx:idx:cap(all)] // safe for append
 			lst.Entries = dst
 
-			if _, err := bp.ListObjects(r.Context(), bck, lsmsg, lst); err != nil {
+			if _, err := bp.ListObjects(r.BackendCtx(), bck, lsmsg, lst); err != nil {
 				r.Abort(err)
 				return
 			}
