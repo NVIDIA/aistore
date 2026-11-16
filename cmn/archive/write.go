@@ -143,10 +143,16 @@ func (tw *tarWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	tw.tw = tar.NewWriter(tw.wmul)
 }
 
+// serialize w/ Write (and its use of the slab buffer)
 func (tw *tarWriter) Fini() error {
-	defer tw.slab.Free(tw.buf)
-
-	return tw.tw.Close()
+	tw.lck.Lock()
+	err := tw.tw.Close()
+	if tw.buf != nil {
+		tw.slab.Free(tw.buf)
+		tw.buf = nil
+	}
+	tw.lck.Unlock()
+	return err
 }
 
 func (tw *tarWriter) Write(fullname string, oah cos.OAH, reader io.Reader) (err error) {
@@ -233,9 +239,16 @@ func (zw *zipWriter) init(w io.Writer, cksum *cos.CksumHashSize, opts *Opts) {
 	zw.zw = zip.NewWriter(zw.wmul)
 }
 
+// serialize w/ Write (and its use of the slab buffer)
 func (zw *zipWriter) Fini() error {
-	defer zw.slab.Free(zw.buf)
-	return zw.zw.Close()
+	zw.lck.Lock()
+	err := zw.zw.Close()
+	if zw.buf != nil {
+		zw.slab.Free(zw.buf)
+		zw.buf = nil
+	}
+	zw.lck.Unlock()
+	return err
 }
 
 func (zw *zipWriter) Write(fullname string, oah cos.OAH, reader io.Reader) error {

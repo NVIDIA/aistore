@@ -36,9 +36,23 @@ import (
 )
 
 // TODO:
-// - fix test_archive_objects_without_copy (see comment in the source)
-// - multi-worker list-range iter (see lrit.init)
-// - one source multiple destination buckets (feature)
+// - designated target: no time limit while a peer is alive and not 'done', and none for a receive in progress
+//   (a frozen peer keeps the original of in-place TAR append in the work file)
+// - Abort2PC: abort the transaction, not the job - currently, TxnAbort finishes the shared job (all shards);
+//   instead, remove and abandon this transaction's work item (see ais/tgttxn.go)
+// - hold pending from begin to commit - otherwise, idle can stop the job in between and drop the commit
+// - begin while stopping: renew and retry (ais/tgttxn.go) rather than fail the request
+// - in-place TAR append: checksum
+// - control: in-stream 'done' => out-of-band T2T; consolidate _recv w/ tcb, tcobjs (see xact/xs/TODO.md)
+// - multi-worker list-range iterator (currently, xact.NwpNone)
+
+type archwiState uint8
+
+const (
+	archBegun archwiState = iota
+	archCommitted
+	archStarted
+)
 
 type (
 	archFactory struct {
@@ -56,20 +70,13 @@ type (
 		fqn       string // workFQN --/--
 		cksum     cos.CksumHashSize
 		appendPos int64 // append to existing (tar only)
-		tarFormat tar.Format
 		lrp       int
+		state     archwiState  // guarded by pending.mtx until detached
 		cnt       atomic.Int32 // num archived (sender: num sent)
-		refc      atomic.Int32 // finishing
-		nrx       atomic.Int64 // DT: sent by peers (per 'done') minus received
-		rxing     atomic.Int32 // DT: finalize + receives in progress
-		werr      atomic.Bool  // DT: a write failed, and the archive is not valid (do not publish)
-		progress  struct {     // DT: as of the last progress (see qcb)
-			nrx  int64         // wi.nrx
-			in   int64         // r.InObjs()
-			size int64         // work file size
-			fqn  string        // work file
-			last time.Duration // when (quiesce total)
-		}
+		peersLeft atomic.Int32 // DT: peers yet to report 'done'
+		nrx       atomic.Int64 // DT: reported sends minus completed receives
+		rxRefs    atomic.Int32 // DT: pending owner + active receives
+		werr      atomic.Bool  // DT: fatal write error
 	}
 	archtask struct {
 		wi   *archwi
@@ -176,63 +183,35 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 	}
 	debug.AssertFunc(func() bool { return archlom.Cname() == msg.Cname() }) // relying on it
 
-	wi := &archwi{r: r, msg: msg, archlom: archlom, tarFormat: tar.FormatUnknown}
-	wi.fqn = wi.archlom.GenFQN(fs.WorkCT, fs.WorkfileCreateArch)
-	wi.cksum.Init(archlom.CksumType())
+	wi := &archwi{r: r, msg: msg, archlom: archlom}
 
 	// here and elsewhere: an extra check to make sure this target is active (ref: ignoreMaintenance)
 	if err := core.InMaintOrDecomm(r.smap, core.T.Snode(), r); err != nil {
 		return err
 	}
-	nat := r.smap.CountActiveTs()
-	wi.refc.Store(int32(nat - 1))
-
 	wi.tsi, err = r.smap.HrwObjHash2T(archlom.Bck(), archlom.Digest())
 	if err != nil {
 		r.AddErr(err, 4, cos.ModXs)
 		return err
 	}
 
-	// set archwi jogger based on the archlom's mountpath
-	var (
-		burst = max(cmn.XactBurstDflt, r.config.Arch.Burst)
-		mi    = archlom.Mountpath()
-	)
-	r.joggers.mtx.Lock()
-	if j, ok := r.joggers.m[mi.Path]; ok {
-		wi.j = j
-	} else {
-		// [on demand] create and run just once for this job
-		j = &jogger{
-			r:      r,
-			mi:     mi,
-			workCh: make(chan *archtask, burst),
-		}
-		r.joggers.m[mi.Path] = j
-		wi.j = j
-
-		// and run this one right away
-		r.joggers.wg.Add(1)
-		go func(j *jogger, wg *sync.WaitGroup) {
-			j.run()
-			wg.Done()
-		}(j, &r.joggers.wg)
-	}
-	r.joggers.mtx.Unlock()
-
 	// fcreate at BEGIN time
 	if core.T.SID() == wi.tsi.ID() {
-		wi.rxing.Store(1) // finalize (see finalize)
+		wi.fqn = archlom.GenFQN(fs.WorkCT, fs.WorkfileCreateArch)
+		wi.cksum.Init(archlom.CksumType())
+		wi.peersLeft.Store(int32(r.smap.CountActiveTs() - 1))
+		wi.rxRefs.Store(1)
 		var (
-			s    string
-			lmfh cos.LomReader
+			s         string
+			lmfh      cos.LomReader
+			tarFormat tar.Format
 		)
 		switch {
 		case !wi.msg.AppendIfExists:
 			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
 		case wi.archlom.Load(false, false) == nil:
 			s = " append"
-			lmfh, err = wi.beginAppend()
+			lmfh, tarFormat, err = wi.beginAppend()
 		default:
 			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
 		}
@@ -244,7 +223,7 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 		}
 
 		// construct format-specific writer; serialize for multi-target conc. writing
-		opts := archive.Opts{Serialize: true, TarFormat: wi.tarFormat}
+		opts := archive.Opts{Serialize: true, TarFormat: tarFormat}
 		wi.writer = archive.NewWriter(msg.Mime, wi.wfh, &wi.cksum, &opts)
 
 		// append case (above)
@@ -260,6 +239,16 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 		}
 	}
 
+	r.pending.mtx.Lock()
+	if !r.IsRunning() {
+		r.pending.mtx.Unlock()
+		if wi.writer != nil {
+			wi.writer.Fini()
+			wi.cleanup()
+		}
+		return cmn.NewErrAborted(r.Base.Name(), "stopping", nil)
+	}
+
 	// most of the time there'll be a single destination bucket for the lifetime
 	if r.bckTo == nil {
 		if from := r.Bck().Bucket(); !from.Equal(&wi.msg.ToBck) {
@@ -267,7 +256,18 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 		}
 	}
 
-	r.pending.mtx.Lock()
+	// register the jogger and work item before stopping can begin
+	mi := archlom.Mountpath()
+	r.joggers.mtx.Lock()
+	wi.j = r.joggers.m[mi.Path]
+	if wi.j == nil {
+		burst := max(cmn.XactBurstDflt, r.config.Arch.Burst)
+		wi.j = &jogger{r: r, mi: mi, workCh: make(chan *archtask, burst)}
+		r.joggers.m[mi.Path] = wi.j
+		r.joggers.wg.Go(wi.j.run)
+	}
+	r.joggers.mtx.Unlock()
+
 	r.pending.m[msg.TxnUUID] = wi
 	r.wiCnt.Inc()
 	r.pending.mtx.Unlock()
@@ -275,18 +275,24 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 }
 
 func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
-	r.IncPending()
 	r.pending.mtx.Lock()
-	wi, ok := r.pending.m[msg.TxnUUID]
-	r.pending.mtx.Unlock()
-	if !ok || wi == nil {
-		// NOTE: unexpected and unlikely - aborting
-		debug.AssertFunc(func() bool { return r.ErrCnt() > 0 }) // see cleanup
-		r.Abort(r.Err())
-		r.DecPending()
-		r.cleanup()
+	if !r.IsRunning() {
+		r.pending.mtx.Unlock()
 		return
 	}
+	wi := r.pending.m[msg.TxnUUID]
+	if wi == nil {
+		r.pending.mtx.Unlock()
+		r.Abort(fmt.Errorf("%s: missing archive transaction %s", r.Base.Name(), msg.TxnUUID))
+		return
+	}
+	if wi.state != archBegun {
+		r.pending.mtx.Unlock()
+		return
+	}
+	wi.state = archCommitted
+	r.IncPending()
+	r.pending.mtx.Unlock()
 
 	var (
 		lsflags uint64
@@ -300,12 +306,6 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 	err := lrit.init(r, &msg.ListRange, r.Bck(), lsflags, xact.NwpNone, r.config.Arch.Burst)
 	if err != nil {
 		r.Abort(err)
-		r.DecPending()
-		r.cleanup()
-		return
-	}
-
-	if r.IsAborted() {
 		return
 	}
 
@@ -313,11 +313,9 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 	l, c := len(j.workCh), cap(j.workCh)
 	j.chanFull.Check(l, c)
 
-	j.workCh <- &archtask{wi, lrit}
-	if r.ErrCnt() > 0 {
-		wi.cleanup()
-		r.Abort(r.Err())
-		r.cleanup()
+	select {
+	case j.workCh <- &archtask{wi, lrit}:
+	case <-r.IdleTimer():
 	}
 }
 
@@ -376,7 +374,9 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 	case <-r.IdleTimer():
 	case <-r.ChanAbort():
 	}
-	r.DemandBase.Stop() // prevent new requests from reusing this xaction
+	r.pending.mtx.Lock()
+	r.DemandBase.Stop() // prevent new joggers and work items
+	r.pending.mtx.Unlock()
 
 	// quiesce and close DM (compare w/ tcb.go, tcobjs.go)
 	if r.p.dm != nil {
@@ -401,19 +401,31 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 }
 
 func (r *XactArch) cleanup() {
-	if r.ErrCnt() == 0 {
-		return
-	}
+	r.joggers.wg.Wait()
 
-	// [cleanup] close and rm unfinished archives (compare w/ finalize)
+	// started items belong to finalize; claim only work the joggers left behind
+	var parked []*archwi
 	r.pending.mtx.Lock()
-	for _, wi := range r.pending.m {
-		wi.cleanup()
+	for id, wi := range r.pending.m {
+		if wi.state == archStarted {
+			continue
+		}
+		delete(r.pending.m, id)
+		r.wiCnt.Dec()
+		parked = append(parked, wi)
 	}
-	clear(r.pending.m)
 	r.pending.mtx.Unlock()
 
-	r.joggers.wg.Wait()
+	for _, wi := range parked {
+		if wi.writer == nil {
+			core.FreeLOM(wi.archlom)
+		} else if wi.rxRefs.Dec() == 0 {
+			wi.abandon()
+		} // otherwise the last receive rolls back
+		if wi.state == archCommitted {
+			r.DecPending()
+		}
+	}
 }
 
 func (r *XactArch) doSend(lom *core.LOM, wi *archwi, fh cos.ReadOpenCloser) error {
@@ -446,7 +458,6 @@ func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 
 func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	// control messages (compare w/ tcb.go, tcobjs.go)
-	// TODO: refactor and consolidate - currently duplicates tcobjs.go
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {
 		case transport.OpcDone:
@@ -464,11 +475,11 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 						e := fmt.Errorf("%s: invalid 'done' from %s: %w", r.Name(), meta.Tname(hdr.SID), err)
 						r.AddErr(e, 4, cos.ModXs)
 					} else {
-						wi.nrx.Add(n) // before refc (see qcb)
+						wi.nrx.Add(n) // before peersLeft (see quiesce)
 					}
 				}
-				refc := wi.refc.Dec()
-				debug.Assert(refc >= 0)
+				left := wi.peersLeft.Dec()
+				debug.Assert(left >= 0)
 			} else {
 				// (2) Xaction-level OpcDone: sender's whole xaction is done
 				r.sntl.rxDone(hdr)
@@ -495,7 +506,7 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	r.pending.mtx.Lock()
 	wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
 	if ok {
-		wi.rxing.Inc() // under lock (see finalize)
+		wi.rxRefs.Inc() // under lock (see finalize)
 	}
 	r.pending.mtx.Unlock()
 	if !ok {
@@ -520,10 +531,10 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 		}
 		r.AddErr(err, 5, cos.ModXs)
 	}
-	rxing := wi.rxing.Dec() // before nrx (see finalize)
+	refs := wi.rxRefs.Dec() // before nrx (see finalize)
 	wi.nrx.Dec()
-	if rxing == 0 {
-		wi.abandon() // finalize gave up (see finalize)
+	if refs == 0 {
+		wi.abandon() // finalize or shutdown gave up
 	}
 	return nil
 }
@@ -538,9 +549,8 @@ func (r *XactArch) finalize(wi *archwi) {
 	r.pending.mtx.Unlock()
 
 	// no new receives (wi is not pending)
-	if n := wi.rxing.Dec(); n > 0 {
+	if n := wi.rxRefs.Dec(); n > 0 {
 		// still receiving (slow or frozen peer)
-		// TODO: no time limit for a receive so a peer that stays frozen keeps the original of TAR append in the work file
 		err := fmt.Errorf("%s: %s: %d object(s) from peers still being received", r, wi.msg.Cname(), n)
 		r.AddErr(err, 4, cos.ModXs)
 		r.DecPending()
@@ -549,10 +559,13 @@ func (r *XactArch) finalize(wi *archwi) {
 
 	if q == core.QuiTimeout || wi.werr.Load() {
 		var err error
-		if q == core.QuiTimeout {
+		switch n := wi.nrx.Load(); {
+		case q == core.QuiTimeout && n < 0:
+			err = fmt.Errorf("%s: %s: received %d object(s) more than peers sent", r, wi.msg.Cname(), -n)
+		case q == core.QuiTimeout:
 			err = fmt.Errorf("%s: %s: %v (%d object(s) sent by peers not received)",
-				r, wi.msg.Cname(), cmn.ErrQuiesceTimeout, wi.nrx.Load())
-		} else {
+				r, wi.msg.Cname(), cmn.ErrQuiesceTimeout, n)
+		default:
 			err = fmt.Errorf("%s: %s: failed to archive object(s)", r, wi.msg.Cname())
 		}
 		r.AddErr(err, 4, cos.ModXs)
@@ -573,18 +586,16 @@ func (r *XactArch) finalize(wi *archwi) {
 	if err == nil || r.IsAborted() { // done ok (unless aborted)
 		return
 	}
-	debug.Assert(q != core.QuiAborted)
-
-	wi.cleanup()
 	r.AddErr(err, 5, cos.ModXs)
 }
 
 func (r *XactArch) _fini(wi *archwi) (ecode int, err error) {
+	defer core.FreeLOM(wi.archlom)
+
 	err = wi.writer.Fini()
 
-	if r.IsAborted() || err != nil {
+	if !r.IsRunning() || err != nil {
 		wi.cleanup()
-		core.FreeLOM(wi.archlom)
 		return 0, err
 	}
 
@@ -604,17 +615,18 @@ func (r *XactArch) _fini(wi *archwi) (ecode int, err error) {
 	}
 	if err != nil {
 		wi.cleanup()
-		core.FreeLOM(wi.archlom)
 		return http.StatusInternalServerError, err
 	}
 	debug.Assert(wi.wfh == nil)
 
 	wi.archlom.SetSize(size)
 	ecode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r, cmn.OwtArchive)
-	core.FreeLOM(wi.archlom)
+	if err != nil {
+		wi.cleanup()
+		return ecode, err
+	}
 	r.ObjsAdd(1, size-wi.appendPos)
-
-	return ecode, err
+	return ecode, nil
 }
 
 func (r *XactArch) Name() (s string) {
@@ -670,11 +682,13 @@ outer:
 	for {
 		select {
 		case archtask, ok := <-j.workCh:
-			if !ok {
+			if !ok || !j.r.IsRunning() {
 				break outer
 			}
 			j.do(archtask)
 		case <-j.r.ChanAbort():
+			break outer
+		case <-j.r.IdleTimer():
 			break outer
 		}
 	}
@@ -687,6 +701,11 @@ func (j *jogger) do(archtask *archtask) {
 		lrit, wi = archtask.lrit, archtask.wi
 	)
 	debug.Assert(r == wi.r)
+	r.pending.mtx.Lock()
+	debug.Assert(wi.state == archCommitted)
+	wi.state = archStarted
+	r.pending.mtx.Unlock()
+
 	wi.lrp = lrit.lrp
 	if err := lrit.run(wi, j.r.smap, false /*prealloc buf*/); err != nil {
 		wi.r.AddErr(err)
@@ -695,7 +714,7 @@ func (j *jogger) do(archtask *archtask) {
 	lrit.wait()
 
 	if core.T.SID() == wi.tsi.ID() {
-		go wi.r.finalize(wi) // TODO -- FIXME: async finalize this shard vs stopping
+		go wi.r.finalize(wi)
 	} else {
 		wi.r.sendTerm(wi.msg.TxnUUID, wi.tsi, nil, int64(wi.cnt.Load()))
 		wi.r.pending.mtx.Lock()
@@ -712,17 +731,14 @@ func (j *jogger) do(archtask *archtask) {
 // archwi //
 ////////////
 
-// returns one of:
-// 1. (TAR opened for append, lmfh nil, and archlom not locked)
-// 2. (lmfh and archlom locked)
-// 3. error
-func (wi *archwi) beginAppend() (lmfh cos.LomReader, err error) {
+// in-place TAR append returns its format; copy-append returns a reader with archlom locked
+func (wi *archwi) beginAppend() (lmfh cos.LomReader, format tar.Format, err error) {
 	msg := wi.msg
 	if msg.Mime == archive.ExtTar && !wi.archlom.IsChunked() {
 		// (special)
-		err = wi.openTarForAppend()
-		if err == nil /*can append*/ || err != archive.ErrTarIsEmpty /*fail XactArch.Begin*/ {
-			return nil, err
+		format, err = wi.openTarForAppend()
+		if err != archive.ErrTarIsEmpty {
+			return nil, format, err
 		}
 	}
 
@@ -733,37 +749,35 @@ func (wi *archwi) beginAppend() (lmfh cos.LomReader, err error) {
 	lmfh, err = wi.archlom.Open()
 	if err != nil {
 		wi.archlom.Unlock(false)
-		return nil, err
+		return nil, format, err
 	}
 	if wi.wfh, err = wi.archlom.CreateWork(wi.fqn); err != nil {
 		wi.archlom.Unlock(false)
 		cos.Close(lmfh)
 		lmfh = nil
 	}
-	return lmfh, err
+	return lmfh, format, err
 }
 
 // [NOTE]
 // - archive.OpenTarForAppend calls os.OpenFile
 // - it therefore requires archlom to be a monolithic file - no chunks
-func (wi *archwi) openTarForAppend() (err error) {
+func (wi *archwi) openTarForAppend() (format tar.Format, err error) {
 	if err = wi.archlom.RenameMainTo(wi.fqn); err != nil {
-		return err
+		return format, err
 	}
 	// open (rw) lom itself
-	wi.wfh, wi.tarFormat, wi.appendPos, err = archive.OpenTarForAppend(wi.archlom.Cname(), wi.fqn)
+	wi.wfh, format, wi.appendPos, err = archive.OpenTarForAppend(wi.archlom.Cname(), wi.fqn)
 	if err == nil {
-		return nil // can append
+		return format, nil // can append
 	}
 
 	// back
 	if errV := wi.archlom.RenameToMain(wi.fqn); errV != nil {
 		nlog.Errorf("%s: nested error: failed to append %s (%v) and rename back from %s (%v)",
 			wi.tsi, wi.archlom, err, wi.fqn, errV)
-	} else {
-		wi.fqn = ""
 	}
-	return err
+	return format, err
 }
 
 // multi-object iterator i/f: "handle work item"
@@ -814,7 +828,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	if wi.wfh == nil {
 		lom.Unlock(false)
 		// NOTE: unexpected and unlikely - aborting
-		err := cos.NewErrNotFoundFmt(wi.r, "archive destination is not ready for %q", lom.Cname())
+		err := cos.NewErrNotFoundFmt(nil, "%s: archive destination is not ready for %q", wi.r.Name(), lom.Cname())
 		wi.r.Abort(err)
 		return
 	}
@@ -832,33 +846,45 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 }
 
 // wait for peers' 'done' and all objects they sent ('done' may arrive first on another stream)
+// once all peers are done, time out after send_file_time w/ no progress on this shard
 func (wi *archwi) quiesce() core.QuiRes {
-	wi.progress.nrx, wi.progress.in, wi.progress.last = wi.nrx.Load(), wi.r.InObjs(), 0
-	wi.progress.fqn, wi.progress.size = wi.fqn, 0
-	return wi.r.Quiesce(cmn.Rom.CplaneOperation(), wi.qcb)
-}
+	var (
+		lastNrx, lastSize int64
+		lastProgress      time.Duration
+	)
+	return wi.r.Quiesce(cmn.Rom.CplaneOperation(), func(total time.Duration) core.QuiRes {
+		if wi.r.IsDone() {
+			return core.QuiAborted
+		}
+		left, n := wi.peersLeft.Load(), wi.nrx.Load() // order: see _recv
+		if left == 0 {
+			switch {
+			case n == 0:
+				return core.QuiDone
+			case n < 0:
+				// got more objects than peers reported - won't converge
+				return core.QuiTimeout
+			}
+		}
+		if smap := core.T.Sowner().Get(); !wi.r.smap.CompareTargets(smap) {
+			return wi.qabort(smap)
+		}
+		if left > 0 {
+			return core.QuiActive
+		}
 
-// once all peers are done, time out after send_file_time w/ no progress
-// abort on a change of the targets (join, leave, restart, maintenance)
-// (sentinel._qcb also aborts on a join, leave, or maintenance, but does not detect a restart)
-// TODO: progress counts all shards (InObjs) so a stalled shard waits while other shards receive
-func (wi *archwi) qcb(total time.Duration) core.QuiRes {
-	refc, n, in := wi.refc.Load(), wi.nrx.Load(), wi.r.InObjs() // (order: see _recv)
-	if refc == 0 && n == 0 {
-		return core.QuiDone
-	}
-	if smap := core.T.Sowner().Get(); !wi.r.smap.CompareTargets(smap) {
-		return wi.qabort(smap)
-	}
-	switch {
-	case refc > 0 || n != wi.progress.nrx || in != wi.progress.in || wi.grows():
-		wi.progress.nrx, wi.progress.in, wi.progress.last = n, in, total
+		// track completed receives and writes still in progress
+		size := lastSize
+		if finfo, err := os.Stat(wi.fqn); err == nil {
+			size = finfo.Size()
+		}
+		if n != lastNrx || size != lastSize {
+			lastNrx, lastSize, lastProgress = n, size, total
+		} else if total-lastProgress > wi.r.config.Timeout.SendFile.D() {
+			return core.QuiTimeout
+		}
 		return core.QuiActive
-	case total-wi.progress.last > wi.r.config.Timeout.SendFile.D():
-		return core.QuiTimeout
-	default:
-		return core.QuiActive
-	}
+	})
 }
 
 func (wi *archwi) qabort(smap *meta.Smap) core.QuiRes {
@@ -870,16 +896,6 @@ func (wi *archwi) qabort(smap *meta.Smap) core.QuiRes {
 	// the same targets but a new incarnation or new endpoints (broadcast the abort)
 	err := fmt.Errorf("%s: targets changed (incarnation or endpoints) [%s => %s]", r.Name(), r.smap.StringEx(), smap.StringEx())
 	return r.sntl._qabort(err)
-}
-
-// a receive in progress writes to the work file (see qcb)
-func (wi *archwi) grows() bool {
-	finfo, err := os.Stat(wi.progress.fqn)
-	if err != nil || finfo.Size() == wi.progress.size {
-		return false
-	}
-	wi.progress.size = finfo.Size()
-	return true
 }
 
 func (wi *archwi) nameInArch(objName string) string {
@@ -904,7 +920,7 @@ func (wi *archwi) abandon() {
 }
 
 func (wi *archwi) cleanup() {
-	if wi.appendPos > 0 && wi.wfh != nil {
+	if wi.appendPos > 0 && wi.fqn != "" {
 		wi.rollback()
 		return
 	}
@@ -921,10 +937,12 @@ func (wi *archwi) cleanup() {
 }
 
 func (wi *archwi) rollback() {
-	if err := wi.wfh.Close(); err != nil {
-		nlog.Warningln(wi.r.Name(), "rollback:", err)
+	if wi.wfh != nil {
+		if err := wi.wfh.Close(); err != nil {
+			nlog.Warningln(wi.r.Name(), "rollback:", err)
+		}
+		wi.wfh = nil
 	}
-	wi.wfh = nil
 	wi.archlom.Lock(true) // (a PUT publishes under the same lock)
 	err := wi._rollback()
 	wi.archlom.Unlock(true)
@@ -963,7 +981,7 @@ func (wi *archwi) finalize() (int64, error) {
 			debug.AssertNoErr(err)
 			return 0, err
 		}
-		wi.archlom.SetCksum(cos.NewCksum(cos.ChecksumNone, "")) // TODO: checksum NIY
+		wi.archlom.SetCksum(cos.NewCksum(cos.ChecksumNone, "")) // (see TODO)
 		return finfo.Size(), nil
 	}
 	// default
@@ -989,9 +1007,9 @@ func (wi *archwi) append(sb *cos.SB) {
 		sb.WriteInt(int(cnt))
 	}
 	if wi.tsi.ID() == core.T.SID() {
-		if refc := wi.refc.Load(); refc > 0 {
+		if left := wi.peersLeft.Load(); left > 0 {
 			sb.WriteString(", peers-not-done:")
-			sb.WriteInt(int(refc))
+			sb.WriteInt(int(left))
 		} else if n := wi.nrx.Load(); n > 0 {
 			sb.WriteString(", from-peers:")
 			sb.WriteInt(int(n))

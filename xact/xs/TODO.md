@@ -195,7 +195,7 @@ Add an integration test that verifies that prune removes no destination object w
 - streaming (`streamingF.genBEID`, using `_tag`): xid is derived, not assigned; concurrent requests (same from, to) via different
   proxies can make targets adopt different xactions and fail with ErrBusy; mint on a designated target and
   hand out via the proxy, as get-batch does (ais/ml.go) - protocol change
-- tcb, tcobjs, archive: duplicated code (three in-code TODOs); consolidate, preferably together with
+- tcb, tcobjs, archive: duplicated code (TODOs in tcobjs.go and at the top of archive.go); consolidate, preferably together with
   the out-of-band control migration
 - tcb, tcobjs `_recv`: resolve the zero-atime workaround (`lom.AtimeUnix() == 0`); `coi._dm` already copies
   source attributes, so trace the paths that omit atime before removing the receive-side fallback
