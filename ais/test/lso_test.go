@@ -581,6 +581,7 @@ func TestLsoStartAfter(t *testing.T) {
 				num:      200,
 				bck:      bck.Clone(),
 				fileSize: 128,
+				prefix:   trand.String(8) + "/",
 			}
 		)
 
@@ -593,17 +594,17 @@ func TestLsoStartAfter(t *testing.T) {
 		if m.bck.IsRemote() {
 			defer m.del()
 		}
-		lst, err := api.ListObjects(baseParams, m.bck, nil, api.ListArgs{})
+		lst, err := api.ListObjects(baseParams, m.bck, &apc.LsoMsg{Prefix: m.prefix}, api.ListArgs{})
 		tassert.CheckFatal(t, err)
 
 		middleObjName := lst.Entries[m.num/2-1].Name
 		tlog.Logfln("start listing bucket after: %q...", middleObjName)
 
-		msg := &apc.LsoMsg{PageSize: 10, StartAfter: middleObjName}
+		msg := &apc.LsoMsg{Prefix: m.prefix, PageSize: 10, StartAfter: middleObjName}
 		lst, err = api.ListObjects(baseParams, m.bck, msg, api.ListArgs{})
 
 		switch {
-		case bck.IsAIS():
+		case bck.IsAIS() || bck.IsRemoteS3():
 			tassert.CheckFatal(t, err)
 			tassert.Errorf(
 				t, len(lst.Entries) == m.num/2,
@@ -617,6 +618,68 @@ func TestLsoStartAfter(t *testing.T) {
 			tassert.Errorf(t, false, "expected an error, got nil")
 		}
 	})
+}
+
+// start-after w/ no recursion (S3 delimiter): skip directories with no names past start-after
+// - ais:// bucket (A-flow)
+// - optional: s3:// cliBck (R-flow, ListObjectsV2 StartAfter)
+func TestLsoStartAfterNoRecursion(t *testing.T) {
+	t.Run("ais", func(t *testing.T) {
+		bck := cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		tools.CreateBucket(t, tools.RandomProxyURL(t), bck, nil, true /*cleanup*/)
+		testLsoStartAfterNoRecursion(t, bck)
+	})
+	t.Run("s3", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{RequiredCloudProvider: apc.AWS, Bck: cliBck})
+		testLsoStartAfterNoRecursion(t, cliBck)
+	})
+}
+
+func testLsoStartAfterNoRecursion(t *testing.T, bck cmn.Bck) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		remote     = bck.IsRemote()
+		base       = trand.String(8)
+		dirs       = []string{"a", "b", "c"}
+
+		top = ioContext{t: t, bck: bck, num: 10, prefix: base + "/", fileSize: cos.KiB, fixedSize: true}
+		sub = make([]ioContext, len(dirs))
+	)
+	top.init(remote) // cleanup (remote): delete all under base/
+	top.puts()
+	for i, d := range dirs {
+		sub[i] = ioContext{t: t, bck: bck, num: 4, prefix: base + "/" + d + "/", fileSize: cos.KiB, fixedSize: true,
+			skipRemoteEvict: true}
+		sub[i].init(false /*cleanup*/)
+		sub[i].puts()
+	}
+
+	// start after the first name in "b/": skip "a/" and "b/"
+	bnames := append([]string(nil), sub[1].objNames...)
+	sort.Strings(bnames)
+	after := bnames[0]
+	expected := map[string]bool{base + "/c/": true}
+	for _, name := range top.objNames {
+		if name > after {
+			expected[name] = true
+		}
+	}
+
+	msg := &apc.LsoMsg{Prefix: base + "/", Flags: apc.LsNoRecursion, StartAfter: after}
+	lst, err := api.ListObjects(baseParams, bck, msg, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+
+	got := make(map[string]bool, len(lst.Entries))
+	for _, en := range lst.Entries {
+		got[en.Name] = true
+		tassert.Fatalf(t, expected[en.Name], "unexpected entry %q (start-after %q)", en.Name, after)
+	}
+	for name := range expected {
+		tassert.Fatalf(t, got[name], "missing entry %q (start-after %q)", name, after)
+	}
+
+	tlog.Logfln("start-after %q: listed %d entries", after, len(lst.Entries))
 }
 
 func TestLsoProps(t *testing.T) {

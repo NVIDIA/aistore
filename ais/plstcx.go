@@ -193,9 +193,8 @@ func (c *lsoCtx) lsPage() (*cmn.LsoRes, error) {
 	}
 
 	if c.listRemote {
-		// R-flow
-		if lsmsg.StartAfter != "" {
-			// TODO: remote AIS first, then Cloud
+		// R-flow // TODO -- FIXME: currently, added only ais/backend/aws
+		if lsmsg.StartAfter != "" && !bck.IsRemoteS3() {
 			return nil, fmt.Errorf("%s option --start_after (%s) not yet supported for remote buckets (%s)",
 				lsotag, lsmsg.StartAfter, bck)
 		}

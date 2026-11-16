@@ -871,6 +871,11 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		debug.AssertFunc(func() bool { return !cos.IsLastB(dirName, filepath.Separator) })
 		dirName += cos.PathSeparator
 
+		// start-after: same as objects
+		if dirName <= r.walk.wi.lsmsg().StartAfter {
+			return nil
+		}
+
 		// Deduplicate: heap output is sorted, so duplicates from different mountpaths are adjacent
 		if dirName == r.walk.lastDir {
 			return nil // skip duplicate

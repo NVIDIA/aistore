@@ -258,6 +258,8 @@ func (*s3bp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, ls
 	}
 	if msg.ContinuationToken != "" {
 		params.ContinuationToken = aws.String(msg.ContinuationToken)
+	} else if msg.StartAfter != "" {
+		params.StartAfter = aws.String(msg.StartAfter) // first page only
 	}
 
 	if bck.Props != nil && bck.Props.Versioning.Enabled {
