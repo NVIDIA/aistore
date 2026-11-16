@@ -47,7 +47,7 @@ import (
 // Every admitted item is accounted for through a worker attempt, a skip after
 // abort, or queue draining. Abort cannot interrupt a TAR scan already in progress.
 
-// TODO: size the queue from XactConf.Burst and workers by mountpath count.
+// TODO: size the queue from XactConf.Burst and workers by mountpath count (TuneNumWorkers)
 // TODO: coordinate admission and renewal with idle expiration in the shared demand base
 const (
 	demandShardIndexBurst      = cmn.XactBurstDflt
@@ -190,7 +190,7 @@ func (r *XactDemandShardIndex) IdleTimer() <-chan struct{} { return r.stopCh.Lis
 func (r *XactDemandShardIndex) Run(wg *sync.WaitGroup) {
 	nlog.Infoln(r.Name())
 	var adv load.Advice
-	adv.Init(load.FlMem|load.FlCla|load.FlDsk, &load.Extra{Cfg: cmn.GCO.Get().Disk, RW: true})
+	adv.Init(load.FlMem|load.FlCla|load.FlSch|load.FlDsk, &load.Extra{Cfg: cmn.GCO.Get().Disk, RW: true})
 	// launch workers with private advice copies
 	for range demandShardIndexNumWorkers {
 		r.wg.Go(func() { r.work(adv) })
