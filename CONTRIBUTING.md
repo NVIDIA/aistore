@@ -14,6 +14,7 @@ The AIStore project repository follows an open source model where anyone is allo
   - [Coding Style](#coding-style)
   - [Testing Changes](#testing-changes)
   - [Previewing Documentation Changes](#previewing-documentation-changes)
+  - [Pull Request Descriptions](#pull-request-descriptions)
   - [Commit Messages](#commit-messages)
   - [Signing-Off Commits](#signing-off-commits)
   - [Squashing Commits](#squashing-commits)
@@ -128,6 +129,29 @@ For comments above functions and methods:
   "add" or "return", rather than "adds" or "returns".
 - Keep the summary brief; optionally follow it with brief bulleted details.
 
+Write a comment only to state intent or a constraint the code cannot show.
+Never narrate what the code does. Keep each comment as short as possible while
+preserving the constraint. Match the surrounding file's comment density and style.
+
+Doc comments for packages, types, functions, and methods describe only the
+entity's own responsibility:
+
+- Do not describe internals, precedence or fallback order, or implementation steps.
+- Do not make claims about callers, deployment, external tooling, or where a value
+  is consumed later.
+- Do not justify a design or a change, or reference obsolete or unimplemented behavior.
+
+Explain specific confusing code inline, immediately above the line it explains,
+instead of in the doc comment. Keep work-in-progress notes and development history
+out of finished documentation and comments.
+
+Start a docstring with one summary sentence. Add parameter, return, error,
+or example sections when callers need them. Preserve units, bounds, meaningful
+defaults, side effects, compatibility limits, and resource ownership that form
+that entity's public contract. Do not repeat the signature or describe the
+implementation line by line. Link detailed design documentation instead of
+copying it into the docstring.
+
 Keep critical sections short. Do not hold a mutex across a network request
 of any kind. Avoid `nlog` calls while holding a mutex where possible, and keep
 syscalls inside critical sections to the absolute minimum.
@@ -208,6 +232,21 @@ If generation fails, the preview uses a placeholder page.
 
 `make fern-build` publishes to Fern and requires authentication.
 
+#### Pull Request Descriptions
+
+Default to one short paragraph describing the problem and resulting behavior.
+Update it when the scope changes.
+Add details only when needed to explain a design decision, compatibility change,
+or operational limit. Do not copy the commit body, list every changed file, or
+recount the development history.
+
+Keep test commands, logs, and validation matrices in review evidence. Link or
+attach the evidence needed for review. Include these details in the description
+only when requested; keep required contributor information brief.
+
+Put planned follow-up pull requests under `Future To Do`, one unchecked task
+item (`- [ ]`) per follow-up. Omit the section when there are none.
+
 #### Commit Messages
 
 Keep commit titles and bodies clear, concise, and consistent with the final
@@ -215,9 +254,15 @@ diff: describe the problem and resulting behavior without unsupported claims.
 Release notes are usually drafted from commit messages.
 
 Use `<subsystem>: <message>` for the title. Lowercase words and preserve
-technical identifiers such as `TX`. Prefix body bullets with `*`; indent
+technical identifiers such as `TX`. Add a body only for behavior or rationale
+that the title does not explain. Use at most three main bullets.
+Prefix body bullets with `*`; indent
 sub-bullets and prefix them with `-`.
 Separate change groups (e.g., implementation and tests) with `----` on its own line.
+
+Keep test results in review evidence unless requested. Describe test behavior
+when tests are the change itself. Omit file inventories, implementation
+walkthroughs, and repetition of the title.
 
 For example:
 
