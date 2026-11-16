@@ -80,10 +80,24 @@ Report checks, results, and any missing cluster, credentials, or skipped coverag
   causes at the appropriate layer while preserving caller contracts. Keep unrelated
   cleanup out of the change.
 - Preserve public signatures, defaults, return types, and exception behavior.
-  Keep public APIs typed and documented; update relevant examples and docstrings.
+  Keep public APIs typed and documented; update relevant examples and docstrings
+  using [Coding Style](../CONTRIBUTING.md#coding-style).
+- Follow [Pull Request Descriptions](../CONTRIBUTING.md#pull-request-descriptions)
+  and [Commit Messages](../CONTRIBUTING.md#commit-messages) when preparing a change.
 - Check request/response formats against the Go API and server handlers when
   changing protocol behavior. Reuse existing SDK clients, models, and errors.
 - Preserve streaming, retry/resume, and resource ownership contracts; test byte
   integrity and cleanup on failures for changes to object I/O.
 - Keep optional dependencies in their existing extras; core SDK imports must work
   without PyTorch or other optional integrations installed.
+
+## Changelog Entries
+
+Match the style of recent releases in [CHANGELOG.md](CHANGELOG.md).
+Add unreleased changes under `[Unreleased]`; leave published entries unchanged.
+Use one concise bullet per user-visible change, grouped under relevant topic
+headings. Name affected APIs with backticks and describe the resulting behavior.
+Include conditions, defaults, errors, or resource ownership only when users need
+them. Put compatibility changes first, mark breaking changes with `**BREAKING**`,
+and give the required migration steps. Omit implementation walkthroughs, test
+inventories, and development notes.

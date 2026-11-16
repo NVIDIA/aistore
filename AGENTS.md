@@ -103,6 +103,8 @@ the human contributor owns claims and disclosure.
 - Prioritize correctness over performance. Understand synchronization primitives
   and their responsibilities before changing concurrent code or critical sections.
 - Follow [Coding Style](CONTRIBUTING.md#coding-style).
+- Follow [Pull Request Descriptions](CONTRIBUTING.md#pull-request-descriptions)
+  when preparing a change.
 - Before committing, follow [Commit Messages](CONTRIBUTING.md#commit-messages)
   and contributor requirements for human authorship, sign-off, and disclosure.
 
