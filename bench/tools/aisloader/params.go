@@ -617,6 +617,10 @@ func (p *params) validate() error {
 		}
 	}
 
+	if p.numWorkers <= 0 {
+		return fmt.Errorf("invalid option: numworkers %d (must be > 0)", p.numWorkers)
+	}
+
 	if cargs.IdleConnsPerHost < 0 {
 		return fmt.Errorf("invalid option: idle-conns-per-host %d (must be >= 0)", cargs.IdleConnsPerHost)
 	}

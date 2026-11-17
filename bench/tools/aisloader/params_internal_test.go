@@ -23,8 +23,9 @@ func TestParamsValidate(t *testing.T) {
 				bck: cmn.Bck{Provider: apc.AIS},
 			},
 			workloadParams: workloadParams{
-				duration: DurationExt{Val: time.Minute},
-				putPct:   50,
+				duration:   DurationExt{Val: time.Minute},
+				putPct:     50,
+				numWorkers: 10,
 			},
 			readParams: readParams{
 				evictBatchSize: 1000,
@@ -114,6 +115,20 @@ func TestParamsValidate(t *testing.T) {
 				p.putPct = 100
 			},
 			wantErr: "'-split-reads' requires a workload that reads",
+		},
+		{
+			name: "zero workers",
+			mutate: func(p *params) {
+				p.numWorkers = 0
+			},
+			wantErr: "numworkers 0",
+		},
+		{
+			name: "negative workers",
+			mutate: func(p *params) {
+				p.numWorkers = -1
+			},
+			wantErr: "numworkers -1",
 		},
 		{
 			name: "size range",
