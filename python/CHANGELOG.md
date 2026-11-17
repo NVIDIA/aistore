@@ -6,6 +6,14 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Compatibility changes
+
+- **BREAKING**: `Bucket.list_objects()`, `list_all_objects()`, `list_objects_iter()`,
+  and `list_all_objects_iter()` now pass `start_after` to the server, enabling S3
+  range starts on supporting servers. Catch `AISError` instead of
+  `NotImplementedError` for unsupported providers. Iterator errors are raised
+  when the first page is requested.
+
 ### Added
 
 - `Client.initialize()` and `version` to fetch and cache the AIS software version.

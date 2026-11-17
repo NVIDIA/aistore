@@ -454,17 +454,11 @@ class TestBucketOps(ParallelTestBase):
 
         self.assertEqual(sorted(set(obj_names) - set(cached)), sorted(listed))
 
-    @unittest.skipIf(REMOTE_SET, "start_after is supported for AIS buckets only")
+    @unittest.skipIf(
+        REMOTE_SET and not AWS_BUCKET, "start_after requires an AIS or S3 bucket"
+    )
     def test_list_objects_start_after(self):
-        self._create_objects()
-
-        # Listings come back in lexicographic order; capture the full set first.
-        all_names = [
-            entry.name for entry in self.bucket.list_all_objects(prefix=self.obj_prefix)
-        ]
-        self.assertGreater(len(all_names), 1)
-        self.assertEqual(all_names, sorted(all_names))
-
+        all_names = sorted(self._create_objects(num_obj=10))
         marker_idx = len(all_names) // 2
         marker = all_names[marker_idx]
         # `start_after` is exclusive: everything strictly after the marker.
@@ -478,7 +472,7 @@ class TestBucketOps(ParallelTestBase):
         after_names = [
             entry.name
             for entry in self.bucket.list_all_objects(
-                prefix=self.obj_prefix, start_after=marker
+                prefix=self.obj_prefix, page_size=2, start_after=marker
             )
         ]
         self.assertEqual(expected, after_names)
@@ -488,10 +482,23 @@ class TestBucketOps(ParallelTestBase):
         iter_names = [
             obj.name
             for obj in self.bucket.list_objects_iter(
-                prefix=self.obj_prefix, page_size=3, start_after=marker
+                prefix=self.obj_prefix, page_size=2, start_after=marker
             )
         ]
         self.assertEqual(expected, iter_names)
+
+        objects = self.bucket.list_all_objects_iter(
+            prefix=self.obj_prefix, start_after=marker
+        )
+        self.assertEqual(expected, [obj.name for obj in objects])
+        self.assertEqual(
+            [],
+            list(
+                self.bucket.list_objects_iter(
+                    prefix=self.obj_prefix, page_size=2, start_after=all_names[-1]
+                )
+            ),
+        )
 
     def test_list_object_flags_combined(self):
         self._create_objects()

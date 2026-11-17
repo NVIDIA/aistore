@@ -519,6 +519,13 @@ class TestBucket(unittest.TestCase):
         }
         self._list_objects_exec_assert(expected_act_value, start_after=start_after)
 
+    def test_list_objects_start_after_s3(self):
+        self.mock_client.request_deserialize.return_value = Mock(BucketList, entries=[])
+        self.amz_bck.list_objects(start_after="obj-100")
+        request = self.mock_client.request_deserialize.call_args.kwargs
+        self.assertEqual(self.amz_bck_params, request["params"])
+        self.assertEqual("obj-100", request["json"]["value"]["start_after"])
+
     def test_list_all_objects_start_after_first_page_only(self):
         # `start_after` seeds the first page; continuation pages resume via the token.
         list_1_id = "123"
@@ -575,21 +582,6 @@ class TestBucket(unittest.TestCase):
         ]
         self.assertEqual(sent_values[0].get("start_after"), start_after)
         self.assertNotIn("start_after", sent_values[1])
-
-    def test_start_after_remote_raises_not_implemented(self):
-        # `start_after` is AIS-only; remote buckets must fail fast on the client.
-        with self.assertRaises(NotImplementedError):
-            self.amz_bck.list_objects(start_after="obj-1")
-        with self.assertRaises(NotImplementedError):
-            self.amz_bck.list_objects_iter(start_after="obj-1")
-        with self.assertRaises(NotImplementedError):
-            self.amz_bck.list_all_objects(start_after="obj-1")
-        with self.assertRaises(NotImplementedError):
-            # guard fires eagerly at call time, before any iteration
-            self.amz_bck.list_all_objects_iter(start_after="obj-1")
-        # fail fast: no request reaches the cluster
-        self.mock_client.request.assert_not_called()
-        self.mock_client.request_deserialize.assert_not_called()
 
     def test_transform(self):
         prepend_val = PREFIX_NAME

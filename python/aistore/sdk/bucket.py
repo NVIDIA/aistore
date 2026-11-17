@@ -172,12 +172,15 @@ class Bucket(AISSource):
             props (str, optional): Comma-separated list of object properties to return. Default value is "name,size".
                 Properties: "name", "size", "atime", "version", "checksum", "target_url", "copies".
             start_after (str, optional): List objects whose names are strictly greater than this
-                value (exclusive marker). Supported for AIS buckets only. See `list_objects`.
+                value (exclusive marker). Supported only for native AIS and general-purpose S3 buckets.
 
         Returns:
             Iterable[Object]: Objects matching the prefix with the specified properties.
+
+        Raises:
+            aistore.sdk.errors.AISError: AIStore rejects the request. Unsupported `start_after`
+                is reported when iteration requests the first page.
         """
-        self._verify_start_after(start_after)
         return (
             self.object(entry.name, entry.generate_object_props())
             for entry in self.list_objects_iter(
@@ -589,22 +592,21 @@ class Bucket(AISSource):
             start_after (str, optional): List objects whose names are strictly greater than this
                 value (exclusive marker). Useful for sharding a flat bucket across parallel
                 listers. Applied to the first page only; subsequent pages continue via the
-                server-issued continuation token. Supported for AIS buckets only.
+                server-issued continuation token. Supported only for native AIS and general-purpose S3 buckets.
 
         Returns:
             BucketList: the page of objects in the bucket and the continuation token to get the next page
             Empty continuation token marks the final page of the object list
 
         Raises:
-            aistore.sdk.errors.AISError: All other types of errors with AIStore
-            NotImplementedError: If `start_after` is set on a remote (non-AIS) bucket
+            aistore.sdk.errors.AISError: AIStore rejects the request, including unsupported
+                use of `start_after`.
             requests.ConnectionError: Connection error
             requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        self._verify_start_after(start_after)
         flags = list(flags) if flags else []
         headers = {HEADER_ACCEPT: MSGPACK_CONTENT_TYPE}
 
@@ -666,22 +668,21 @@ class Bucket(AISSource):
             inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
                 See `list_objects` for details.
             start_after (str, optional): List objects whose names are strictly greater than this
-                value (exclusive marker). Applied to the first page only. Supported for AIS
-                buckets only. See `list_objects` for details.
+                value (exclusive marker). Applied to the first page only.
+                Supported only for native AIS and general-purpose S3 buckets.
 
         Returns:
             ObjectIterator: object iterator
 
         Raises:
-            aistore.sdk.errors.AISError: All other types of errors with AIStore
-            NotImplementedError: If `start_after` is set on a remote (non-AIS) bucket
+            aistore.sdk.errors.AISError: AIStore rejects the request. Unsupported `start_after`
+                is reported when iteration requests the first page.
             requests.ConnectionError: Connection error
             requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        self._verify_start_after(start_after)
 
         def fetch_objects(uuid, token):
             return self.list_objects(
@@ -728,22 +729,21 @@ class Bucket(AISSource):
             inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
                 See `list_objects` for details.
             start_after (str, optional): List objects whose names are strictly greater than this
-                value (exclusive marker). Applied to the first page only. Supported for AIS
-                buckets only. See `list_objects` for details.
+                value (exclusive marker). Applied to the first page only.
+                Supported only for native AIS and general-purpose S3 buckets.
 
         Returns:
             List[BucketEntry]: list of objects in bucket
 
         Raises:
-            aistore.sdk.errors.AISError: All other types of errors with AIStore
-            NotImplementedError: If `start_after` is set on a remote (non-AIS) bucket
+            aistore.sdk.errors.AISError: AIStore rejects the request, including unsupported
+                use of `start_after`.
             requests.ConnectionError: Connection error
             requests.ConnectTimeout: Timed out connecting to AIStore
             requests.exceptions.HTTPError: Service unavailable
             requests.RequestException: "There was an ambiguous exception that occurred while handling..."
             requests.ReadTimeout: Timed out receiving response from AIStore
         """
-        self._verify_start_after(start_after)
         uuid = ""
         continuation_token = ""
         obj_list = []
@@ -1152,21 +1152,6 @@ class Bucket(AISSource):
         """
         if self.provider.is_remote():
             raise InvalidBckProvider(self.provider)
-
-    def _verify_start_after(self, start_after: str):
-        """
-        `start_after` is supported for AIS buckets only. This client-side check
-        rejects cloud buckets (provider != AIS); remote-AIS buckets are not
-        caught here and fall through to the server-side rejection (ais/plstcx.go).
-
-        Raises:
-            NotImplementedError: If `start_after` is set on a cloud bucket
-        """
-        if start_after and self.provider.is_remote():
-            raise NotImplementedError(
-                f"'start_after' is not supported for remote bucket provider "
-                f"'{self.provider.value}'"
-            )
 
     def verify_cloud_bucket(self):
         """
