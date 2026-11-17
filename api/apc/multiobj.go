@@ -24,6 +24,9 @@ type (
 		Template string `json:"template"` // +gen:optional
 		// Explicit list of object names.
 		ObjNames []string `json:"objnames"` // +gen:optional
+		// Designated target (DT) - internal use: set by the system,
+		// user-provided value is ignored.
+		DT string `json:"dt,omitempty"` // +gen:optional
 	}
 	// EvdMsg parameterizes multi-object delete and evict ("evd")
 	// operations. Objects are selected via ListRange. For evict, only

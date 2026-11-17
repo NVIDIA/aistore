@@ -109,7 +109,7 @@ func (p *proxy) checkPlacementVer(smap *smapX, action string) error {
 			case "":
 				unknown = append(unknown, si.StringEx())
 			default:
-				differ = append(differ, si.StringEx()+"("+ver+")")
+				differ = append(differ, _verTag(si, ver))
 			}
 		}
 	}
@@ -119,14 +119,29 @@ func (p *proxy) checkPlacementVer(smap *smapX, action string) error {
 			differ = append(differ, name+"(unknown)")
 		}
 		slices.Sort(differ)
-		return fmt.Errorf("%s: cannot %s: node versions differ %v (primary: %s) - complete the upgrade",
-			p, action, differ, cmn.VersionAIStore)
+		return &errNodeVersDiffer{si: p.si, action: action, differ: differ}
 	case len(unknown) > 0:
 		slices.Sort(unknown)
 		return cmn.NewErrBusy(membershipTag, action,
 			fmt.Sprintf("node versions not yet known: %v", unknown))
 	}
 	return nil
+}
+
+// peer response must carry apc.HdrNodeVersion equal to self's
+// (to fail cluster-wide operations that require the same version everywhere)
+func (h *htrun) checkPeerVer(res *callResult, action string) error {
+	if ver := res.header.Get(apc.HdrNodeVersion); ver != cmn.VersionAIStore {
+		return &errNodeVersDiffer{si: h.si, action: action, differ: []string{_verTag(res.si, ver)}}
+	}
+	return nil
+}
+
+func _verTag(si *meta.Snode, ver string) string {
+	if ver == "" {
+		ver = "unknown"
+	}
+	return si.StringEx() + "(" + ver + ")"
 }
 
 // placement in use: weighted Smap or bucket placement override(s)

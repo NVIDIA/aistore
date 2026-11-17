@@ -63,6 +63,11 @@ type (
 		si       *meta.Snode
 		from, to string
 	}
+	errNodeVersDiffer struct {
+		si     *meta.Snode // self
+		action string
+		differ []string // "<node>(<version>)"
+	}
 	errNotPrimary struct {
 		si     *meta.Snode
 		smap   *smapX
@@ -169,6 +174,11 @@ func newErrDowngrade(si *meta.Snode, from, to string) *errDowngrade {
 
 func (e *errDowngrade) Error() string {
 	return fmt.Sprintf("%s: attempt to downgrade %s to %s", e.si, e.from, e.to)
+}
+
+func (e *errNodeVersDiffer) Error() string {
+	return fmt.Sprintf("%s: cannot %s: node versions differ %v (have: %s) - complete the upgrade",
+		e.si, e.action, e.differ, cmn.VersionAIStore)
 }
 
 func isErrDowngrade(err error) bool {

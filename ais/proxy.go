@@ -2676,7 +2676,7 @@ func (p *proxy) listBuckets(w http.ResponseWriter, r *http.Request, qbck *cmn.Qu
 func (p *proxy) prefetch(bucket string, msg *apc.ActMsg, query url.Values) (string, error) {
 	tids := query[apc.QparamTID] // one value per target: tid=t1&tid=t2
 	if len(tids) == 0 {
-		return p.bcastBckAction(http.MethodPost, bucket, msg, query)
+		return p._prefetchDT(bucket, msg, query)
 	}
 	query.Del(apc.QparamTID) // used by the proxy only; not forwarded to targets
 
@@ -2726,6 +2726,116 @@ func (p *proxy) prefetch(bucket string, msg *apc.ActMsg, query url.Values) (stri
 	}
 	freeBcastRes(results)
 	return actMsgExt.UUID, err
+}
+
+// prefetch on all active targets - two-phase startup (compare with x-moss in ais/ml.go):
+// - select designated target (DT): HRW(xid)
+// - phase 1: start all other targets (receivers)
+// - phase 2: start DT (sender)
+// - targets learn DT via apc.QparamTID and verify same Smap
+// - abort all on failure; fail on mixed node versions
+// (user-selected targets, if any: single bcast and no DT - see above)
+func (p *proxy) _prefetchDT(bucket string, msg *apc.ActMsg, query url.Values) (string, error) {
+	smap := p.owner.smap.get()
+	if smap.CountActiveTs() <= 1 {
+		return p.bcastBckAction(http.MethodPost, bucket, msg, query)
+	}
+	var (
+		actMsgExt = p.newAmsg(msg, nil, cos.GenUUID())
+		xid       = actMsgExt.UUID
+		dt, err   = smap.HrwTargetTask(xid)
+	)
+	if err != nil {
+		return "", err
+	}
+	nlb := xact.NewXactNL(xid, actMsgExt.Action, &smap.Smap, nil)
+	nlb.SetOwner(equalIC)
+	p.ic.registerEqual(regIC{smap: smap, query: query, nl: nlb})
+
+	query.Set(apc.QparamTID, dt.ID())
+	var (
+		active = smap.Tmap.ActiveNodes()
+		hreq   = cmn.HreqArgs{
+			Method: http.MethodPost,
+			Path:   apc.URLPathBuckets.Join(bucket),
+			Query:  query,
+			Body:   cos.MustMarshal(actMsgExt),
+		}
+	)
+
+	// phase 1: all other targets
+	selected := make(meta.Nodes, 0, len(active)-1)
+	for _, tsi := range active {
+		if tsi.ID() != dt.ID() {
+			selected = append(selected, tsi)
+		}
+	}
+	args := allocBcArgs()
+	{
+		args.req = hreq
+		args.smap = smap
+		args.network = cmn.NetIntraControl
+		args.selected = selected
+		args.nodeCount = len(selected)
+		args.timeout = apc.DefaultTimeout
+	}
+	results := p.bcastSelected(args)
+	freeBcArgs(args)
+	for _, res := range results {
+		if err = p._prfStarted(res, msg.Action, "phase 1"); err != nil {
+			break
+		}
+	}
+	freeBcastRes(results)
+	if err != nil {
+		p._prfAbort(xid, smap, active, err)
+		return xid, err
+	}
+
+	// phase 2: DT
+	cargs := allocCargs()
+	{
+		cargs.si = dt
+		cargs.req = hreq
+		cargs.timeout = apc.DefaultTimeout
+	}
+	res := p.call(cargs, smap)
+	err = p._prfStarted(res, msg.Action, "phase 2: DT")
+	freeCR(res)
+	freeCargs(cargs)
+	if err != nil {
+		p._prfAbort(xid, smap, active, err)
+	}
+	return xid, err
+}
+
+// check call result and node version (two-phase startup)
+func (p *proxy) _prfStarted(res *callResult, action, phase string) error {
+	if res.err != nil {
+		return res.errorf("%s failed to %q [%s]", res.si, action, phase)
+	}
+	return p.checkPeerVer(res, action)
+}
+
+func (p *proxy) _prfAbort(xid string, smap *smapX, active meta.Nodes, cause error) {
+	nlog.Errorln(p.String(), "aborting two-phase startup", xact.Cname(apc.ActPrefetchObjects, xid), "[", cause, "]")
+
+	msg := apc.ActMsg{
+		Action: apc.ActXactStop,
+		Value:  xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects},
+	}
+	args := allocBcArgs()
+	{
+		args.req = cmn.HreqArgs{Method: http.MethodPut, Path: apc.URLPathXactions.S, Body: cos.MustMarshal(&msg)}
+		args.smap = smap
+		args.network = cmn.NetIntraControl
+		args.selected = active
+		args.nodeCount = len(active)
+		args.timeout = cmn.Rom.MaxKeepalive()
+		args.noResults = true
+	}
+	p.bcastSelected(args)
+	freeBcArgs(args)
 }
 
 func (p *proxy) bcastBckAction(method, bucket string, msg *apc.ActMsg, query url.Values) (xid string, err error) {

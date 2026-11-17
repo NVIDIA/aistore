@@ -138,15 +138,15 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 	}
 
 	if args.MinTargets > 0 {
-		if smap.CountTargets() < args.MinTargets {
-			tb.Skipf("%s requires at least %d targets (have %d)",
+		if smap.CountActiveTs() < args.MinTargets {
+			tb.Skipf("%s requires at least %d active targets (have %d)",
 				tb.Name(), args.MinTargets, smap.CountTargets())
 		}
 	}
 
 	if args.MinProxies > 0 {
-		if smap.CountProxies() < args.MinProxies {
-			tb.Skipf("%s requires at least %d proxies (have %d)",
+		if smap.CountActivePs() < args.MinProxies {
+			tb.Skipf("%s requires at least %d active proxies (have %d)",
 				tb.Name(), args.MinProxies, smap.CountProxies())
 		}
 	}

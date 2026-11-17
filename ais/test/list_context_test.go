@@ -52,6 +52,7 @@ const (
 	lsoCtxEndless            // full sorted pages, no last page
 	lsoCtxPageError          // fail the second call once
 	lsoCtxPageTimeout        // return the first page, then block
+	lsoCtxLastPage           // empty final page
 )
 
 type (
@@ -292,6 +293,9 @@ func (remote *lsoCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	n := b.calls.Add(1)
 	switch b.mode {
+	case lsoCtxLastPage:
+		w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
+		_ = msgp.Encode(w, &cmn.LsoRes{})
 	case lsoCtxRetry:
 		http.Error(w, "throttled", http.StatusTooManyRequests)
 	case lsoCtxSparse:

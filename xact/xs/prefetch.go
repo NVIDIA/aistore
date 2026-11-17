@@ -163,7 +163,15 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, msg *apc.Prefetch
 }
 
 func (r *prefetch) Run(wg *sync.WaitGroup) {
-	nlog.Infoln(r.Name())
+	dt := r.msg.DT
+	switch dt {
+	case "":
+		nlog.Infoln(r.Name())
+	case core.T.SID():
+		nlog.Infoln(core.T.String(), r.Name(), "DT (self)")
+	default:
+		nlog.Infoln(core.T.String(), r.Name(), "[ DT:", dt, "]")
+	}
 
 	wg.Done()
 

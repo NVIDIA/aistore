@@ -732,9 +732,26 @@ func (t *target) httpbckpost(w http.ResponseWriter, r *http.Request, apireq *api
 			t.writeErrf(w, r, cmn.FmtErrMorphUnmarshal, t.si, msg.Action, msg.Value, err)
 			return
 		}
+		// two-phase startup: designated target (DT), if any
+		dt := apireq.dpq.get(apc.QparamTID)
+		if dt != "" {
+			smap := t.owner.smap.get()
+			if ecode, err := t.ensureSameSmap(r.Header, smap); err != nil {
+				t.writeErr(w, r, err, ecode)
+				return
+			}
+			if smap.GetActiveNode(dt) == nil {
+				t.writeErr(w, r, &errNodeNotFound{si: t.si, smap: smap, msg: "prefetch DT", id: dt})
+				return
+			}
+		}
+		prfMsg.DT = dt // (designated target - internal use)
 		if ecode, err := t.runPrefetch(msg.UUID, apireq.bck, prfMsg); err != nil {
 			t.writeErr(w, r, err, ecode)
 			return
+		}
+		if dt != "" {
+			w.Header().Set(apc.HdrNodeVersion, cmn.VersionAIStore) // (proxy checks)
 		}
 	case apc.ActRechunk:
 		rechunkMsg := &apc.RechunkMsg{}

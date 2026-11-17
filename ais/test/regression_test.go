@@ -713,13 +713,13 @@ func TestPrefetchList(t *testing.T) {
 	}
 }
 
-func TestPrefetchTarget(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
+func TestPrefetchSpecificTargets(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck, MinTargets: 3})
 
 	// 1. Set up a unique prefix and register cleanup for the test objects.
 	m := ioContext{t: t, bck: cliBck, prefix: "prefetch-target-" + cos.GenUUID() + "/", skipRemoteEvict: true}
 	m.initAndSaveState(false /*cleanup*/)
-	m.expectTargets(3)
+
 	t.Cleanup(func() { m.del() })
 	bp := tools.BaseAPIParams(m.proxyURL)
 
@@ -771,6 +771,28 @@ func TestPrefetchTarget(t *testing.T) {
 	// 4. Test one target, a subset, the default set, and a selection owned by an excluded target.
 	pair := []string{targets[0].ID(), targets[1].ID()}
 	excluded := m.objNames[len(m.objNames)-1:]
+	t.Run("subset-prefix-list", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+		remote := attachLsoCtxRemote(t, bp, m.smap.CountActiveTs())
+		b := remote.addBck(t, bp, "prefetch-targets", lsoCtxLastPage)
+		msg := &apc.PrefetchMsg{ListRange: apc.ListRange{Template: "prefix/"}}
+		xid, err := api.Prefetch(bp, b.bck, msg, pair...)
+		tassert.CheckFatal(t, err)
+		args := &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.RebalanceTimeout}
+		status, err := api.WaitForXactionIC(bp, args)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, status.IsFinished() && !status.AbortedX && status.ErrMsg == "", "prefetch did not finish cleanly: %+v", status)
+		snaps, err := api.QueryXactionSnaps(bp, args)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(snaps) == len(pair), "expected targets %v, got %v", pair, snaps)
+		for _, tid := range pair {
+			tassert.Fatalf(t, len(snaps[tid]) == 1, "expected one snapshot from target %s, got %v", tid, snaps)
+			snap := snaps[tid][0]
+			tassert.Errorf(t, snap.IsFinished() && !snap.IsAborted() && snap.Err == "", "target %s: prefetch failed: %+v", tid, snap)
+		}
+		// one final page per target; no retries or continuation requests
+		tassert.Errorf(t, b.calls.Load() == int64(len(pair)), "expected %d LIST calls, got %d", len(pair), b.calls.Load())
+	})
 	for _, tc := range []struct {
 		name      string
 		selection apc.ListRange
