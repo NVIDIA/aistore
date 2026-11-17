@@ -23,6 +23,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
+	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/stats"
 	"github.com/NVIDIA/aistore/tools"
@@ -1630,4 +1631,60 @@ func TestMossZeroSizeCounters(t *testing.T) {
 			tassert.Errorf(t, outObjs > 0, "[%s] x-moss OutObjs=%d, want > 0 (zero-size Tx must count)", desc, outObjs)
 		})
 	}
+}
+
+// fail on a missing peer entry when ContinueOnErr is false
+func TestMossMissingNoContinueOnErr(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+
+	var (
+		bp      = tools.BaseAPIParams()
+		bck     = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		present = "present.bin"
+		missing string
+	)
+	tools.CreateBucket(t, bp.URL, bck, nil, true /*cleanup*/)
+	_, err := api.PutObject(&api.PutArgs{
+		BaseParams: bp, Bck: bck, ObjName: present, Reader: _mossBody(cos.KiB, 1), Size: cos.KiB,
+	})
+	tassert.CheckFatal(t, err)
+
+	smap := tools.GetClusterMap(t, bp.URL)
+	owner, err := smap.HrwObjName2T(meta.CloneBck(&bck), present)
+	tassert.CheckFatal(t, err)
+	for j := 0; ; j++ {
+		missing = fmt.Sprintf("missing-%d", j)
+		peer, err := smap.HrwObjName2T(meta.CloneBck(&bck), missing)
+		tassert.CheckFatal(t, err)
+		if peer.ID() != owner.ID() {
+			break
+		}
+	}
+
+	// colocation breaks ties in input order, assemble on the present object owner
+	req := &apc.MossReq{
+		In:         []apc.MossIn{{ObjName: present}, {ObjName: missing}},
+		Colocation: apc.ColocOne,
+	}
+	t.Run("multipart", func(t *testing.T) {
+		_, err := api.GetBatch(bp, bck, req, io.Discard)
+		tassert.Errorf(t, cmn.IsErrHTTPNotFound(err), "expected missing peer entry to fail, got %v", err)
+	})
+	t.Run("streaming", func(t *testing.T) {
+		req.StreamingGet = true
+		rc, _, err := api.GetBatchStream(bp, bck, req)
+		tassert.CheckFatal(t, err)
+		defer rc.Close()
+
+		tr := tar.NewReader(rc)
+		hdr, err := tr.Next()
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, hdr.Name == bck.Name+"/"+present, "unexpected first entry %q", hdr.Name)
+		n, err := io.Copy(io.Discard, tr)
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, n == cos.KiB, "expected complete present object, got %d bytes", n)
+		// failure must omit the missing entry, including its placeholder
+		hdr, err = tr.Next()
+		tassert.Errorf(t, err != nil, "expected stream to end before missing entry, got %v", hdr)
+	})
 }
