@@ -11,6 +11,7 @@ from aistore.sdk.const import (
     ACT_EVICT_OBJECTS,
     HTTP_METHOD_POST,
     ACT_PREFETCH_OBJECTS,
+    QPARAM_TID,
     ACT_COPY_OBJECTS,
     ACT_TRANSFORM_OBJECTS,
     ACT_ARCHIVE_OBJECTS,
@@ -19,7 +20,7 @@ from aistore.sdk.const import (
 from aistore.sdk.provider import Provider
 from aistore.sdk.etl.etl_const import DEFAULT_ETL_TIMEOUT
 from aistore.sdk.multiobj import ObjectGroup, ObjectRange
-from aistore.sdk.types import Namespace, BucketModel, ArchiveMultiObj
+from aistore.sdk.types import Namespace, BucketModel, ArchiveMultiObj, Snode
 from aistore.sdk.etl import ETLConfig
 
 
@@ -146,6 +147,30 @@ class TestObjectGroup(unittest.TestCase):
             blob_threshold=blob_threshold_value,
             num_workers=3,
         )
+
+    def test_prefetch_with_targets(self):
+        prefetch_expected_val = self.expected_value.copy()
+        prefetch_expected_val["coer"] = False
+        prefetch_expected_val["latest-ver"] = False
+        self.mock_bck.qparam = {"provider": "aws"}
+
+        resp = self.object_group.prefetch(
+            targets=["t1", Snode(daemon_id="t2", daemon_type="target")]
+        )
+
+        self.assertEqual(self.mock_response_text, resp)
+        self.mock_bck.make_request.assert_called_with(
+            HTTP_METHOD_POST,
+            ACT_PREFETCH_OBJECTS,
+            value=prefetch_expected_val,
+            params={"provider": "aws", QPARAM_TID: ["t1", "t2"]},
+        )
+
+    def test_prefetch_targets_str(self):
+        for targets in ("t1", ""):
+            with self.assertRaises(TypeError):
+                self.object_group.prefetch(targets=targets)
+        self.mock_bck.make_request.assert_not_called()
 
     def test_copy(self):
         self.expected_value["prefix"] = ""

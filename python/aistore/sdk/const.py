@@ -322,6 +322,10 @@ GB_COLOC = "coloc"
 # Colocation Query Param
 QPARAM_COLOC = "coloc"
 
+# Prefetch: targets to run on, one value per target: tid=t1&tid=t2
+# (apc.QparamTID, api/apc/query.go)
+QPARAM_TID = "tid"
+
 # MossResp structs
 GB_OUT = "out"
 GB_UUID = "uuid"

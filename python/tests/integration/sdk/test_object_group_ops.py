@@ -135,6 +135,41 @@ class TestObjectGroupOps(ParallelTestBase):
         not REMOTE_SET,
         "Remote bucket is not set",
     )
+    def test_prefetch_selected_targets(self):
+        targets = [
+            tsi
+            for tsi in self.client.cluster().get_info().tmap.values()
+            if not tsi.in_maint_or_decomm()
+        ]
+        if len(targets) < 2:
+            self.skipTest("Requires at least two active targets")
+        obj_group = self._create_small_objects()
+        self._evict_objects(obj_group)
+
+        # One target, given as a cluster-map node: only that target runs the job
+        # and caches the objects it owns
+        selected = targets[0]
+        job = self.client.job(obj_group.prefetch(targets=[selected]))
+        self.assertTrue(job.wait(timeout=TEST_TIMEOUT).success)
+        snaps = job.get_details().root
+        self.assertEqual([selected.daemon_id], list(snaps.keys()))
+        self.assertEqual(
+            snaps[selected.daemon_id][0].stats.objects, self._count_cached()
+        )
+
+        with self.assertRaises(AISError):
+            obj_group.prefetch(targets=["no-such-target"])
+
+    def _count_cached(self) -> int:
+        objects = self.bucket.list_objects(
+            props="name,cached", prefix=self.obj_prefix
+        ).entries
+        return sum(1 for obj in objects if obj.is_cached())
+
+    @unittest.skipIf(
+        not REMOTE_SET,
+        "Remote bucket is not set",
+    )
     def test_prefetch_blob_download(self):
         obj_group = self._create_blob_objects()
         self._evict_objects(obj_group)

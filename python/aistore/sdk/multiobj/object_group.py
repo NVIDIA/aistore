@@ -2,7 +2,7 @@
 # Copyright (c) 2023-2026, NVIDIA CORPORATION. All rights reserved.
 #
 import logging
-from typing import Dict, List, Iterable, Optional
+from typing import Dict, List, Iterable, Optional, Union
 
 from aistore.sdk.ais_source import AISSource
 from aistore.sdk.const import (
@@ -11,6 +11,7 @@ from aistore.sdk.const import (
     HTTP_METHOD_PUT,
     ACT_DELETE_OBJECTS,
     ACT_PREFETCH_OBJECTS,
+    QPARAM_TID,
     ACT_EVICT_OBJECTS,
     ACT_COPY_OBJECTS,
     ACT_TRANSFORM_OBJECTS,
@@ -28,6 +29,7 @@ from aistore.sdk.types import (
     TCBckMsg,
     ArchiveMultiObj,
     PrefetchMsg,
+    Snode,
 )
 from aistore.sdk.request_client import RequestClient
 from aistore.sdk.etl import ETLConfig
@@ -193,12 +195,14 @@ class ObjectGroup(AISSource):
             value=self._obj_collection.get_value(),
         ).text
 
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
     def prefetch(
         self,
         blob_threshold: Optional[int] = None,
         num_workers: Optional[int] = None,
         latest: bool = False,
         continue_on_error: bool = False,
+        targets: Optional[List[Union[str, Snode]]] = None,
     ):
         """
         Prefetches a list or range of objects in a bucket so that they are cached in AIS
@@ -213,8 +217,14 @@ class ObjectGroup(AISSource):
             num_workers (int, optional): Number of concurrent workers (readers). Defaults to the number of target
                 mountpaths if omitted or zero. A value of -1 indicates no workers at all (i.e., single-threaded
                 execution). Any positive value will be adjusted not to exceed the number of target CPUs.
+            targets (List[Union[str, Snode]], optional): Run only on these active targets, each fetching only
+                the objects it owns; objects owned by other targets are skipped. Accepts target IDs or
+                `Snode` entries of the cluster map. If omitted or empty, runs on all active targets.
+                The cluster rejects duplicates, unknown nodes, proxies, and targets in maintenance.
+                Requires AIStore v5.3 or later; older clusters ignore it and run on all targets.
 
         Raises:
+            TypeError: If targets is a single str and not a list
             aistore.sdk.errors.AISError: All other types of errors with AIStore
             requests.ConnectionError: Connection error
             requests.ConnectTimeout: Timed out connecting to AIStore
@@ -225,7 +235,26 @@ class ObjectGroup(AISSource):
         Returns:
             Job ID (as str) that can be used to check the status of the operation
 
+        Example:
+            # Prefetch a list of objects
+            job_id = bucket.objects(obj_names=["a.jpg", "b.jpg"]).prefetch()
+
+            # Prefetch a range of shards, combining options
+            shards = bucket.objects(obj_template="shard-{000..999}.tar")
+            job_id = shards.prefetch(latest=True, num_workers=16, blob_threshold=64 * 1024 * 1024)
+
+            # Prefetch the same range on two active targets only: cluster-map nodes or target IDs
+            smap = client.cluster().get_info()
+            targets = [tsi for tsi in smap.tmap.values() if not tsi.in_maint_or_decomm()]
+            job_id = shards.prefetch(targets=targets[:2])
+            job_id = shards.prefetch(targets=[tsi.daemon_id for tsi in targets[:2]])
+
+            # Wait for the job to finish
+            client.job(job_id).wait()
+
         """
+        if isinstance(targets, str):
+            raise TypeError("targets must be a list of target IDs or Snode entries")
         self.bck.verify_cloud_bucket()
 
         value = PrefetchMsg(
@@ -236,10 +265,18 @@ class ObjectGroup(AISSource):
             num_workers=num_workers,
         ).as_dict()
 
+        kwargs = {}
+        if targets:
+            target_ids = [
+                target.daemon_id if isinstance(target, Snode) else target
+                for target in targets
+            ]
+            kwargs["params"] = {**self.bck.qparam, QPARAM_TID: target_ids}
         return self.bck.make_request(
             HTTP_METHOD_POST,
             ACT_PREFETCH_OBJECTS,
             value=value,
+            **kwargs,
         ).text
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments

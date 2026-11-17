@@ -11,6 +11,10 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 - `Client.initialize()` and `version` to fetch and cache the AIS software version.
   Initialization is idempotent and runs automatically on context entry; the client
   is closed if initialization fails during context entry.
+- `ObjectGroup.prefetch()` accepts `targets` (target IDs or cluster-map `Snode`
+  entries) to run the job only on the selected targets, each fetching the objects
+  it owns. Requires AIStore v5.3 or later; an older cluster accepts the call but
+  ignores `targets` and runs the job on all targets.
 
 ### Fixed
 
