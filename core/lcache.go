@@ -318,7 +318,7 @@ func (lchk *lchk) housekeep(int64) time.Duration {
 	lchk.last.Store(mono.NanoTime())
 	go lchk.evict(lchk.timeout, now)
 
-	return hk.Jitter(lchk.timeout, now.UnixNano())
+	return cos.Jitter(lchk.timeout, now.UnixNano())
 }
 
 func (lchk *lchk) evict(timeout time.Duration, now time.Time) {

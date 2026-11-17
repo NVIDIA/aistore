@@ -170,10 +170,11 @@ func (bp *rlbackend) GetObj() (int, error) {
 
 - Each wait starts from the larger of the previous retry sleep and the current token-derived interval.
 - The error percentage determines the multiplier: **2x** at 30% or below, **4x** above 30%, and **8x** above 50%. With fewer than three recorded requests, the multiplier is 2x.
-- Each sleep is capped at the larger of **6 seconds** (`DfltRateMaxWait / DfltRateMaxRetries`) and the current token-derived interval. Retries remain bounded by `num_retries` (at most 10) and a one-minute retry-sleep budget.
+- Before jitter, each sleep is capped at the larger of **6 seconds** (`DfltRateMaxWait / DfltRateMaxRetries`) and the current token-derived interval. Retries remain bounded by `num_retries` (at most 10) and a one-minute retry-sleep budget.
+- Each wait applies approximately +/-3% jitter after capping, so it can slightly exceed that base cap, but never falls below the token-derived interval. The resulting sleep is carried forward to the next retry.
 - The previous sleep belongs only to the current operation. A later operation starts without that accumulated delay.
 
-For one isolated operation with a fresh limiter, a 10ms base interval, and every attempt returning `429`, ten retries sleep for **20ms, 40ms, 80ms, 160ms, 320ms, 640ms, 1.28s, 2.56s, 5.12s, 6s** (16.22s total). A successful retry or a non-rate-limit error ends the retry loop.
+Ignoring jitter, for one isolated operation with a fresh limiter, a 10ms base interval, and every attempt returning `429`, ten retries sleep for **20ms, 40ms, 80ms, 160ms, 320ms, 640ms, 1.28s, 2.56s, 5.12s, 6s** (16.22s total). A successful retry or a non-rate-limit error ends the retry loop.
 
 ---
 

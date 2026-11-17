@@ -460,11 +460,11 @@ func (n *notifs) housekeep(now int64) time.Duration {
 	n.fin.wunlockAll()
 
 	if n.nls.l.Load() == 0 {
-		return hk.Jitter(hk.Prune2mIval, now)
+		return cos.Jitter(hk.Prune2mIval, now)
 	}
 
 	if elapsed := mono.Since(now); elapsed > maxNotifsHK {
-		return hk.Jitter(hk.Prune2mIval>>1, now)
+		return cos.Jitter(hk.Prune2mIval>>1, now)
 	}
 
 	n.tempnl = n.tempnl[:0]
@@ -491,7 +491,7 @@ func (n *notifs) housekeep(now int64) time.Duration {
 	// cleanup temp cloned notifs
 	clear(n.tempnl)
 
-	return hk.Jitter(nexthk, now)
+	return cos.Jitter(nexthk, now)
 }
 
 // conditional: query targets iff they delayed updating

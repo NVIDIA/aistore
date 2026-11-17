@@ -212,9 +212,11 @@ func (arl *AdaptRateLim) Acquire() error {
 func (arl *AdaptRateLim) OnErr(sleep time.Duration) time.Duration {
 	arl.mu.Lock()
 	arl.stats.nerr++
-	sleep = max(sleep, arl.minBtwn)
-
+	minBtwn := arl.minBtwn
 	erate := arl._erate()
+	arl.mu.Unlock()
+
+	sleep = max(sleep, minBtwn)
 	switch {
 	case erate > erateHigh:
 		sleep <<= 3
@@ -223,10 +225,10 @@ func (arl *AdaptRateLim) OnErr(sleep time.Duration) time.Duration {
 	default:
 		sleep <<= 1
 	}
-	// cap each sleep at 6s, but never below the token-derived interval
-	sleep = min(sleep, max(DfltRateMaxWait/DfltRateMaxRetries, arl.minBtwn))
-	arl.mu.Unlock()
-	// TODO: support jitter.
+	// cap base sleep before jitter at 6s, but never below the token-derived interval
+	maxSleep := max(DfltRateMaxWait/DfltRateMaxRetries, minBtwn)
+	sleep = min(sleep, maxSleep)
+	sleep = max(Jitter(sleep, mono.NanoTime()), minBtwn)
 	time.Sleep(sleep)
 	return sleep
 }

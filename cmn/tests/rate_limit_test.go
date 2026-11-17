@@ -103,6 +103,28 @@ func TestAdaptRateLim(t *testing.T) {
 	}
 }
 
+func TestJitter(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		duration time.Duration
+		want     [8]time.Duration
+	}{
+		{name: "zero"},
+		{name: "20ms", duration: 20 * time.Millisecond,
+			want: [8]time.Duration{19375000, 19531250, 19687500, 19843750, 20000000, 20156250, 20312500, 20468750}},
+		{name: "6s", duration: 6 * time.Second,
+			want: [8]time.Duration{5812500000, 5859375000, 5906250000, 5953125000, 6000000000, 6046875000, 6093750000, 6140625000}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for slot, want := range tc.want {
+				now := int64(1024 + slot)
+				got := cos.Jitter(tc.duration, now)
+				tassert.Fatalf(t, got == want, "choice %d: got %v, want %v", slot, got, want)
+			}
+		})
+	}
+}
+
 func TestAdaptRateLimBackoff(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true})
 	for _, tc := range []struct {
@@ -133,8 +155,10 @@ func TestAdaptRateLimBackoff(t *testing.T) {
 			}
 			started := time.Now()
 			sleep := arl.OnErr(tc.previous)
-			tassert.Fatalf(t, sleep == tc.want && time.Since(started) >= sleep,
-				"backoff = %v, want %v; elapsed %v", sleep, tc.want, time.Since(started))
+			lower := tc.want - tc.want/32
+			upper := tc.want + tc.want/32
+			tassert.Fatalf(t, sleep >= lower && sleep <= upper && time.Since(started) >= sleep,
+				"backoff = %v, want [%v, %v]; elapsed %v", sleep, lower, upper, time.Since(started))
 		})
 	}
 }
@@ -145,17 +169,17 @@ func TestAdaptRateLimRetrySequence(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.CheckFatal(t, arl.Acquire())
 	var sleep time.Duration
-	for _, want := range []time.Duration{
-		20 * time.Millisecond, 40 * time.Millisecond, 80 * time.Millisecond, 160 * time.Millisecond,
-		320 * time.Millisecond, 640 * time.Millisecond, 1280 * time.Millisecond, 2560 * time.Millisecond,
-		5120 * time.Millisecond, 6 * time.Second,
-	} {
+	for range cos.DfltRateMaxRetries {
+		base := min(max(sleep, cos.DfltRateMinBtwn)<<1, cos.DfltRateMaxWait/cos.DfltRateMaxRetries)
 		sleep = arl.OnErr(sleep)
-		tassert.Fatalf(t, sleep == want, "backoff = %v, want %v", sleep, want)
+		lower := base - base/32
+		upper := base + base/32
+		tassert.Fatalf(t, sleep >= lower && sleep <= upper, "backoff = %v, want [%v, %v]", sleep, lower, upper)
 	}
 	tassert.CheckFatal(t, arl.Acquire())
 	sleep = arl.OnErr(0)
-	tassert.Fatalf(t, sleep == cos.DfltRateMinBtwn<<1,
+	base := cos.DfltRateMinBtwn << 1
+	tassert.Fatalf(t, sleep >= base-base/32 && sleep <= base+base/32,
 		"new operation reused the previous operation's wait: %v", sleep)
 }
 

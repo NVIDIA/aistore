@@ -1120,11 +1120,11 @@ func TestBackendRateLimitBackoffRemoteAIS(t *testing.T) {
 		},
 		{
 			name: "cold-get-recovers-from-429-and-clears-retry-delay", backendRateLimit: true,
-			remoteTokenInterval: 5 * time.Minute,
+			remoteTokenInterval: time.Minute,
 		},
 		{
 			name: "range-read-recovers-from-429-and-clears-retry-delay", backendRateLimit: true, rangeRead: true,
-			remoteTokenInterval: 5 * time.Minute,
+			remoteTokenInterval: time.Minute,
 		},
 		{
 			name: "one-retry-sleeps-20ms", backendRateLimit: true, numRetries: 1,
@@ -1224,8 +1224,13 @@ func TestBackendRateLimitBackoffRemoteAIS(t *testing.T) {
 				tassert.CheckFatal(t, statsErr)
 				retried := tools.GetNamedStatsVal(after, stats.RatelimGetRetryCount) - tools.GetNamedStatsVal(before, stats.RatelimGetRetryCount)
 				sleep := time.Duration(tools.GetNamedStatsVal(after, stats.RatelimGetRetryLatencyTotal) - tools.GetNamedStatsVal(before, stats.RatelimGetRetryLatencyTotal))
-				tassert.Fatalf(t, retried == 1 && sleep == tc.wantRetrySleep,
-					"expected one retried GET with %v total sleep, got %d with %v", tc.wantRetrySleep, retried, sleep)
+				tolerance := tc.wantRetrySleep * time.Duration(tc.numRetries) / 32
+				lower := tc.wantRetrySleep - tolerance
+				if tc.backendMaxTokens != 0 {
+					lower = tc.wantRetrySleep
+				}
+				tassert.Fatalf(t, retried == 1 && sleep >= lower && sleep <= tc.wantRetrySleep+tolerance,
+					"expected one retried GET with %v +/- %v total sleep, got %d with %v", tc.wantRetrySleep, tolerance, retried, sleep)
 			}
 			if tc.wantHTTPError == 0 && tc.wantErrorType == "" {
 				tassert.Fatalf(t, err == nil, "GET failed: %v", err)
@@ -1255,6 +1260,81 @@ func TestBackendRateLimitBackoffRemoteAIS(t *testing.T) {
 			} else {
 				tassert.Fatalf(t, herr.Status == tc.wantHTTPError, "expected HTTP %d, got %v", tc.wantHTTPError, err)
 			}
+		})
+	}
+}
+
+func TestBackendRateLimitJitterRemoteAIS(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true, Long: true})
+	bp := tools.BaseAPIParams(tools.RandomProxyURL(t))
+	remoteBP := tools.BaseAPIParams(tools.RemoteCluster.URL)
+	smap := tools.GetClusterMap(t, bp.URL)
+	smap.InitDigests()
+	remoteSmap, err := api.GetClusterMap(remoteBP)
+	tassert.CheckFatal(t, err)
+	for _, tc := range []struct {
+		name    string
+		minimum time.Duration
+		base    time.Duration
+	}{
+		{name: "jitter-around-6s-base-cap", minimum: 3 * time.Second, base: 6 * time.Second},
+		{name: "jitter-preserves-5.95s-minimum", minimum: 5950 * time.Millisecond, base: 6 * time.Second},
+		{name: "jitter-preserves-10s-minimum", minimum: 10 * time.Second, base: 10 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			remoteBck := cmn.Bck{Name: "backend-jitter-" + cos.GenTie(), Provider: apc.AIS}
+			tools.CreateBucket(t, remoteBP.URL, remoteBck, nil, true)
+			names, _, err := tools.PutRandObjs(tools.PutObjectsArgs{
+				Context: t.Context(), ProxyURL: remoteBP.URL, Bck: remoteBck,
+				ObjCnt: 1, ObjSize: cos.KiB, FixedSize: true, CksumType: cos.ChecksumOneXxh,
+			})
+			tassert.CheckFatal(t, err)
+			bck := remoteBck
+			bck.Ns.UUID = tools.RemoteCluster.UUID
+			_, err = api.HeadBucket(bp, bck, false)
+			tassert.CheckFatal(t, err)
+			t.Cleanup(func() { tassert.CheckError(t, api.EvictRemoteBucket(bp, bck, false)) })
+			tokensPerTarget := 2
+			interval := time.Duration(tokensPerTarget+tokensPerTarget>>2) * tc.minimum
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+				Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+					Enabled: apc.Ptr(true), MaxTokens: apc.Ptr(tokensPerTarget * smap.CountActiveTs()), Interval: apc.Ptr(cos.Duration(interval)),
+				}, NumRetries: apc.Ptr(1)},
+			}})
+			tassert.CheckFatal(t, err)
+			remoteTokens := 8 * remoteSmap.CountActivePs()
+			_, err = api.SetBucketProps(remoteBP, remoteBck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+				Frontend: &cmn.BurstyToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+					Enabled: apc.Ptr(true), MaxTokens: apc.Ptr(remoteTokens), Interval: apc.Ptr(cos.Duration(time.Hour)),
+				}, Size: apc.Ptr(1)},
+			}})
+			tassert.CheckFatal(t, err)
+			tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+				_, getErr := api.GetObject(remoteBP, remoteBck, names[0], nil)
+				if getErr == nil {
+					return false
+				}
+				tassert.Fatalf(t, api.HTTPStatus(getErr) == http.StatusTooManyRequests, "expected remote 429, got %v", getErr)
+				return true
+			}, tools.WaitRetryOpts{MaxRetries: remoteTokens + 1, Interval: time.Millisecond}))
+			owner, err := smap.HrwObjName2T(meta.CloneBck(&bck), names[0])
+			tassert.CheckFatal(t, err)
+			before, err := api.GetDaemonStats(bp, owner)
+			tassert.CheckFatal(t, err)
+			_, err = api.GetObject(bp, bck, names[0], &api.GetArgs{Context: t.Context()})
+			herr := cmn.AsErrHTTP(err)
+			tassert.Fatalf(t, herr != nil && herr.TypeCode == "ErrBackendRetry", "expected exhausted 429 retry, got %v", err)
+			after, err := api.GetDaemonStats(bp, owner)
+			tassert.CheckFatal(t, err)
+			retried := tools.GetNamedStatsVal(after, stats.RatelimGetRetryCount) - tools.GetNamedStatsVal(before, stats.RatelimGetRetryCount)
+			sleep := time.Duration(tools.GetNamedStatsVal(after, stats.RatelimGetRetryLatencyTotal) - tools.GetNamedStatsVal(before, stats.RatelimGetRetryLatencyTotal))
+			valid := false
+			for slot := range 8 {
+				valid = valid || sleep == max(tc.base+time.Duration(slot-4)*(tc.base>>7), tc.minimum)
+			}
+			tassert.Fatalf(t, retried == 1 && valid, "expected one jittered retry around %v with minimum %v, got %d with %v sleep",
+				tc.base, tc.minimum, retried, sleep)
+			tlog.Logfln("retry sleep %v", sleep)
 		})
 	}
 }

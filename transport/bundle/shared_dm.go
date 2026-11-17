@@ -242,14 +242,14 @@ func (sdm *sharedDM) housekeep(now int64) time.Duration {
 	sdm._stats()
 
 	if sdm.active() {
-		return hk.Jitter(sdmPruneIval, now)
+		return cos.Jitter(sdmPruneIval, now)
 	}
 	// tentatively (lock and check inside)
 	if err := sdm.Close(); err != nil {
 		if cmn.Rom.V(4, cos.ModTransport) {
 			nlog.Warningln(err)
 		}
-		return hk.Jitter(sdmPruneIval, now)
+		return cos.Jitter(sdmPruneIval, now)
 	}
 	return hk.UnregInterval
 }

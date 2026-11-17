@@ -22,7 +22,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/fs"
-	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
@@ -401,7 +400,7 @@ func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (eco
 		nctx    = cmn.WithNoRetry(ctx)
 	)
 	for retries = 1; retries < remPageRetriesMax; retries++ {
-		sleep = hk.Jitter(sleep+sleep/2, now+int64(sleep))
+		sleep = cos.Jitter(sleep+sleep/2, now+int64(sleep))
 		select {
 		case <-ctx.Done():
 			if err := r.parent.AbortErr(); err != nil {

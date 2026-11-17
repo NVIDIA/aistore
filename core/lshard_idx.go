@@ -546,7 +546,7 @@ func (c *sidx) housekeep(now int64) time.Duration {
 		c.evictAsync(grade)
 	}
 	c._stats(grade)
-	return hk.Jitter(load.Ival(g.pmm, grade), now)
+	return cos.Jitter(load.Ival(g.pmm, grade), now)
 }
 
 // verbose only; log when changed

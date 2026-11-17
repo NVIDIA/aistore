@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/atomic"
+	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
 func startHK(t *testing.T) {
@@ -157,7 +158,7 @@ func TestTimerExecution(t *testing.T) {
 				wg.Done()
 				return UnregInterval // Self-clean from inside runDue()
 			}
-			return Jitter(ival, now) // Exercise Jitter while re-arming
+			return cos.Jitter(ival, now) // Exercise Jitter while re-arming
 		}, ival)
 	}
 

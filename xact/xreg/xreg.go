@@ -462,7 +462,7 @@ func (r *registry) incFinished() { r.finDelta.Inc() }
 // prune stopping and finished entries from `active`; age out Brief history
 func (r *registry) hkPruneActive(now int64) time.Duration {
 	if r.finDelta.Swap(0) == 0 {
-		return hk.Jitter(hk.Prune2mIval, now)
+		return cos.Jitter(hk.Prune2mIval, now)
 	}
 	// the same knob that un-quiets logs extends brief history
 	age := hk.OldAgeXshort
@@ -498,7 +498,7 @@ func (r *registry) hkPruneActive(now int64) time.Duration {
 	if pending {
 		r.finDelta.Inc() // re-arm: not aged yet
 	}
-	return hk.Jitter(hk.Prune2mIval, now)
+	return cos.Jitter(hk.Prune2mIval, now)
 }
 
 // age out history at hk.OldAgeX while keeping at least `keepOldThreshold` entries
@@ -567,7 +567,7 @@ func (r *registry) hkDelOld(int64) time.Duration {
 	if ll == 0 {
 		return d // shrink-only pass
 	}
-	return hk.Jitter(d, now.UnixNano())
+	return cos.Jitter(d, now.UnixNano())
 }
 
 func (r *registry) renewByID(entry Renewable, bck *meta.Bck) (rns RenewRes) {

@@ -101,13 +101,6 @@ func UnregIf(name string, f HKCB) {
 	HK.enq(op{name: name, f: f, interval: UnregInterval})
 }
 
-// add +/-3% pseudo-random jitter to the housekeeping interval `d`
-func Jitter(d time.Duration, now int64) time.Duration {
-	step := int64(d >> 7)
-	n := (now & 0x7) - 4
-	return d + time.Duration(n*step)
-}
-
 ////////
 // hk //
 ////////

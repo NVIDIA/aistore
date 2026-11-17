@@ -12,7 +12,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
-	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/sys"
 )
 
@@ -123,7 +122,7 @@ func (r *MMSA) HKIval(pressure int) time.Duration {
 }
 
 func (r *MMSA) hkIval(pressure int, now int64) time.Duration {
-	return hk.Jitter(r.HKIval(pressure), now)
+	return cos.Jitter(r.HKIval(pressure), now)
 }
 
 // refresh and clone internal hits/idle stats

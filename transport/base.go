@@ -24,7 +24,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
-	"github.com/NVIDIA/aistore/hk"
 )
 
 // stream TCP/HTTP session: inactive <=> active transitions
@@ -435,7 +434,7 @@ func (r *rtry) sleep(err error) {
 	if r.cnt == 1 {
 		nlog.WarningDepth(1, "retry", r.sname, "[", err, r.cnt, r.total, "]")
 	} else {
-		d = hk.Jitter(r.nxtSleep, r.now+int64(r.total))
+		d = cos.Jitter(r.nxtSleep, r.now+int64(r.total))
 		runtime.Gosched()
 	}
 	time.Sleep(d)

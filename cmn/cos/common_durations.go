@@ -33,6 +33,13 @@ func ProbingFrequency(dur time.Duration) time.Duration {
 	return max(sleep, PollSleepShort)
 }
 
+// add +/-3% pseudo-random jitter to the interval
+func Jitter(duration time.Duration, now int64) time.Duration {
+	step := int64(duration >> 7)
+	offset := (now & 0x7) - 4
+	return duration + time.Duration(offset*step)
+}
+
 // constrain duration `d` to the closed interval [mind, maxd]
 // (see also: ClampInt)
 func ClampDuration(d, mind, maxd time.Duration) time.Duration {
