@@ -191,10 +191,15 @@ func TestPodDerivedRejoin(t *testing.T) {
 	checkRejoin(apc.Proxy, "ais-proxy-1", ports[7], ports[9], stopProxy, nil)
 }
 
-// pod-derived target restarts (SIGKILL) with its original mountpaths, one of which now stores a bad VMD copy:
-// - the target must derive the same ID, ignore the bad copy, and rejoin
-// - the bad copy must be replaced
 func TestPodDerivedRestartBadVMD(t *testing.T) {
+	testPodDerivedRestart(t, false /*missing*/)
+}
+
+func TestPodDerivedRestartMissingMountpath(t *testing.T) {
+	testPodDerivedRestart(t, true /*missing*/)
+}
+
+func testPodDerivedRestart(t *testing.T, missing bool) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
 
 	config := tools.GetClusterConfig(t)
@@ -241,6 +246,11 @@ func TestPodDerivedRestartBadVMD(t *testing.T) {
 			HostNet: cmn.LocalNetConfig{
 				Hostname: host, HostnameIntraControl: host, Port: public, PortIntraControl: control,
 			},
+		}
+		if missing && role == apc.Target {
+			// test_fspaths would recreate a missing path before identity selection
+			local.TestFSP = cmn.TestFSPConf{}
+			local.FSP.Paths = cos.StrKVs{mpaths[0]: "test", mpaths[1]: "test"}
 		}
 		cfg := *config
 		pid := tools.DeployNode(t, &meta.Snode{DaeType: role}, &cfg, local, append(args, "-daemon_id_source=k8s-pod")...)
@@ -294,15 +304,30 @@ func TestPodDerivedRestartBadVMD(t *testing.T) {
 	tlog.Logfln("%s is down, %s", old.StringEx(), vmd)
 
 	bad := filepath.Join(mpaths[1], fname.Vmd)
-	tassert.CheckFatal(t, cos.Stat(bad))
-	tlog.Logfln("Writing a bad VMD copy: %s", bad)
-	tassert.CheckFatal(t, os.WriteFile(bad, []byte("garbage"), 0o644))
+	var args []string
+	if missing {
+		tassert.CheckFatal(t, os.Rename(mpaths[1], mpaths[1]+".lost"))
+		args = []string{"-start_with_lost_mountpath"}
+	} else {
+		tassert.CheckFatal(t, cos.Stat(bad))
+		tlog.Logfln("Writing a bad VMD copy: %s", bad)
+		tassert.CheckFatal(t, os.WriteFile(bad, []byte("garbage"), 0o644))
+	}
 
-	start(apc.Target, "ais-target-0", ports[2], ports[3], targetFSP)
+	start(apc.Target, "ais-target-0", ports[2], ports[3], targetFSP, args...)
 	tlog.Logfln("Waiting for %s to restart and rejoin", old.StringEx())
 	err = ready(func(node *meta.Snode) bool { return node.ID() == old.ID() && !node.SameIncarnation(old) })
 	tassert.Fatalf(t, err == nil, "%s did not rejoin: %v", old.StringEx(), err)
 	tlog.Logfln("%s rejoined", target.StringEx())
+
+	if missing {
+		_, err := os.Stat(mpaths[1])
+		tassert.Fatalf(t, cos.IsNotExist(err), "missing path was recreated: %v", err)
+		vmd, err := volume.LoadVMDTest(old.ID(), mpaths[0])
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, vmd != nil, "surviving mountpath lost its VMD")
+		return
+	}
 
 	after, err := volume.LoadVMDTest(old.ID(), mpaths...)
 	tassert.CheckFatal(t, err)
@@ -311,6 +336,120 @@ func TestPodDerivedRestartBadVMD(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	tassert.Fatalf(t, repaired != nil && repaired.Version == after.Version, "%s: expected repaired VMD v%d, got %v", bad, after.Version, repaired)
 	tlog.Logfln("Bad copy replaced: %s", repaired)
+}
+
+// upgrade: pod-derived ID source enabled on a target with persisted (generated) ID
+// - persisted ID takes precedence; target rejoins with the same ID
+func TestPodDerivedPersistedPrecedence(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})
+
+	config := tools.GetClusterConfig(t)
+	config.Version, config.UUID = 0, ""
+	host, scheme := "127.0.0.1", "http"
+	if config.Net.UseIPv6 {
+		host = "::1"
+	}
+	if config.Net.HTTP.UseHTTPS {
+		scheme = "https"
+	}
+	// reserve distinct ports for the private cluster
+	var listeners [4]net.Listener
+	var ports [len(listeners)]int
+	for i := range listeners {
+		listener, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
+		tassert.CheckFatal(t, err)
+		t.Cleanup(func() { _ = listener.Close() })
+		listeners[i] = listener
+		ports[i] = listener.Addr().(*net.TCPAddr).Port
+	}
+	for _, listener := range listeners {
+		tassert.CheckFatal(t, listener.Close())
+	}
+	primaryURL := cmn.ProtoEndpoint(scheme, net.JoinHostPort(host, strconv.Itoa(ports[0])))
+	config.Proxy.PrimaryURL, config.Proxy.OriginalURL, config.Proxy.DiscoveryURL = primaryURL, primaryURL, primaryURL
+	t.Setenv(env.AisPrimaryEP, primaryURL)
+	t.Setenv(env.AisK8sNamespace, "ais-upgrade-test")
+	t.Setenv("AIS_DAEMON_ID", "")
+	t.Setenv("AIS_DAEMON_ID_SOURCE", "")
+
+	fspRoot := t.TempDir()
+	tassert.CheckFatal(t, os.Mkdir(filepath.Join(fspRoot, "mp1"), 0o755))
+	start := func(role, pod string, public, control int, fsp cmn.TestFSPConf, args ...string) func() {
+		t.Helper()
+		tlog.Logfln("Starting %s pod %s (public port %d, control port %d, args %v)", role, pod, public, control, args)
+		t.Setenv(env.AisK8sPod, pod)
+		local := &cmn.LocalConfig{
+			ConfigDir: t.TempDir(),
+			LogDir:    t.TempDir(),
+			TestFSP:   fsp,
+			HostNet: cmn.LocalNetConfig{
+				Hostname: host, HostnameIntraControl: host, Port: public, PortIntraControl: control,
+			},
+		}
+		cfg := *config
+		pid := tools.DeployNode(t, &meta.Snode{DaeType: role}, &cfg, local, args...)
+		stop := func() {
+			if pid != 0 {
+				tools.CleanupNode(t, pid)
+				pid = 0
+			}
+		}
+		t.Cleanup(stop)
+		return stop
+	}
+	proxyRoot := t.TempDir()
+	tassert.CheckFatal(t, os.Mkdir(filepath.Join(proxyRoot, "mp1"), 0o755))
+	start(apc.Proxy, "ais-proxy-0", ports[0], ports[1], cmn.TestFSPConf{Root: proxyRoot, Count: 1}, "-ntargets=1")
+
+	// 1. pre-upgrade: no ID source - generated and persisted
+	targetFSP := cmn.TestFSPConf{Root: fspRoot, Count: 1}
+	stop := start(apc.Target, "ais-target-0", ports[2], ports[3], targetFSP)
+
+	var (
+		bp      = tools.BaseAPIParams(primaryURL)
+		startup = tools.WaitRetryOpts{MaxRetries: 160, Interval: 250 * time.Millisecond}
+		target  *meta.Snode
+	)
+	ready := func(match func(*meta.Snode) bool) error {
+		return tools.WaitForCondition(func() bool {
+			smap, err := api.GetClusterMap(bp)
+			if err != nil {
+				return false
+			}
+			for _, node := range smap.Tmap {
+				if match(node) && api.GetProxyReadiness(tools.BaseAPIParams(node.PubNet.URL)) == nil {
+					target = node
+					return true
+				}
+			}
+			return false
+		}, startup)
+	}
+	tassert.CheckFatal(t, ready(func(*meta.Snode) bool { return true }))
+	old := target
+	tlog.Logfln("%s is ready (pre-upgrade)", old.StringEx())
+
+	stop()
+	tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+		return api.Health(tools.BaseAPIParams(old.PubNet.URL)) != nil
+	}, startup))
+
+	// 2. post-upgrade: same mountpaths, pod-derived ID source enabled
+	stop = start(apc.Target, "ais-target-0", ports[2], ports[3], targetFSP, "-daemon_id_source=k8s-pod")
+	err := ready(func(node *meta.Snode) bool { return node.ID() == old.ID() && !node.SameIncarnation(old) })
+	tassert.Fatalf(t, err == nil, "%s did not rejoin with its persisted ID: %v", old.StringEx(), err)
+	tlog.Logfln("%s rejoined with persisted ID", target.StringEx())
+
+	// 3. unused derivation settings (changed scope, missing pod metadata) must not block a subsequent restart
+	old = target
+	stop()
+	tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+		return api.Health(tools.BaseAPIParams(old.PubNet.URL)) != nil
+	}, startup))
+	t.Setenv(env.AisK8sNamespace, "")
+	start(apc.Target, "ais-target-0", ports[2], ports[3], targetFSP, "-daemon_id_source=k8s-pod:changed")
+	err = ready(func(node *meta.Snode) bool { return node.ID() == old.ID() && !node.SameIncarnation(old) })
+	tassert.Fatalf(t, err == nil, "%s did not ignore unused derivation settings: %v", old.StringEx(), err)
 }
 
 func TestSlowKeepaliveDuplicateID(t *testing.T) {

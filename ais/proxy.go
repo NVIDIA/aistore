@@ -110,13 +110,18 @@ func (p *proxy) iniPrimaryState() {
 func (p *proxy) init(config *cmn.Config) {
 	p.initPhase1(config)
 
-	// (a) derive node ID from K8s pod identity, when requested (see podDaemonID())
-	// (b) get node ID from command-line or env var (see envDaemonID())
-	// (c) hash K8s node name
-	// (d) load existing ID from the file stored under local config `confdir` (compare w/ target)
-	// (e) generate a new one (genDaemonID())
+	// (a) get node ID from command-line or env var (see envDaemonID()); outside K8s, must match (b) if exists
+	// (b) outside K8s: load existing ID from the file stored under local config `confdir` (compare w/ target)
+	// (c) K8s: retain legacy MY_NODE-derived ID when local Smap records it
+	// (d) derive node ID from K8s pod identity, when requested (see podDaemonID())
+	// (e) K8s: hash K8s node name
+	// (f) generate a new one (genDaemonID())
 	// - in that sequence
-	pid := initPID(config)
+	// - persist outside K8s only; K8s IDs get recomputed at every startup
+	pid, err := initPID(config)
+	if err != nil {
+		cos.ExitLog(err) // FATAL
+	}
 
 	keyPair := p.newKeyPair(pid, apc.Proxy)
 	p.si.Init(pid, apc.Proxy, keyPair.VerifyingKey)
@@ -152,53 +157,93 @@ func (p *proxy) init(config *cmn.Config) {
 	p.ec.init()
 }
 
-func initPID(config *cmn.Config) string {
-	if pid, _ := podDaemonID(apc.Proxy); pid != "" {
-		return pid
-	}
-
-	// 1. ID from env
-	if pid := envDaemonID(apc.Proxy); pid != "" {
-		if err := cos.ValidateDaemonID(pid); err != nil {
-			nlog.Errorln("Daemon ID loaded from env is invalid:", err)
+// select a proxy ID and persist it outside K8s
+func initPID(config *cmn.Config) (string, error) {
+	var (
+		pid    = envDaemonID(apc.Proxy)
+		src    string
+		loaded string
+	)
+	// K8s proxies have no pod <=> node affinity
+	if !k8s.IsK8s() {
+		var err error
+		if loaded, err = readProxyID(config); err != nil {
+			return "", err
 		}
-		nlog.Infoln("Initialized", meta.Pname(pid), "from env")
-		return pid
 	}
-
-	// 2. ID from Kubernetes Node name.
-	if k8s.IsK8s() {
-		pid := cos.HashK8sProxyID(k8s.NodeName)
-		nlog.Infoln("Initialized", meta.Pname(pid), "from K8s node name", k8s.NodeName)
-		return pid
+	if pid != "" {
+		if err := cos.ValidateDaemonID(pid); err != nil {
+			return "", fmt.Errorf("invalid proxy ID from command-line or env: %w", err)
+		}
+		if loaded != "" && loaded != pid {
+			return "", fmt.Errorf("proxy ID mismatch: %q (command-line or env) vs %q (%s)", pid, loaded, fname.ProxyID)
+		}
+		src = "command-line or env"
+	} else {
+		if loaded != "" {
+			nlog.Infof("Initialized %s from file %q", meta.Pname(loaded), fname.ProxyID)
+			return loaded, nil
+		}
+		if pid = _loadPre53PID(config); pid != "" {
+			src = "legacy K8s ID recorded in Smap"
+		} else if pid = podDaemonID(apc.Proxy); pid != "" {
+			src = "K8s pod identity"
+		} else if k8s.IsK8s() {
+			pid = cos.HashK8sProxyID(k8s.NodeName)
+			src = "K8s node name " + k8s.NodeName
+		} else {
+			pid = genDaemonID(apc.Proxy, config)
+			debug.AssertNoErr(cos.ValidateDaemonID(pid))
+			src = "randomly generated ID"
+		}
 	}
-
-	// 3. Read ID from persistent file.
-	if pid := readProxyID(config); pid != "" {
-		nlog.Infof("Initialized %s from file %q", meta.Pname(pid), fname.ProxyID)
-		return pid
+	if !k8s.IsK8s() {
+		if err := os.WriteFile(filepath.Join(config.ConfigDir, fname.ProxyID), []byte(pid), cos.PermRWR); err != nil {
+			return "", fmt.Errorf("failed to persist %s: %w", meta.Pname(pid), err)
+		}
 	}
-
-	// 4. initial deployment
-	pid := genDaemonID(apc.Proxy, config)
-	err := cos.ValidateDaemonID(pid)
-	debug.AssertNoErr(err)
-
-	// store ID on disk
-	if err := os.WriteFile(filepath.Join(config.ConfigDir, fname.ProxyID), []byte(pid), cos.PermRWR); err != nil {
-		cos.ExitLog("failed to write PID:", err, "[", meta.Pname(pid), "]")
-	}
-	nlog.Infoln("Initialized", meta.Pname(pid), "from randomly generated ID")
-	return pid
+	nlog.Infoln("Initialized", meta.Pname(pid), "from", src)
+	return pid, nil
 }
 
-func readProxyID(config *cmn.Config) (pid string) {
-	if b, err := os.ReadFile(filepath.Join(config.ConfigDir, fname.ProxyID)); err == nil {
-		pid = string(b)
-	} else if !cos.IsNotExist(err) {
-		nlog.Errorln(err)
+// K8s: return legacy MY_NODE-derived ID if local Smap records it (and does not record the pod-derived one)
+// - same as pre-5.3: proxy ID follows K8s node, whichever pod runs there (and at whichever IP)
+func _loadPre53PID(config *cmn.Config) string {
+	if !k8s.IsK8s() {
+		return ""
 	}
-	return pid
+	smap, err := _loadSmap(filepath.Join(config.ConfigDir, fname.Smap))
+	if err != nil {
+		return ""
+	}
+
+	source, _ := podIDSource()
+	pod, ns := os.Getenv(env.AisK8sPod), os.Getenv(env.AisK8sNamespace)
+	if scope, ok := parsePodIDSource(source); ok && pod != "" && ns != "" {
+		if smap.GetProxy(derivePodID(apc.Proxy, ns, pod, scope)) != nil {
+			return ""
+		}
+	}
+	if pid := cos.HashK8sProxyID(k8s.NodeName); smap.GetProxy(pid) != nil {
+		return pid
+	}
+	return ""
+}
+
+func readProxyID(config *cmn.Config) (string, error) {
+	fpath := filepath.Join(config.ConfigDir, fname.ProxyID)
+	b, err := os.ReadFile(fpath)
+	if err != nil {
+		if cos.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to read proxy ID %q: %w", fpath, err)
+	}
+	pid := string(b)
+	if err := cos.ValidateDaemonID(pid); err != nil {
+		return "", fmt.Errorf("invalid proxy ID in %q: %w", fpath, err)
+	}
+	return pid, nil
 }
 
 func (p *proxy) pready(smap *smapX, withRR bool /* also check readiness to rebalance */) error {

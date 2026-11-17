@@ -148,6 +148,9 @@ func initDaemon(version, buildTime string) cos.Runner {
 	if daemon.cli.role != apc.Proxy && daemon.cli.role != apc.Target {
 		cos.ExitLogf("invalid node's role %q, expecting %q or %q", daemon.cli.role, apc.Proxy, apc.Target)
 	}
+	if err := validatePodIDSource(); err != nil {
+		cos.ExitLog(err)
+	}
 	if daemon.cli.globalConfigPath == "" {
 		cos.ExitLogf(erfm, "config")
 	}
@@ -474,21 +477,33 @@ const (
 	daemonIDSourceFlag = "daemon_id_source"
 )
 
-func podDaemonID(daemonType string) (id, podRef string) {
-	source, option := daemon.cli.daemonIDSource, "-"+daemonIDSourceFlag
+func podIDSource() (source, option string) {
+	source, option = daemon.cli.daemonIDSource, "-"+daemonIDSourceFlag
 	if source == "" {
 		source, option = os.Getenv(daemonIDSourceEnv), daemonIDSourceEnv
 	}
+	return source, option
+}
+
+// validate syntax at startup, whether or not derivation is needed
+func validatePodIDSource() error {
+	source, option := podIDSource()
 	if source == "" {
-		return "", ""
+		return nil
+	}
+	if _, ok := parsePodIDSource(source); !ok {
+		return fmt.Errorf("invalid %s %q: expected k8s-pod or k8s-pod:<scope>", option, source)
+	}
+	return nil
+}
+
+func podDaemonID(daemonType string) (id string) {
+	source, option := podIDSource()
+	if source == "" {
+		return ""
 	}
 	scope, ok := parsePodIDSource(source)
-	if !ok {
-		cos.ExitLogf("invalid %s %q: expected k8s-pod or k8s-pod:<scope>", option, source)
-	}
-	if daemon.cli.daemonID != "" || os.Getenv(daemonIDEnv) != "" {
-		cos.ExitLogf("%s cannot be combined with -%s option or %s", option, daemonIDFlag, daemonIDEnv)
-	}
+	debug.Assert(ok, source) // see validatePodIDSource
 	pod, ns := os.Getenv(env.AisK8sPod), os.Getenv(env.AisK8sNamespace)
 	if pod == "" || ns == "" {
 		cos.ExitLogf("%s requires %s and %s", option, env.AisK8sPod, env.AisK8sNamespace)
@@ -499,9 +514,8 @@ func podDaemonID(daemonType string) (id, podRef string) {
 	if daemonType == apc.Target {
 		name = meta.Tname(id)
 	}
-	podRef = ns + "/" + pod
-	nlog.Infof("initialized %s from %s=%q (pod %s)", name, option, source, podRef)
-	return id, podRef
+	nlog.Infof("derived %s from %s=%q (pod %s/%s)", name, option, source, ns, pod)
+	return id
 }
 
 // parse "k8s-pod" or "k8s-pod:<scope>"

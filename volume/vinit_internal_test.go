@@ -8,6 +8,7 @@ package volume
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,6 +21,35 @@ import (
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/tassert"
 )
+
+func TestRecoverTID(t *testing.T) {
+	const (
+		id    = "target01"
+		child = "AIS_TEST_RECOVER_TID_PATH"
+	)
+	if path := os.Getenv(child); path != "" {
+		RecoverTID(id, cos.StrKVs{filepath.Join(path, "a"): "", filepath.Join(path, "b"): ""})
+		return
+	}
+	path := t.TempDir()
+	tid, recovered := RecoverTID(id, cos.StrKVs{path: ""})
+	tassert.Fatalf(t, tid == id && !recovered, "unexpected recovery without VMD")
+	tassert.CheckFatal(t, SaveVMDTest(path, id, 1, path))
+	for _, candidate := range []string{"", id, "target02"} {
+		tid, recovered = RecoverTID(candidate, cos.StrKVs{path: ""})
+		tassert.Fatalf(t, tid == id && recovered, "candidate %q: expected persisted ID, got %q, %t", candidate, tid, recovered)
+	}
+	root := t.TempDir()
+	a, b := mkMpath(t, root, "a"), mkMpath(t, root, "b")
+	tassert.CheckFatal(t, SaveVMDTest(a, id, 1, a))
+	tassert.CheckFatal(t, SaveVMDTest(b, "target02", 1, b))
+	// a copy matching the candidate must still participate in conflict detection
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRecoverTID$")
+	cmd.Env = append(os.Environ(), child+"="+root)
+	out, err := cmd.CombinedOutput()
+	tassert.Fatalf(t, err != nil && strings.Contains(string(out), "multiple conflicting target IDs"),
+		"conflicting VMD IDs were not rejected: %v, %s", err, out)
+}
 
 func TestRestoreDisabledMountpath(t *testing.T) {
 	const tid = "target01"
@@ -238,22 +268,6 @@ func TestVcopiesStale(t *testing.T) {
 
 	badOnlyUnused.load([]string{unused})
 	tassert.Fatalf(t, badOnlyUnused.stale(vmd, avail) == 0, "unexpected stale copies")
-}
-
-func TestOwnershipError(t *testing.T) {
-	const tid = "target01"
-	var (
-		owner = &fs.ErrStorageIntegrity{Code: fs.SieTargetIDMismatch, Msg: "test"}
-		other = &fs.ErrStorageIntegrity{Code: fs.SieNotEqVMD, Msg: "test"}
-		pod   = IniCtx{PodRef: "ais/ais-target-1"}
-	)
-	err := pod.ownershipError(owner, tid)
-	sie, ok := errors.AsType[*fs.ErrStorageIntegrity](err)
-	tassert.Fatalf(t, ok && sie.Code == fs.SieTargetIDMismatch, "lost the storage integrity error: %v", err)
-	tassert.Fatalf(t, strings.Contains(err.Error(), pod.PodRef) && strings.Contains(err.Error(), tid), "missing pod and target ID: %v", err)
-
-	tassert.Fatalf(t, pod.ownershipError(other, tid) == other, "unexpected wrap of %v", other)
-	tassert.Fatalf(t, IniCtx{}.ownershipError(owner, tid) == owner, "unexpected wrap without pod")
 }
 
 //

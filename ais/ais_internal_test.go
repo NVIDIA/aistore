@@ -36,7 +36,9 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/jsp"
+	"github.com/NVIDIA/aistore/cmn/k8s"
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -48,6 +50,7 @@ import (
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/volume"
 	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 
@@ -93,7 +96,7 @@ func TestMain(m *testing.M) {
 	// target
 	t := newTarget(co)
 	t.initPhase1(config)
-	tid, _, _ := initTID(config)
+	tid := initTID(config)
 	t.si.Init(tid, apc.Target, nil /*verifying key*/)
 
 	// NOTE: without this mountpath nothing downstream works - BMD cannot be
@@ -155,6 +158,17 @@ func TestPodIDSource(t *testing.T) {
 		tassert.Errorf(t, ok == test.ok, "%q: expected ok=%t, got %t", test.source, test.ok, ok)
 		tassert.Errorf(t, !ok || scope == test.scope, "%q: expected scope %q, got %q", test.source, test.scope, scope)
 	}
+
+	// startup validation, whether or not derivation is needed; command line takes precedence
+	initDaemonIDTest(t)
+	tassert.CheckFatal(t, validatePodIDSource())
+	t.Setenv(daemonIDSourceEnv, "k8s-pod:")
+	tassert.Fatalf(t, validatePodIDSource() != nil, "accepted invalid source")
+	daemon.cli.daemonIDSource = "k8s-pod:scope"
+	tassert.CheckFatal(t, validatePodIDSource())
+	t.Setenv(daemonIDSourceEnv, "k8s-pod")
+	daemon.cli.daemonIDSource = "k8s-node"
+	tassert.Fatalf(t, validatePodIDSource() != nil, "accepted invalid command-line source")
 }
 
 // ID source: environment, command line (takes precedence), and none
@@ -172,20 +186,273 @@ func TestPodDaemonID(t *testing.T) {
 	t.Setenv(env.AisK8sNamespace, ns)
 
 	t.Setenv(daemonIDSourceEnv, "")
-	id, podRef := podDaemonID(apc.Target)
-	tassert.Fatalf(t, id == "" && podRef == "", "expected no pod-derived ID, got %q (%q)", id, podRef)
+	id := podDaemonID(apc.Target)
+	tassert.Fatalf(t, id == "", "expected no pod-derived ID, got %q", id)
 
 	t.Setenv(daemonIDSourceEnv, "k8s-pod:"+scope)
-	id, podRef = podDaemonID(apc.Target)
+	id = podDaemonID(apc.Target)
 	tassert.Fatalf(t, id == derivePodID(apc.Target, ns, pod, scope), "unexpected ID %q", id)
-	tassert.Fatalf(t, podRef == ns+"/"+pod, "unexpected pod reference %q", podRef)
 
-	pid, _ := podDaemonID(apc.Proxy)
+	pid := podDaemonID(apc.Proxy)
 	tassert.Fatalf(t, pid == derivePodID(apc.Proxy, ns, pod, scope) && pid != id, "unexpected proxy ID %q", pid)
 
 	daemon.cli.daemonIDSource = "k8s-pod"
-	id, _ = podDaemonID(apc.Target)
+	id = podDaemonID(apc.Target)
 	tassert.Fatalf(t, id == derivePodID(apc.Target, ns, pod, ""), "command line must take precedence, got %q", id)
+}
+
+// isolate startup options and K8s detection
+func initDaemonIDTest(t *testing.T) {
+	t.Helper()
+	id, source, node := daemon.cli.daemonID, daemon.cli.daemonIDSource, k8s.NodeName
+	t.Cleanup(func() { daemon.cli.daemonID, daemon.cli.daemonIDSource, k8s.NodeName = id, source, node })
+	daemon.cli.daemonID, daemon.cli.daemonIDSource, k8s.NodeName = "", "", ""
+	t.Setenv(daemonIDEnv, "")
+	t.Setenv(daemonIDSourceEnv, "")
+	t.Setenv(env.AisK8sPod, "")
+	t.Setenv(env.AisK8sNamespace, "")
+}
+
+func TestProxyIDPersist(t *testing.T) {
+	initDaemonIDTest(t)
+	config := &cmn.Config{}
+	config.ConfigDir = t.TempDir()
+	stored := func() string {
+		t.Helper()
+		id, err := readProxyID(config)
+		tassert.CheckFatal(t, err)
+		return id
+	}
+
+	// generated, then loaded
+	pid, err := initPID(config)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, stored() == pid, "generated %q not persisted", pid)
+	again, err := initPID(config)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, again == pid, "expected persisted %q, got %q", pid, again)
+
+	// unused derivation is not evaluated, even with changed scope and missing pod metadata
+	t.Setenv(daemonIDSourceEnv, "k8s-pod:changed")
+	again, err = initPID(config)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, again == pid, "changed scope replaced persisted ID")
+	t.Setenv(daemonIDSourceEnv, "")
+
+	// -daemon_id/AIS_DAEMON_ID must match persisted ID
+	t.Setenv(daemonIDEnv, pid)
+	again, err = initPID(config)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, again == pid, "expected persisted %q, got %q", pid, again)
+	t.Setenv(daemonIDEnv, cos.GenDaemonID())
+	_, err = initPID(config)
+	tassert.Fatalf(t, err != nil, "accepted AIS_DAEMON_ID that differs from persisted %q", pid)
+	t.Setenv(daemonIDEnv, "")
+	daemon.cli.daemonID = cos.GenDaemonID()
+	_, err = initPID(config)
+	tassert.Fatalf(t, err != nil, "accepted -daemon_id that differs from persisted %q", pid)
+	daemon.cli.daemonID = ""
+	tassert.Fatalf(t, stored() == pid, "persisted %q changed to %q", pid, stored())
+
+	// nothing persisted: -daemon_id/AIS_DAEMON_ID gets persisted; command line wins over env
+	config.ConfigDir = t.TempDir()
+	t.Setenv(daemonIDEnv, cos.GenDaemonID())
+	daemon.cli.daemonID = cos.GenDaemonID()
+	again, err = initPID(config)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, again == daemon.cli.daemonID && stored() == again, "command-line ID not selected and persisted")
+	daemon.cli.daemonID = ""
+	t.Setenv(daemonIDEnv, "bad id")
+	_, err = initPID(config)
+	tassert.Fatalf(t, err != nil, "accepted invalid AIS_DAEMON_ID")
+	t.Setenv(daemonIDEnv, "")
+
+	// K8s: pod-derived ID is recomputed and not persisted; stale ID file is ignored
+	config.ConfigDir = t.TempDir()
+	tassert.CheckFatal(t, os.WriteFile(filepath.Join(config.ConfigDir, fname.ProxyID), []byte(pid), cos.PermRWR))
+	t.Setenv(daemonIDSourceEnv, "k8s-pod:scope-1")
+	t.Setenv(env.AisK8sPod, "ais-proxy-0")
+	t.Setenv(env.AisK8sNamespace, "ais")
+	derived := derivePodID(apc.Proxy, "ais", "ais-proxy-0", "scope-1")
+	for _, node := range []string{"node-a", "node-b"} {
+		k8s.NodeName = node
+		again, err = initPID(config)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, again == derived && stored() == pid, "node %s: expected derived %q (not persisted), got %q", node, derived, again)
+	}
+
+	// K8s: MY_NODE-derived ID is recomputed and not persisted
+	config.ConfigDir = t.TempDir()
+	t.Setenv(daemonIDSourceEnv, "")
+	again, err = initPID(config)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, again == cos.HashK8sProxyID(k8s.NodeName) && stored() == "", "unexpected K8s node-name ID %q", again)
+
+	// K8s, legacy: local Smap records MY_NODE-derived ID; derivation is not evaluated (missing pod metadata)
+	legacy := cos.HashK8sProxyID(k8s.NodeName)
+	psi := &meta.Snode{}
+	psi.Init(legacy, apc.Proxy, nil)
+	psi.PubNet.Init("http", "127.0.0.1", "8080")
+	psi.ControlNet.Init("http", "127.0.0.1", "9080")
+	psi.DataNet = psi.ControlNet
+	smap := newSmap()
+	smap.Version, smap.UUID, smap.Primary = 1, cos.GenUUID(), psi
+	smap.Pmap[legacy] = psi
+	tassert.CheckFatal(t, jsp.SaveMeta(filepath.Join(config.ConfigDir, fname.Smap), smap, nil))
+	t.Setenv(daemonIDSourceEnv, "k8s-pod:scope-1")
+	t.Setenv(env.AisK8sPod, "")
+	again, err = initPID(config)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, again == legacy && stored() == "", "legacy ID not preserved (or persisted)")
+	k8s.NodeName = ""
+	t.Setenv(daemonIDSourceEnv, "")
+
+	// invalid or unreadable persistence must not create a new identity
+	config.ConfigDir = t.TempDir()
+	fpath := filepath.Join(config.ConfigDir, fname.ProxyID)
+	for _, contents := range []string{"", "bad id"} {
+		tassert.CheckFatal(t, os.WriteFile(fpath, []byte(contents), cos.PermRWR))
+		_, err = initPID(config)
+		tassert.Fatalf(t, err != nil, "accepted corrupt proxy ID %q", contents)
+	}
+	tassert.CheckFatal(t, os.Remove(fpath))
+	tassert.CheckFatal(t, os.Mkdir(fpath, 0o755))
+	_, err = initPID(config)
+	tassert.Fatalf(t, err != nil, "ignored failure to read proxy ID")
+}
+
+// K8s upgrade: local Smap decides between legacy MY_NODE-derived and pod-derived IDs
+// - endpoints don't matter (e.g., new pod IP after upgrade)
+func TestProxyIDLegacySmap(t *testing.T) {
+	initDaemonIDTest(t)
+	t.Setenv(daemonIDSourceEnv, "k8s-pod:scope")
+	t.Setenv(env.AisK8sPod, "ais-proxy-0")
+	t.Setenv(env.AisK8sNamespace, "ais")
+	k8s.NodeName = "node-b"
+	derived := derivePodID(apc.Proxy, "ais", "ais-proxy-0", "scope")
+	legacy := cos.HashK8sProxyID(k8s.NodeName)
+	for _, tc := range []struct {
+		name             string
+		legacy, recorded bool
+		want             string
+	}{
+		{"legacy", true, false, legacy},
+		{"legacy-and-pod", true, true, derived},
+		{"pod", false, true, derived},
+		{"neither", false, false, derived},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &cmn.Config{}
+			config.ConfigDir = t.TempDir()
+			smap := newSmap()
+			smap.Version, smap.UUID = 1, cos.GenUUID()
+			for i, id := range []string{legacy, derived} {
+				if (i == 0 && !tc.legacy) || (i == 1 && !tc.recorded) {
+					continue
+				}
+				psi := &meta.Snode{}
+				psi.Init(id, apc.Proxy, nil)
+				psi.PubNet.Init("http", fmt.Sprintf("10.0.0.%d", i+1), "51080")
+				psi.ControlNet.Init("http", fmt.Sprintf("ais-proxy-%d.ais-proxy.ais.svc.cluster.local", i), "51082")
+				psi.DataNet = psi.ControlNet
+				smap.Pmap[id] = psi
+				smap.Primary = psi
+			}
+			tassert.CheckFatal(t, jsp.SaveMeta(filepath.Join(config.ConfigDir, fname.Smap), smap, nil))
+			pid, err := initPID(config)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, pid == tc.want, "expected %q, got %q", tc.want, pid)
+		})
+	}
+}
+
+func TestTargetIDPrecedence(t *testing.T) {
+	initDaemonIDTest(t)
+	const stored = "target01"
+	for _, source := range []string{"xattr", "vmd"} {
+		t.Run(source, func(t *testing.T) {
+			path := t.TempDir()
+			config := &cmn.Config{}
+			config.FSP.Paths = cos.StrKVs{path: ""}
+			if source == "xattr" {
+				mi, err := fs.NewMountpath(path, "")
+				tassert.CheckFatal(t, err)
+				tassert.CheckFatal(t, mi.SetDaemonIDXattr(stored))
+			} else {
+				tassert.CheckFatal(t, volume.SaveVMDTest(path, stored, 1, path))
+			}
+			t.Setenv(daemonIDSourceEnv, "k8s-pod:changed")
+			id := initTID(config)
+			tassert.Fatalf(t, id == stored, "lost persisted ID: %q", id)
+			t.Setenv(daemonIDEnv, "fromenv01")
+			id = initTID(config)
+			tassert.Fatalf(t, id == "fromenv01", "AIS_DAEMON_ID did not win: %q", id)
+			daemon.cli.daemonID = "fromcli01"
+			id = initTID(config)
+			tassert.Fatalf(t, id == "fromcli01", "-daemon_id did not win: %q", id)
+			daemon.cli.daemonID = ""
+		})
+	}
+	t.Setenv(daemonIDEnv, "")
+	t.Setenv(daemonIDSourceEnv, "k8s-pod:scope")
+	t.Setenv(env.AisK8sPod, "ais-target-0")
+	t.Setenv(env.AisK8sNamespace, "ais")
+	config := &cmn.Config{}
+	derived := derivePodID(apc.Target, "ais", "ais-target-0", "scope")
+	id := initTID(config)
+	tassert.Fatalf(t, id == derived, "unexpected derived ID %q", id)
+	t.Setenv(daemonIDSourceEnv, "")
+	id = initTID(config)
+	tassert.Fatalf(t, cos.ValidateDaemonID(id) == nil && id != derived, "unexpected generated ID %q", id)
+}
+
+func TestTargetIDMissingMountpaths(t *testing.T) {
+	initDaemonIDTest(t)
+	prev := daemon.cli.target.startWithLostMountpath
+	t.Cleanup(func() { daemon.cli.target.startWithLostMountpath = prev })
+	daemon.cli.target.startWithLostMountpath = true
+	t.Setenv(daemonIDSourceEnv, "k8s-pod:scope")
+	t.Setenv(env.AisK8sPod, "ais-target-0")
+	t.Setenv(env.AisK8sNamespace, "ais")
+	for _, source := range []string{"xattr", "vmd", "pod"} {
+		t.Run(source, func(t *testing.T) {
+			path := t.TempDir()
+			config := &cmn.Config{}
+			config.FSP.Paths = cos.StrKVs{path: "", filepath.Join(t.TempDir(), "missing"): ""}
+			want := "target01"
+			switch source {
+			case "xattr":
+				mi, err := fs.NewMountpath(path, "")
+				tassert.CheckFatal(t, err)
+				tassert.CheckFatal(t, mi.SetDaemonIDXattr(want))
+			case "vmd":
+				tassert.CheckFatal(t, volume.SaveVMDTest(path, want, 1, path))
+			default:
+				want = derivePodID(apc.Target, "ais", "ais-target-0", "scope")
+			}
+			_, err := fs.LoadNodeID(config.FSP.Paths, false)
+			tassert.Fatalf(t, cos.IsNotExist(err), "expected missing-path error, got %v", err)
+			id := initTID(config)
+			tassert.Fatalf(t, id == want, "unexpected identity: %q (expected %q)", id, want)
+		})
+	}
+
+	paths := cos.StrKVs{filepath.Join(t.TempDir(), "missing"): ""}
+	for _, id := range []string{"target01", "target02"} {
+		path := t.TempDir()
+		mi, err := fs.NewMountpath(path, "")
+		tassert.CheckFatal(t, err)
+		tassert.CheckFatal(t, mi.SetDaemonIDXattr(id))
+		paths[path] = ""
+	}
+	_, err := fs.LoadNodeID(paths, true)
+	_, ok := errors.AsType[*fs.ErrStorageIntegrity](err)
+	tassert.Fatalf(t, ok, "expected conflicting target IDs, got %v", err)
+
+	path := filepath.Join(t.TempDir(), "file")
+	tassert.CheckFatal(t, os.WriteFile(path, nil, cos.PermRWR))
+	_, err = fs.LoadNodeID(cos.StrKVs{filepath.Join(path, "child"): ""}, true)
+	tassert.Fatalf(t, err != nil && !cos.IsNotExist(err), "ignored a non-directory error: %v", err)
 }
 
 func TestPodDerivedID(t *testing.T) {

@@ -6,7 +6,6 @@
 package volume
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"path/filepath"
@@ -24,10 +23,8 @@ import (
 )
 
 type IniCtx struct {
-	PodRef        string // namespace/pod for a pod-derived target ID
-	UseLoopbacks  bool   // using loopback dev-s
-	IgnoreMissing bool   // ignore missing mountpath(s)
-	RandomTID     bool   // generated random target ID
+	UseLoopbacks  bool // using loopback dev-s
+	IgnoreMissing bool // ignore missing mountpath(s)
 }
 
 // bootstrap from local-config referenced locations
@@ -60,7 +57,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 	}
 	vc.load(cpaths)
 	if v, err := vc.newest(tid); err != nil {
-		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, ctx.ownershipError(err, tid), fspaths)
+		cos.ExitLogf("%s: %v (config-load-vmd, %v)", t, err, fspaths)
 	} else {
 		vmd = v
 	}
@@ -70,7 +67,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 	// (that in turn contains a copy of VMD, possibly outdated (but that's ok))
 	if vmd == nil {
 		if err := configInitMPI(tid, config, blockDevs); err != nil {
-			cos.ExitLogf("%s: %v (config-init-mpi, %v, %+v)", t, ctx.ownershipError(err, tid), fspaths, ctx)
+			cos.ExitLogf("%s: %v (config-init-mpi, %v, %+v)", t, err, fspaths, ctx)
 		}
 		nlog.Warningln(t.String()+":", "creating new VMD from", fspaths, "config")
 		if v, err := NewFromMPI(tid); err != nil {
@@ -83,7 +80,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 	}
 
 	if v, err := vc.discover(tid, vmd, checked); err != nil {
-		cos.ExitLogf("%s: %v (vmd-discovery, %+v, %s)", t, ctx.ownershipError(err, tid), ctx, vmd)
+		cos.ExitLogf("%s: %v (vmd-discovery, %+v, %s)", t, err, ctx, vmd)
 	} else {
 		vmd = v
 	}
@@ -91,7 +88,7 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 	vc.warnBad()
 
 	if err := initMPI(tid, config, blockDevs, vmd, checked, ctx.IgnoreMissing); err != nil {
-		cos.ExitLogf("%s: %v (vmd-init-mpi, %+v, %s)", t, ctx.ownershipError(err, tid), ctx, vmd)
+		cos.ExitLogf("%s: %v (vmd-init-mpi, %+v, %s)", t, err, ctx, vmd)
 	}
 
 	// rewrite outdated and bad copies (persist removes all copies from available mountpaths)
@@ -104,16 +101,6 @@ func Init(t core.Target, config *cmn.Config, ctx IniCtx) bool /*created*/ {
 
 	nlog.Infoln(vmd.String())
 	return false // created
-}
-
-func (ctx IniCtx) ownershipError(err error, tid string) error {
-	if ctx.PodRef != "" {
-		if sie, ok := errors.AsType[*fs.ErrStorageIntegrity](err); ok &&
-			(sie.Code == fs.SieMpathIDMismatch || sie.Code == fs.SieTargetIDMismatch) {
-			return fmt.Errorf("pod %q expects target ID %q: %w", ctx.PodRef, tid, err)
-		}
-	}
-	return err
 }
 
 // MPI => VMD
@@ -272,7 +259,8 @@ func (md *fsMpathMD) filesystem() cos.FS {
 }
 
 // pre-loading to try to recover lost tid
-func RecoverTID(generatedID string, configPaths cos.StrKVs) (tid string, recovered bool) {
+// - candidate: fallback if no VMD supplies an ID; may be empty
+func RecoverTID(candidate string, configPaths cos.StrKVs) (tid string, recovered bool) {
 	available := make(fs.MPI, len(configPaths)) // temp MPI to attempt loading
 	for mpath := range configPaths {
 		available[mpath] = nil
@@ -282,7 +270,7 @@ func RecoverTID(generatedID string, configPaths cos.StrKVs) (tid string, recover
 		if err := vmd.load(mpath); err != nil {
 			continue
 		}
-		debug.Assert(vmd.DaemonID != "" && vmd.DaemonID != generatedID)
+		debug.Assert(vmd.DaemonID != "")
 		if tid == "" {
 			nlog.Warningf("recovered lost target ID %q from mpath %s", vmd.DaemonID, mpath)
 			tid = vmd.DaemonID
@@ -292,7 +280,7 @@ func RecoverTID(generatedID string, configPaths cos.StrKVs) (tid string, recover
 		}
 	}
 	if tid == "" {
-		tid = generatedID
+		tid = candidate
 	}
 	return tid, recovered
 }

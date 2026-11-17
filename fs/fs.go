@@ -1218,27 +1218,24 @@ func RenameBucketDirs(bckFrom, bckTo *cmn.Bck) (err error) {
 	return
 }
 
-//
-// load node ID - traverses all mountpaths to load and validate
-//
-
-func LoadNodeID(mpaths cos.StrKVs) (mDaeID string, err error) {
+// load and validate mountpath IDs, optionally ignoring missing paths
+func LoadNodeID(mpaths cos.StrKVs, ignoreMissing bool) (mDaeID string, err error) {
 	for mp := range mpaths {
 		daeID, err := _loadXattrID(mp)
 		if err != nil {
+			if ignoreMissing && cos.IsNotExist(err) {
+				continue
+			}
 			return "", err
 		}
 		if daeID == "" {
 			continue
 		}
-		if mDaeID != "" {
-			if mDaeID != daeID {
-				return "", &ErrStorageIntegrity{
-					Code: SieMpathIDMismatch,
-					Msg:  fmt.Sprintf("target ID mismatch: %q vs %q(%q)", mDaeID, daeID, mp),
-				}
+		if mDaeID != "" && mDaeID != daeID {
+			return "", &ErrStorageIntegrity{
+				Code: SieMpathIDMismatch,
+				Msg:  fmt.Sprintf("target ID mismatch: %q vs %q(%q)", mDaeID, daeID, mp),
 			}
-			continue
 		}
 		mDaeID = daeID
 	}

@@ -298,21 +298,14 @@ func (t *target) aisbp() *backend.AISbp {
 func (t *target) init(config *cmn.Config) {
 	t.initPhase1(config)
 
-	// (a) derive node ID from K8s pod identity, when requested (see podDaemonID())
-	// (b) get node ID from command-line or env var (see envDaemonID())
-	// (c) load existing node ID (replicated xattr at roots of respective mountpaths)
+	// (a) get node ID from command-line or env var (see envDaemonID())
+	// (b) load existing node ID (mountpath xattrs, then VMD recovery)
+	// (c) derive node ID from K8s pod identity, when requested and nothing's persisted (see podDaemonID())
 	// (d) generate a new one (genDaemonID())
 	// - in that exact sequence
-	tid, podRef, generated := initTID(config)
-	if generated && len(config.FSP.Paths) > 0 {
-		var recovered bool
-		// in an unlikely event when losing all mountpath-stored IDs but still having a volume
-		tid, recovered = volume.RecoverTID(tid, config.FSP.Paths)
-		generated = !recovered
-
-		// TODO: generated == true will not sit well with loading a local copy of Smap
-		// later on during startup sequence - and not finding _this_ target in it
-	}
+	// - persisted ID takes precedence over (c) and (d)
+	tid := initTID(config)
+	// TODO: a generated ID will not sit well with loading a local Smap that lacks this target
 
 	keyPair := t.newKeyPair(tid, apc.Target)
 	t.si.Init(tid, apc.Target, keyPair.VerifyingKey)
@@ -329,10 +322,8 @@ func (t *target) init(config *cmn.Config) {
 
 	// new fs, check and add mountpaths
 	vini := volume.IniCtx{
-		PodRef:        podRef,
 		UseLoopbacks:  daemon.cli.target.useLoopbackDevs,
 		IgnoreMissing: daemon.cli.target.startWithLostMountpath,
-		RandomTID:     generated,
 	}
 	newVol := volume.Init(t, config, vini)
 	if err := fs.SetVolSizeMedia(); err != nil {
@@ -394,33 +385,34 @@ func (t *target) initHostIP(config *cmn.Config) {
 	}
 }
 
-func initTID(config *cmn.Config) (tid, podRef string, generated bool) {
-	if tid, podRef = podDaemonID(apc.Target); tid != "" {
-		return tid, podRef, false
-	}
+func initTID(config *cmn.Config) (tid string) {
 	if tid = envDaemonID(apc.Target); tid != "" {
 		if err := cos.ValidateDaemonID(tid); err != nil {
 			cos.ExitLog(err) // FATAL
 		}
 		nlog.Infoln("initialized tid", meta.Tname(tid), "from env")
-		return tid, "", false
+		return tid
 	}
 
 	var err error
-	tid, err = fs.LoadNodeID(config.FSP.Paths)
-	switch {
-	case err != nil:
+	tid, err = fs.LoadNodeID(config.FSP.Paths, daemon.cli.target.startWithLostMountpath)
+	if err != nil {
 		cos.ExitLog(err) // FATAL
-	case tid != "":
-		nlog.Infof("loaded tid %s", meta.Tname(tid))
-	default:
-		tid = genDaemonID(apc.Target, config)
-		err = cos.ValidateDaemonID(tid)
-		debug.AssertNoErr(err)
-		nlog.Infoln("generated tid", meta.Tname(tid))
-		generated = true
 	}
-	return tid, "", generated
+	if tid == "" {
+		tid, _ = volume.RecoverTID("", config.FSP.Paths)
+	}
+	if tid != "" {
+		nlog.Infof("loaded tid %s", meta.Tname(tid))
+		return tid
+	}
+	if tid = podDaemonID(apc.Target); tid != "" {
+		return tid
+	}
+	tid = genDaemonID(apc.Target, config)
+	debug.AssertNoErr(cos.ValidateDaemonID(tid))
+	nlog.Infoln("generated tid", meta.Tname(tid))
+	return tid
 }
 
 func regDiskMetrics(node *meta.Snode, tstats *stats.Trunner, mpi fs.MPI) {

@@ -97,8 +97,8 @@ $ AIS_PRIMARY_EP=ais-proxy-0.svc.cluster.local:51082
 
 | name | comment |
 | ---- | ------- |
-| `AIS_DAEMON_ID` | ais node ID |
-| `AIS_DAEMON_ID_SOURCE` | Derive node IDs from Kubernetes pod identity in new clusters. See [pod-derived IDs](/docs/lifecycle_node.md#pod-derived-ids) for `k8s-pod` and `k8s-pod:<scope>`. |
+| `AIS_DAEMON_ID` | Node ID; `-daemon_id` takes precedence. Must match a persisted ID, if any (target mountpaths; `.ais.proxy_id` outside Kubernetes). |
+| `AIS_DAEMON_ID_SOURCE` | Derive node IDs from Kubernetes pod identity when no ID is specified (`-daemon_id`/`AIS_DAEMON_ID`) or persisted. See [pod-derived IDs](/docs/lifecycle_node.md#pod-derived-ids) for `k8s-pod` and `k8s-pod:<scope>`. |
 | `AIS_HOST_IP` | node's public IPv4 |
 | `AIS_HOST_PORT` | node's public TCP port (and note the corresponding local config: "host_net.port") |
 
