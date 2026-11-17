@@ -1,7 +1,7 @@
 // Package cli provides easy-to-use commands to manage, monitor, and utilize AIS clusters.
 // This file handles CLI commands that pertain to AIS objects.
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package cli
 
@@ -25,6 +25,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/xact"
 
 	"github.com/urfave/cli"
 	"github.com/vbauerster/mpb/v4"
@@ -92,6 +93,7 @@ var (
 			nonRecursFlag,
 			inclSrcBucketNameFlag,
 			waitFlag,
+			waitJobXactFinishedFlag,
 		},
 		commandPut: append(
 			listRangeProgressWaitFlags,
@@ -261,39 +263,46 @@ func archMultiObjHandler(c *cli.Context) error {
 		}
 	}
 	// do
-	_, err := api.ArchiveMultiObj(apiBP, a.rsrc.bck, &msg)
+	xid, err := api.ArchiveMultiObj(apiBP, a.rsrc.bck, &msg)
 	if err != nil {
 		return V(err)
 	}
-	// check (NOTE: not waiting through idle-ness, not looking at multiple returned xids)
-	var (
-		total time.Duration
-		sleep = time.Second / 2
-		maxw  = 2 * time.Second
-	)
-	if flagIsSet(c, waitFlag) {
-		maxw = 8 * time.Second
+	if !flagIsSet(c, waitFlag) && !flagIsSet(c, waitJobXactFinishedFlag) {
+		actionDone(c, "Archiving "+_archWhat(&msg, &a)+". "+toMonitorMsg(c, xid, ""))
+		return nil
 	}
-	for total < maxw {
-		// TODO: replace with api.CheckPresence once implemented
-		hargs := api.HeadArgs{FltPresence: apc.FltPresentNoProps, Silent: true}
-		if _, errV := api.HeadObjectV2(apiBP, a.dst.bck, a.dst.oname, apc.GetPropsName, hargs); errV == nil {
-			goto ex
+
+	// wait for the job to become idle and report its errors
+	var timeout time.Duration
+	if flagIsSet(c, waitJobXactFinishedFlag) {
+		timeout = parseDurationFlag(c, waitJobXactFinishedFlag)
+	}
+	// TODO: the wait and the errors are per job which all requests with the same source and destination buckets share
+	if err := waitXact(&xact.ArgsMsg{ID: xid, Kind: apc.ActArchive, Timeout: timeout}); err != nil {
+		return err
+	}
+	// TODO: replace with api.CheckPresence once implemented
+	hargs := api.HeadArgs{FltPresence: apc.FltPresentNoProps, Silent: true}
+	if _, err := api.HeadObjectV2(apiBP, a.dst.bck, a.dst.oname, apc.GetPropsName, hargs); err != nil {
+		if !cmn.IsErrHTTPNotFound(err) {
+			return V(err)
 		}
-		time.Sleep(sleep)
-		total += sleep
+		return fmt.Errorf("%s: not found (%s is idle with no errors)", a.dest(), xact.Cname(apc.ActArchive, xid))
 	}
-ex:
 	_archDone(c, &msg, &a)
 	return nil
 }
 
-func _archDone(c *cli.Context, msg *cmn.ArchiveBckMsg, a *archbck) {
+func _archWhat(msg *cmn.ArchiveBckMsg, a *archbck) string {
 	what := msg.ListRange.Template
 	if msg.ListRange.IsList() {
 		what = strings.Join(msg.ListRange.ObjNames, ", ")
 	}
-	fmt.Fprintf(c.App.Writer, "Archived %s/%s => %s\n", a.rsrc.bck.String(), what, a.dest())
+	return a.rsrc.bck.String() + "/" + what + " => " + a.dest()
+}
+
+func _archDone(c *cli.Context, msg *cmn.ArchiveBckMsg, a *archbck) {
+	actionDone(c, "Archived "+_archWhat(msg, a))
 }
 
 func putApndArchHandler(c *cli.Context) error {

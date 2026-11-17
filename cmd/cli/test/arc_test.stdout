@@ -6,8 +6,10 @@
 
 ^PUT.*=> ais://$BUCKET_1/obj_3.txt$
 
-^Archiv.*$
-^Archiv.*$
+Archived ais://$BUCKET_1/obj_{1..3}.txt => ais://$BUCKET_2/tmpl.tar
+Archived ais://$BUCKET_1/obj_1.txt, obj_2.txt, obj_3.txt => ais://$BUCKET_2/list.tar
+Archived ais://$BUCKET_1/obj_1.txt => ais://$BUCKET_2/timeout.tar
+^Archiving ais://$BUCKET_1/obj_1.txt, obj_2.txt => ais://$BUCKET_2/nowait.tar. To monitor the progress, run 'ais show job .*'$
 ^APPEND.*ais://$BUCKET_2/tmpl.tar as "fourth.txt"$
 
 5

@@ -318,6 +318,8 @@ OPTIONS:
               and similarly, when specifying files and directories:
               --template '/home/dir/subdir/'
               --template "/abc/prefix-{0010..9999..2}-suffix"
+   timeout    Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+              valid time units: ns, us (or µs), ms, s (default), m, h
    wait       Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
    help, h    Show help
 
@@ -409,14 +411,15 @@ g.tar
 - `--dry-run`: Preview the results without executing
 - `--include-src-bck`: Prefix archived file names with the source bucket name
 - `--skip-lookup`: Skip checking bucket existence for better performance
-- `--wait`: Wait for the asynchronous operation to complete
+- `--timeout`: Maximum time to wait for the operation to complete
+- `--wait`: Wait for the asynchronous operation to complete and report its errors
 
 ### Complete Examples
 
 **1**. Archive objects with a specific prefix, non-recursively:
 
 ```console
-$ ais archive bucket s3://src-bck/aaa/ ais://dst/example.tar --nr
+$ ais archive bucket s3://src-bck/aaa/ ais://dst/example.tar --nr --wait
 Archived s3://src-bck/aaa/ => ais://dst/example.tar
 
 $ ais ls ais://dst/example.tar --archive
@@ -433,8 +436,8 @@ example.tar			  106.00KiB
 **2**. Archive objects using a template range:
 
 ```console
-$ ais archive bucket ais://src ais://dst/range.tar --template "obj-{0..9}"
-Archiving "ais://dst/range.tar" ...
+$ ais archive bucket ais://src ais://dst/range.tar --template "obj-{0..9}" --wait
+Archived ais://src/obj-{0..9} => ais://dst/range.tar
 
 $ ais archive ls ais://dst/range.tar
 
@@ -449,37 +452,36 @@ range.tar                92.60KiB
 **3**. Incrementally append to an existing archive:
 
 ```console
-$ ais archive bucket ais://bck/incremental.tar --template "obj{1..3}"
-Archived "ais://bck/incremental.tar" ...
+$ ais archive bucket ais://bck ais://bck/incremental.tar --template "obj{1..3}" --wait
+Archived ais://bck/obj{1..3} => ais://bck/incremental.tar
 
-$ ais archive bucket ais://bck/incremental.tar --template "obj{4..5}" --append
-Archived "ais://bck/incremental.tar"
+$ ais archive bucket ais://bck ais://bck/incremental.tar --template "obj{4..5}" --append-or-put --wait
+Archived ais://bck/obj{4..5} => ais://bck/incremental.tar
 ```
 
 **4**. Archive a list of objects from a given bucket:
 
 ```console
-$ ais archive bucket ais://bck/arch.tar --list obj1,obj2
-Archiving "ais://bck/arch.tar" ...
+$ ais archive bucket ais://bck ais://bck/arch.tar --list obj1,obj2
+Archiving ais://bck/obj1, obj2 => ais://bck/arch.tar. To monitor the progress, run 'ais show job <JOB_ID>'
 ```
 
-Resulting `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bck/obj2`.
+When the job finishes, `ais://bck/arch.tar` contains objects `ais://bck/obj1` and `ais://bck/obj2`.
 
 **5**. Archive objects from a different bucket, use template (range):
 
 ```console
 $ ais archive bucket ais://src ais://dst/arch.tar --template "obj-{0..9}"
-
-Archiving "ais://dst/arch.tar" ...
+Archiving ais://src/obj-{0..9} => ais://dst/arch.tar. To monitor the progress, run 'ais show job <JOB_ID>'
 ```
 
-`ais://dst/arch.tar` now contains 10 objects from bucket `ais://src`: `ais://src/obj-0`, `ais://src/obj-1` ... `ais://src/obj-9`.
+When the job finishes, `ais://dst/arch.tar` contains 10 objects from bucket `ais://src`: `ais://src/obj-0`, `ais://src/obj-1` ... `ais://src/obj-9`.
 
 **6**. Archive 3 objects and then append 2 more:
 
 ```console
-$ ais archive bucket ais://bck/arch1.tar --template "obj{1..3}"
-Archived "ais://bck/arch1.tar" ...
+$ ais archive bucket ais://bck ais://bck/arch1.tar --template "obj{1..3}" --wait
+Archived ais://bck/obj{1..3} => ais://bck/arch1.tar
 $ ais archive ls ais://bck/arch1.tar
 NAME                     SIZE
 arch1.tar                31.00KiB
@@ -487,8 +489,8 @@ arch1.tar                31.00KiB
     arch1.tar/obj2       9.26KiB
     arch1.tar/obj3       9.26KiB
 
-$ ais archive bucket ais://bck/arch1.tar --template "obj{4..5}" --append
-Archived "ais://bck/arch1.tar"
+$ ais archive bucket ais://bck ais://bck/arch1.tar --template "obj{4..5}" --append-or-put --wait
+Archived ais://bck/obj{4..5} => ais://bck/arch1.tar
 
 $ ais archive ls ais://bck/arch1.tar
 NAME                     SIZE

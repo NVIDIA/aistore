@@ -1894,6 +1894,8 @@ OPTIONS:
               and similarly, when specifying files and directories:
               --template '/home/dir/subdir/'
               --template "/abc/prefix-{0010..9999..2}-suffix"
+   timeout    Maximum time to wait for a job to finish; if omitted: wait forever or until Ctrl-C;
+              valid time units: ns, us (or µs), ms, s (default), m, h
    wait       Wait for an asynchronous operation to finish (optionally, use '--timeout' to limit the waiting time)
    help, h    Show help
 ```

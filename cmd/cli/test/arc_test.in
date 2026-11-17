@@ -9,6 +9,9 @@ ais object put $OBJECT_1.txt ais://$BUCKET_1/obj_3.txt
 
 ais archive bucket ais://$BUCKET_1 ais://$BUCKET_2/tmpl.tar --template="obj_{1..3}.txt" --wait
 ais archive bucket ais://$BUCKET_1 ais://$BUCKET_2/list.tar --list="obj_1.txt,obj_2.txt,obj_3.txt" --wait
+ais archive bucket ais://$BUCKET_1 ais://$BUCKET_2/timeout.tar --list="obj_1.txt" --timeout 1m
+ais archive bucket ais://$BUCKET_1 ais://$BUCKET_2/nowait.tar --list="obj_1.txt,obj_2.txt"
+ais archive bucket ais://$BUCKET_2 ais://$BUCKET_1/missing.tar --list="nonexistent.txt" --wait // FAIL "finished with errors"
 
 ais archive put $OBJECT_1.txt ais://$BUCKET_2/tmpl.tar -archpath=fourth.txt --append
 

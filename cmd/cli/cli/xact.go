@@ -116,6 +116,7 @@ func checkXactErrs(xargs *xact.ArgsMsg, waitErr error) error {
 		// cannot reliably attribute errors without the job ID
 		return nil
 	}
+	xargs.OnlyRunning = false // (the idle wait sets it) include the job that finished or aborted
 	xs, err := api.QueryXactionSnaps(apiBP, xargs)
 	if err != nil {
 		return V(err)
