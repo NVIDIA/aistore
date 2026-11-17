@@ -935,12 +935,13 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	if err = jsoniter.Unmarshal(data, &t); err != nil {
 		return
 	}
+	// initialize non-serialized state before decoding the listener
 	if dload.IsType(t.Type) {
-		n.nl = &dload.NotifDownloadListerner{}
+		n.nl = &dload.NotifDownloadListerner{ListenerBase: *nl.NewNLB("", t.Type, "", nil, 0)}
 	} else {
-		n.nl = &xact.NotifXactListener{}
+		n.nl = &xact.NotifXactListener{ListenerBase: *nl.NewNLB("", t.Type, "", nil, 0)}
 	}
-	return jsoniter.Unmarshal(t.NL, &n.nl)
+	return jsoniter.Unmarshal(t.NL, n.nl)
 }
 
 //

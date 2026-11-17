@@ -41,11 +41,14 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/core/mock"
+	"github.com/NVIDIA/aistore/ext/dload"
 	"github.com/NVIDIA/aistore/ext/etl"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
+	"github.com/NVIDIA/aistore/nl"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 
 	jsoniter "github.com/json-iterator/go"
@@ -1318,4 +1321,28 @@ func checkHostnameErr(t *testing.T, err error) {
 	t.Helper()
 	var herr x509.HostnameError
 	tassert.Fatalf(t, errors.As(err, &herr), "expected hostname error, got %v", err)
+}
+
+func TestNotifListenMsgErrors(t *testing.T) {
+	for _, kind := range []string{apc.ActPrefetchObjects, string(dload.TypeSingle)} {
+		t.Run(kind, func(t *testing.T) {
+			smap := &meta.Smap{}
+			var listener nl.Listener
+			if dload.IsType(kind) {
+				listener = dload.NewDownloadNL(cos.GenUUID(), kind, smap, 0)
+			} else {
+				listener = xact.NewXactNL(cos.GenUUID(), kind, smap, nil)
+			}
+			data, err := jsoniter.Marshal(newNLMsg(listener))
+			tassert.CheckFatal(t, err)
+			var decoded notifListenMsg
+			tassert.CheckFatal(t, jsoniter.Unmarshal(data, &decoded))
+			tassert.Fatalf(t, decoded.nl.UUID() == listener.UUID() && decoded.nl.Kind() == kind, "listener changed during transfer")
+			cause := errors.New("injected LIST error")
+			decoded.nl.AddErr(cause)
+			got := decoded.nl.Err()
+			tassert.Fatalf(t, decoded.nl.ErrCnt() == 1 && got != nil && strings.Contains(got.Error(), cause.Error()),
+				"transferred listener dropped error: count=%d, err=%v", decoded.nl.ErrCnt(), got)
+		})
+	}
 }

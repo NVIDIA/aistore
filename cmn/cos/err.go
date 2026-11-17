@@ -173,6 +173,7 @@ func NewErrs(maxErrs ...int) Errs {
 
 func (e *Errs) Add(err error) {
 	debug.Assert(err != nil)
+	debug.Assert(e.cap > 0, "use cos.NewErrs")
 	e.mu.Lock()
 	// first, check for duplication
 	for _, added := range e.errs {
