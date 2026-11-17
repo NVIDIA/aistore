@@ -21,3 +21,5 @@ nested/deep/file.txt
 ^PREFETCH ais://@remais/.*$
 ^prefetch-objects\[.*\]: \[single_obj\.txt\] prefetch from ais://@remais/.* \.\.\.$
 Done.
+^prefetch-objects\[.*\]: prefetch "test_prefix_" from ais://@remais/.* \.\.\.$
+Done.

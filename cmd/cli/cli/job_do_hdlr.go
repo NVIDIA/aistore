@@ -39,7 +39,8 @@ const prefetchUsage = "Prefetch one remote bucket, multiple remote buckets, or\n
 	indent1 + "\t- 'prefetch gs://abc --template images/'\t- same as above;\n" +
 	indent1 + "\t- 'prefetch gs://abc/images/'\t- same as above;\n" +
 	indent1 + "\t- 'prefetch gs://abc --template \"shard-{0000..9999}.tar.lz4\"'\t- prefetch the matching range (prefix + brace expansion);\n" +
-	indent1 + "\t- 'prefetch \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes)"
+	indent1 + "\t- 'prefetch \"gs://abc/shard-{0000..9999}.tar.lz4\"'\t- same as above (notice double quotes);\n" +
+	indent1 + "\t- 'prefetch gs://abc --targets t[abc],t[xyz]'\t- prefetch only the objects that the two specified targets own;"
 
 const blobDownloadUsage = "Download a large object or multiple objects from remote storage, e.g.:\n" +
 	indent1 + "\t- 'blob-download s3://ab/largefile --chunk-size=2mb --progress'\t- download one blob at a given chunk size\n" +
@@ -156,6 +157,7 @@ var (
 			yesFlag,
 			numWorkersFlag,
 			dontHeadRemoteFlag,
+			targetsFlag,
 		),
 		cmdBlobDownload: {
 			refreshFlag,
@@ -198,7 +200,7 @@ var (
 		ArgsUsage:    bucketObjectOrTemplateMultiArg,
 		Flags:        sortFlags(startSpecialFlags[commandPrefetch]),
 		Action:       startPrefetchHandler,
-		BashComplete: bucketCompletions(bcmplop{multiple: true}),
+		BashComplete: prefetchCompletions,
 	}
 	blobDownloadCmd = cli.Command{
 		Name:         cmdBlobDownload,

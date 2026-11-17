@@ -663,7 +663,10 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 		if err := ensureRemoteProvider(lr.bck); err != nil {
 			return "", "", "", err
 		}
-		var msg apc.PrefetchMsg
+		var (
+			msg  apc.PrefetchMsg
+			tids []string
+		)
 		{
 			msg.ObjNames = fileList
 			msg.Template = lr.tmplObjs
@@ -687,8 +690,25 @@ func (lr *lrCtx) _do(c *cli.Context, fileList []string) (xid, kind, action strin
 			if flagIsSet(c, numWorkersFlag) {
 				msg.NumWorkers = parseIntFlag(c, numWorkersFlag)
 			}
+			if flagIsSet(c, targetsFlag) {
+				tnames := splitCsv(parseStrFlag(c, targetsFlag))
+				tids = make([]string, 0, len(tnames))
+				for _, tname := range tnames {
+					if tname == "" {
+						return "", "", "", fmt.Errorf("%s: target name cannot be empty", qflprn(targetsFlag))
+					}
+					tsi, sname, err := getNode(c, tname)
+					if err != nil {
+						return "", "", "", err
+					}
+					if tsi.IsProxy() {
+						return "", "", "", fmt.Errorf("%s: %s is a proxy (expecting target)", qflprn(targetsFlag), sname)
+					}
+					tids = append(tids, tsi.ID())
+				}
+			}
 		}
-		xid, err = api.Prefetch(apiBP, lr.bck, &msg)
+		xid, err = api.Prefetch(apiBP, lr.bck, &msg, tids...)
 		kind = apc.ActPrefetchObjects
 		action = "prefetch"
 	case commandEvict:

@@ -98,5 +98,11 @@ ais prefetch ais://@remais/$BUCKET/single_obj.txt --wait
 # Prefetch nonexistent objects with --wait: the job finishes with errors
 ais prefetch ais://@remais/$BUCKET --list "no-such-1,no-such-2" --wait // FAIL "finished with errors"
 
+# Batch 5: Test target selection
+# Prefetch on a single selected target
+ais prefetch ais://@remais/$BUCKET --prefix test_prefix_ --targets $RANDOM_TARGET --wait
+# Reject a node that is not in the cluster
+ais prefetch ais://@remais/$BUCKET/single_obj.txt --targets no-such-target // FAIL "does not exist"
+
 # Clean up remote bucket
 ais bucket rm --yes ais://@remais/$BUCKET // IGNORE

@@ -1085,6 +1085,13 @@ var (
 	overwriteFlag = cli.BoolFlag{Name: "overwrite-dst,o", Usage: "Overwrite destination, if exists"}
 	deleteSrcFlag = cli.BoolFlag{Name: "delete-src", Usage: "Delete source files after successful processing"}
 	targetIDFlag  = cli.StringFlag{Name: "target-id", Usage: "AIS target designated to carry out the entire operation"}
+	targetsFlag   = cli.StringFlag{
+		Name: "targets",
+		Usage: "Comma-separated list of targets to run prefetch on (" + tabtab + ");\n" +
+			indent4 + "\teach selected target fetches only the objects it owns; when omitted, prefetch runs on all targets, e.g.:\n" +
+			indent4 + "\t--targets t[abc]\n" +
+			indent4 + "\t--targets 't[abc],t[xyz]'",
+	}
 
 	notFshareFlag = cli.BoolFlag{
 		Name: "not-file-share",

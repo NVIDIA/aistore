@@ -282,7 +282,7 @@ var (
 		ArgsUsage:    bucketObjectOrTemplateMultiArg,
 		Flags:        sortFlags(startSpecialFlags[commandPrefetch]),
 		Action:       startPrefetchHandler,
-		BashComplete: bucketCompletions(bcmplop{multiple: true}),
+		BashComplete: prefetchCompletions,
 	}
 
 	objectCmdRemove = cli.Command{

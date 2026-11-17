@@ -6,6 +6,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -276,6 +277,16 @@ func placementWeightsCompletions(c *cli.Context) {
 			fmt.Println(meta.Tname(tid))
 		}
 	}
+}
+
+// suggest targets when completing the '--targets' value; otherwise, buckets
+// (the shell omits the word being completed: the flag is the last one before the completion request)
+func prefetchCompletions(c *cli.Context) {
+	if l := len(os.Args); l > 2 && os.Args[l-2] == flprn(targetsFlag) {
+		suggestTargets(c)
+		return
+	}
+	bucketCompletions(bcmplop{multiple: true})(c)
 }
 
 func suggestAllNodesMulti(c *cli.Context) { suggestNodeMulti(c, allNodes, false /*inMaint*/) }
