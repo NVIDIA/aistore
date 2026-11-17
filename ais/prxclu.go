@@ -1043,6 +1043,21 @@ func (p *proxy) xstart(w http.ResponseWriter, r *http.Request, msg *apc.ActMsg) 
 		}
 	}
 	xargs.Kind, _ = xact.GetKindName(xargs.Kind) // display name => kind
+	if xargs.Kind == apc.ActPrefetchObjects {
+		bck := meta.CloneBck(&xargs.Bck)
+		if err := bck.Init(p.owner.bmd); err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		msg := &apc.ActMsg{Action: apc.ActPrefetchObjects, Value: &apc.PrefetchMsg{}}
+		xid, err := p.prefetch(bck.Name, msg, bck.NewQuery())
+		if err != nil {
+			p.writeErr(w, r, err)
+			return
+		}
+		writeXid(w, xid)
+		return
+	}
 
 	// rebalance
 	if xargs.Kind == apc.ActRebalance {

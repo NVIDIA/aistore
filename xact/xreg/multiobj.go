@@ -9,6 +9,12 @@ import (
 	"github.com/NVIDIA/aistore/core/meta"
 )
 
+type PrefetchArgs struct {
+	Msg  *apc.PrefetchMsg
+	Smap *meta.Smap
+	DT   string
+}
+
 func RenewPutArchive(bckFrom, bckTo *meta.Bck, ptime uint64) RenewRes {
 	return RenewBucketXact(apc.ActArchive, bckFrom, Args{Custom: bckTo, PTime: ptime}, bckFrom, bckTo)
 }
@@ -17,8 +23,8 @@ func RenewEvictDelete(uuid, kind string, bck *meta.Bck, msg *apc.EvdMsg) RenewRe
 	return RenewBucketXact(kind, bck, Args{UUID: uuid, Custom: msg})
 }
 
-func RenewPrefetch(uuid string, bck *meta.Bck, msg *apc.PrefetchMsg) RenewRes {
-	return RenewBucketXact(apc.ActPrefetchObjects, bck, Args{UUID: uuid, Custom: msg})
+func RenewPrefetch(uuid string, bck *meta.Bck, args *PrefetchArgs) RenewRes {
+	return RenewBucketXact(apc.ActPrefetchObjects, bck, Args{UUID: uuid, Custom: args})
 }
 
 // kind: (apc.ActCopyObjects | apc.ActETLObjects)

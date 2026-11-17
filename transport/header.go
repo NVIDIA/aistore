@@ -41,6 +41,7 @@ const (
 	OpcAbort
 	OpcRequest
 	OpcResponse
+	OpcStarted
 )
 
 // group 2: transport/bundle (data mover's) opcodes

@@ -8,6 +8,7 @@ package xs
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -24,7 +25,11 @@ import (
 	"github.com/NVIDIA/aistore/hk"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/sys"
+	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
+
+	"github.com/tinylib/msgp/msgp"
 )
 
 // Assorted multi-object (list/range templated) xactions: evict, delete, prefetch multiple objects
@@ -35,8 +40,8 @@ import (
 //   3. if none of the above, fall back to just prefix matching
 
 // TODO:
-// - user-assigned (configurable) num-workers
-// - jogger(s) per mountpath type concurrency
+// - R-flow pagination: support all lrit jobs (evict/delete, tcobjs, archive) and create-nbi
+// - DT to partition pages by target (vs broadcast)
 
 const (
 	lrpList = iota + 1
@@ -66,6 +71,7 @@ type (
 	// common multi-object operation context and list|range|prefix logic
 	lrit struct {
 		parent core.Xact
+		pageR  func(core.Backend, *apc.LsoMsg, *cmn.LsoRes) (int, error) // optional remote page source
 		bck    *meta.Bck
 		msg    *apc.ListRange      // traverse: msg
 		pt     *cos.ParsedTemplate // traverse: template
@@ -81,6 +87,20 @@ type (
 		lrp     int    // enum { lrpList, ... }
 	}
 )
+
+type lrpages struct {
+	parent  core.Xact
+	lrit    *lrit
+	config  *cmn.Config
+	smap    *meta.Smap
+	streams *bundle.Streams
+	recvCh  chan *cmn.LsoRes
+	dt      string
+	recvMu  sync.RWMutex
+	stopCh  cos.StopCh
+	startCh cos.StopCh
+	started bool // DT announced startup
+}
 
 //////////
 // lrit //
@@ -290,8 +310,12 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	}
 
 	var (
-		page = make(cmn.LsoEntries, 0, iniPageCap)
+		page     = make(cmn.LsoEntries, 0, iniPageCap)
+		nextPage = r.pageR
 	)
+	if nextPage == nil {
+		nextPage = r.lsoPage
+	}
 	for !r.done() {
 		var (
 			err   error
@@ -304,15 +328,16 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 
 		if bremote {
 			lst = &cmn.LsoRes{Entries: page}
-			// TODO: this is the last remaining place where we list remote bucket by each and every target
-			ecode, err = r.lsoPage(npg.bp, lsmsg, lst)
+			ecode, err = nextPage(npg.bp, lsmsg, lst)
 		} else {
 			npg.page.Entries = page
 			err = npg.nextPageA()
 			lst = &npg.page
 		}
 		if err != nil {
-			nlog.Errorln(r.bck.Cname(""), "failed list-objects: [", err, ecode, "]")
+			if !r.parent.IsAborted() { // (log only the original cause)
+				nlog.Errorln(r.bck.Cname(""), "failed list-objects: [", err, ecode, "]")
+			}
 			return err
 		}
 
@@ -471,4 +496,233 @@ outer:
 	if buf != nil {
 		slab.Free(buf)
 	}
+}
+
+// R-flow for list-range-prefix (lrit) jobs: remote prefix listed by a single designated target (DT)
+// - DT: lists remote pages and broadcasts each page to all other participants
+// - participants: receive pages in order; each keeps its own (HRW) names
+// - lrit: plugs in via `pageR` (in place of backend.ListObjects)
+// - two-phase startup (proxy): receivers first, DT second
+// - abort on: target membership change, listing/send/receive errors
+// - bound DT startup; backend LIST and retry keep their own timeout policy
+
+var _ meta.Slistener = (*lrpages)(nil)
+
+// must be called after lrit.init and parent's InitBase
+func newLrpages(lrit *lrit, config *cmn.Config, smap *meta.Smap, dt string) (*lrpages, error) {
+	p := &lrpages{
+		parent: lrit.parent,
+		lrit:   lrit,
+		config: config,
+		smap:   smap,
+		dt:     dt,
+		recvCh: make(chan *cmn.LsoRes, 1),
+	}
+	if err := p.init(); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (p *lrpages) String() string { return "lrpages-" + p.parent.ID() }
+
+func (p *lrpages) isDT() bool { return p.dt == core.T.SID() }
+
+func (p *lrpages) init() error {
+	p.stopCh.Init()
+	p.startCh.Init()
+	// streams have the same participants as the proxy's startup waves
+	streamsSmap := *p.smap
+	streamsSmap.Tmap = p.smap.Tmap.ActiveMap()
+	if err := transport.Handle(p.String(), p.recv); err != nil {
+		return err
+	}
+	if p.isDT() {
+		p.streams = bundle.New(transport.NewIntraDataClient(), bundle.Args{
+			Trname: p.String(),
+			Extra: &transport.Extra{
+				Config:      p.config,
+				Smap:        &streamsSmap,
+				SbundleMult: 1,
+				Parent:      &transport.Parent{Xact: p.parent},
+			},
+		})
+	}
+	core.T.Sowner().Listeners().Reg(p)
+	p.ListenSmapChanged()
+	return nil
+}
+
+func (p *lrpages) ListenSmapChanged() {
+	current := core.T.Sowner().Get()
+	if !p.smap.CompareTargets(current) {
+		p.parent.SetClusterAbort()
+		p.parent.Abort(cmn.NewErrMembershipChange(p.parent.Name(), p.smap.StringEx(), current.StringEx()))
+	}
+}
+
+func (p *lrpages) cleanup() {
+	core.T.Sowner().Listeners().Unreg(p)
+	p.stopCh.Close()
+	if p.streams != nil {
+		p.streams.Close(!p.parent.IsAborted())
+	}
+	if err := transport.Unhandle(p.String()); err != nil {
+		nlog.Errorln(p.parent.Name(), err)
+	}
+	p.recvMu.Lock()
+	cos.DrainAnyChan(p.recvCh)
+	p.recvMu.Unlock()
+}
+
+// lrit.pageR
+func (p *lrpages) next(bp core.Backend, msg *apc.LsoMsg, page *cmn.LsoRes) (int, error) {
+	if !p.isDT() {
+		return 0, p.recvNext(page)
+	}
+	if !p.started {
+		if err := p.bcast(nil); err != nil {
+			return 0, err
+		}
+		p.started = true
+	}
+	msg.UUID = p.parent.ID()
+	ecode, err := p.lrit.lsoPage(bp, msg, page)
+	if err != nil {
+		return ecode, err
+	}
+	page.UUID = p.parent.ID()
+	return 0, p.bcast(page)
+}
+
+// receiver: bound startup separately from backend LIST and backpressure
+func (p *lrpages) recvNext(page *cmn.LsoRes) error {
+	if !p.started {
+		wait := max(p.config.Client.ListObjTimeout.D(), 2*p.config.Timeout.CplaneOperation.D())
+		timer := time.NewTimer(wait)
+		select {
+		case <-p.startCh.Listen():
+			timer.Stop()
+			p.started = true
+		case <-p.parent.ChanAbort():
+			timer.Stop()
+			return p.parent.AbortErr()
+		case <-timer.C:
+			return fmt.Errorf("%s: timed out waiting for DT %s to start (%v)", p.parent.Name(), meta.Tname(p.dt), wait)
+		}
+	}
+	select {
+	case npage := <-p.recvCh:
+		*page = *npage
+		return nil
+	case <-p.parent.ChanAbort():
+		return p.parent.AbortErr()
+	}
+}
+
+// one encoded page in flight
+// the receive queue and lrit workers apply backpressure
+// nil page announces DT startup before the first LIST
+func (p *lrpages) bcast(page *cmn.LsoRes) error {
+	var (
+		sgl *memsys.SGL
+		roc cos.ReadOpenCloser
+	)
+	if page != nil {
+		mm := core.T.PageMM()
+		buf, slab := mm.AllocSize(cmn.MsgpLsoBufSize)
+		sgl = mm.NewSGL(memsys.DefaultBufSize)
+		mw := msgp.NewWriterBuf(sgl, buf)
+		err := page.EncodeMsg(mw)
+		if err == nil {
+			err = mw.Flush()
+		}
+		slab.Free(buf)
+		if err != nil {
+			sgl.Free()
+			return err
+		}
+		roc = memsys.NewReader(sgl)
+	}
+	sent := make(chan error, 1)
+	o := transport.AllocSend()
+	o.Hdr.Bck = p.parent.Bck().Clone()
+	o.Hdr.ObjName = p.parent.Name()
+	if page == nil {
+		o.Hdr.Opcode = transport.OpcStarted
+	} else {
+		o.Hdr.ObjAttrs.Size = sgl.Len()
+	}
+	o.SentCB = func(_ *transport.ObjHdr, _ io.ReadCloser, _ any, err error) {
+		if sgl != nil {
+			sgl.Free()
+		}
+		if err != nil {
+			p.parent.Abort(err)
+		}
+		sent <- err
+	}
+	if err := p.streams.Send(o, roc); err != nil {
+		return err
+	}
+	select {
+	case err := <-sent:
+		return err
+	case <-p.parent.ChanAbort():
+		return p.parent.AbortErr()
+	}
+}
+
+func (p *lrpages) recv(hdr *transport.ObjHdr, reader io.Reader, err error) error {
+	p.recvMu.RLock()
+	defer func() {
+		transport.DrainAndFreeReader(reader)
+		p.recvMu.RUnlock()
+	}()
+
+	// stopped or aborted: drop quietly (not a receive error)
+	select {
+	case <-p.stopCh.Listen():
+		return nil
+	default:
+	}
+	if p.parent.IsAborted() {
+		return nil
+	}
+	if err != nil {
+		p.parent.Abort(err)
+		return err
+	}
+
+	if hdr.SID == p.dt && hdr.Opcode == transport.OpcStarted && hdr.IsHeaderOnly() {
+		p.startCh.Close()
+		return nil
+	}
+	if hdr.SID != p.dt || hdr.Opcode != 0 {
+		err := fmt.Errorf("%s: unexpected page from %s, opcode %d", p.parent.Name(), hdr.SID, hdr.Opcode)
+		p.parent.Abort(err)
+		return err
+	}
+
+	buf, slab := core.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
+	page := &cmn.LsoRes{}
+	err = page.DecodeMsg(msgp.NewReaderBuf(reader, buf))
+	slab.Free(buf)
+	if err == nil && page.UUID != p.parent.ID() {
+		err = fmt.Errorf("%s: unexpected page UUID %q", p.parent.Name(), page.UUID)
+	}
+	if err != nil {
+		if p.parent.IsAborted() {
+			return nil
+		}
+		p.parent.Abort(err)
+		return err
+	}
+
+	select {
+	case p.recvCh <- page:
+	case <-p.parent.ChanAbort():
+	case <-p.stopCh.Listen():
+	}
+	return nil
 }

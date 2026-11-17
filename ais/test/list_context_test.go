@@ -45,14 +45,19 @@ const (
 
 // fake remote AIS behavior, per bucket
 const (
-	lsoCtxBlock       = iota // respond 200, then block until canceled
-	lsoCtxRetry              // 429
-	lsoCtxEmpty              // empty pages, no last page
-	lsoCtxSparse             // empty pages, then a single-entry last page
-	lsoCtxEndless            // full sorted pages, no last page
-	lsoCtxPageError          // fail the second call once
-	lsoCtxPageTimeout        // return the first page, then block
-	lsoCtxLastPage           // empty final page
+	lsoCtxBlock         = iota // respond 200, then block until canceled
+	lsoCtxRetry                // 429
+	lsoCtxEmpty                // empty pages, no last page
+	lsoCtxSparse               // empty pages, then a single-entry last page
+	lsoCtxEndless              // full sorted pages, no last page
+	lsoCtxPageError            // fail the second call once
+	lsoCtxPageTimeout          // return the first page, then block
+	lsoCtxLastPage             // empty final page
+	lsoCtxFinalPages           // empty pages, then an empty final page
+	lsoCtxListFailure          // empty first page, then fail
+	lsoCtxSlowPrefetch         // repeated pages, object GETs block until canceled
+	lsoCtxPrefetchPages        // one object per page
+	lsoCtxRetryOnce            // first LIST returns 429
 )
 
 type (
@@ -60,6 +65,9 @@ type (
 		bck             cmn.Bck
 		mode            int
 		calls, canceled atomic.Int64
+		gets            atomic.Int64
+		ready           chan struct{}
+		entries         cmn.LsoEntries
 	}
 	lsoCtxRemote struct {
 		srv        *httptest.Server
@@ -150,9 +158,9 @@ func TestLsoContext(t *testing.T) {
 		b := remote.addBck(t, bp, "retry", lsoCtxRetry)
 		xid, err := api.Prefetch(bp, b.bck, &apc.PrefetchMsg{})
 		tassert.CheckFatal(t, err)
-		waitLsoCtxCount(t, &b.calls, nat)
+		waitLsoCtxCount(t, &b.calls, 1)
 		tassert.CheckFatal(t, api.AbortXaction(bp, &xact.ArgsMsg{ID: xid}))
-		assertLsoCtxStable(t, &b.calls, nat, lsoCtxRetryWait)
+		assertLsoCtxStable(t, &b.calls, 1, lsoCtxRetryWait)
 		waitLsoCtxAborted(t, bp, xid, apc.ActPrefetchObjects, nat)
 	})
 
@@ -223,6 +231,192 @@ func TestLsoContext(t *testing.T) {
 	})
 }
 
+func TestPrefetchDT(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 1})
+	bp := tools.BaseAPIParams()
+	nat := tools.GetClusterMap(t, tools.GetPrimaryURL()).CountActiveTs()
+	remote := attachLsoCtxRemote(t, bp, nat)
+	for _, tc := range []struct {
+		name  string
+		mode  int
+		calls int64
+	}{
+		{"last-page", lsoCtxLastPage, 1},
+		{"empty-pages", lsoCtxFinalPages, lsoCtxStress + 1},
+		{"objects", lsoCtxPrefetchPages, lsoCtxStress},
+		{"generic-start", lsoCtxLastPage, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := remote.addBck(t, bp, tc.name, tc.mode)
+			var (
+				xid string
+				err error
+			)
+			if tc.name == "generic-start" {
+				xid, err = api.StartXaction(bp, &xact.ArgsMsg{Kind: apc.ActPrefetchObjects, Bck: b.bck}, "")
+			} else {
+				xid, err = api.Prefetch(bp, b.bck, &apc.PrefetchMsg{})
+			}
+			tassert.CheckFatal(t, err)
+			args := &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout}
+			status, err := api.WaitForXactionIC(bp, args)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, status.IsFinished() && !status.IsAborted() && status.ErrMsg == "", "prefetch did not finish cleanly: %+v", status)
+			snaps, err := api.QueryXactionSnaps(bp, args)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(snaps) == nat, "expected %d targets, got %v", nat, snaps)
+			for tid, all := range snaps {
+				tassert.Fatalf(t, len(all) == 1 && all[0].IsFinished() && !all[0].IsAborted() && all[0].Err == "", "target %s: %+v", tid, all)
+			}
+			tassert.Errorf(t, b.calls.Load() == tc.calls, "expected %d backend LISTs, got %d", tc.calls, b.calls.Load())
+			if tc.mode == lsoCtxPrefetchPages {
+				count, _, _ := snaps.ObjCounts(xid)
+				tassert.Errorf(t, count == lsoCtxStress, "expected %d prefetched objects, got %d", lsoCtxStress, count)
+				msg := &apc.LsoMsg{Flags: apc.LsCached | apc.LsNameOnly}
+				page, err := api.ListObjectsPage(bp, b.bck, msg, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+				tassert.Errorf(t, len(page.Entries) == lsoCtxStress, "expected %d cached objects, got %d", lsoCtxStress, len(page.Entries))
+				for i := range lsoCtxStress {
+					var got bytes.Buffer
+					_, err := api.GetObject(bp, b.bck, fmt.Sprintf("obj-%d", i+1), &api.GetArgs{Writer: &got})
+					tassert.CheckFatal(t, err)
+					tassert.Errorf(t, got.String() == "x", "unexpected object data: %q", got.String())
+				}
+				tassert.Errorf(t, b.gets.Load() == lsoCtxStress, "expected %d backend GETs, got %d", lsoCtxStress, b.gets.Load())
+			}
+		})
+	}
+	t.Run("abort-inflight", func(t *testing.T) {
+		b := remote.addBck(t, bp, "prefetch-block", lsoCtxBlock)
+		xid, err := api.Prefetch(bp, b.bck, &apc.PrefetchMsg{})
+		tassert.CheckFatal(t, err)
+		waitLsoCtxCount(t, &b.calls, 1)
+		tassert.CheckFatal(t, api.AbortXaction(bp, &xact.ArgsMsg{ID: xid}))
+		waitLsoCtxCount(t, &b.canceled, 1)
+		waitLsoCtxAborted(t, bp, xid, apc.ActPrefetchObjects, nat)
+		tassert.Errorf(t, b.calls.Load() == 1, "expected one backend LIST, got %d", b.calls.Load())
+	})
+	t.Run("backend-error", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+		b := remote.addBck(t, bp, "prefetch-error", lsoCtxListFailure)
+		xid, err := api.Prefetch(bp, b.bck, &apc.PrefetchMsg{})
+		tassert.CheckFatal(t, err)
+		status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, status.IsAborted() && strings.Contains(status.ErrMsg, "injected LIST error"), "expected backend error and abort, got %s (err=%q)", status, status.ErrMsg)
+		err = tools.WaitForCondition(func() bool {
+			snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid})
+			if err != nil || len(snaps) != nat {
+				return false
+			}
+			for _, all := range snaps {
+				if len(all) != 1 || !all[0].IsFinished() || !all[0].IsAborted() {
+					return false
+				}
+			}
+			return true
+		}, tools.WaitRetryOpts{MaxRetries: 300, Interval: 50 * time.Millisecond})
+		tassert.CheckFatal(t, err)
+		tassert.Errorf(t, b.calls.Load() == 2, "expected two backend LISTs, got %d", b.calls.Load())
+	})
+	for _, workers := range []int{1, xact.NwpNone} {
+		t.Run(fmt.Sprintf("backpressure-abort/%d", workers), func(t *testing.T) {
+			tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+			b := remote.addBck(t, bp, "prefetch-slow", lsoCtxSlowPrefetch)
+			xid, err := api.Prefetch(bp, b.bck, &apc.PrefetchMsg{NumWorkers: workers})
+			tassert.CheckFatal(t, err)
+			smap := tools.GetClusterMap(t, bp.URL)
+			dt, err := smap.HrwTargetTask(xid)
+			tassert.CheckFatal(t, err)
+			var receiver *meta.Snode
+			for _, tsi := range smap.Tmap.ActiveNodes() {
+				if tsi.ID() != dt.ID() {
+					receiver = tsi
+					break
+				}
+			}
+			bck := meta.CloneBck(&b.bck)
+			bck.Props, err = api.HeadBucket(bp, b.bck, true /*dontAddRemote*/)
+			tassert.CheckFatal(t, err)
+			for i := range 1024 {
+				name := tools.GenerateObjectNameOnTarget(fmt.Sprintf("slow-%04d-", i), *bck.Bucket(), smap, receiver)
+				b.entries = append(b.entries, &cmn.LsoEnt{Name: name})
+			}
+			close(b.ready)
+			waitLsoCtxCount(t, &b.gets, 1)
+			var previous int64
+			steady := 0
+			err = tools.WaitForCondition(func() bool {
+				current := b.calls.Load()
+				if current == previous {
+					steady++
+				} else {
+					previous, steady = current, 0
+				}
+				return steady == 6
+			}, tools.WaitRetryOpts{MaxRetries: 300, Interval: 50 * time.Millisecond})
+			tassert.CheckFatal(t, err)
+			tassert.CheckFatal(t, api.AbortXaction(bp, &xact.ArgsMsg{ID: xid}))
+			waitLsoCtxCount(t, &b.canceled, 1)
+			waitLsoCtxAborted(t, bp, xid, apc.ActPrefetchObjects, nat)
+			assertLsoCtxStable(t, &b.calls, int(previous), 200*time.Millisecond)
+		})
+	}
+	t.Run("first-page-retry", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+		config := tools.GetClusterConfig(t)
+		t.Cleanup(func() {
+			tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": config.Client.ListObjTimeout.String()})
+		})
+		tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": "2s"})
+
+		b := remote.addBck(t, bp, "prefetch-first-page", lsoCtxRetryOnce)
+		xid, err := api.Prefetch(bp, b.bck, &apc.PrefetchMsg{})
+		tassert.CheckFatal(t, err)
+		waitLsoCtxCount(t, &b.calls, 1)
+		status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, status.IsFinished() && !status.IsAborted() && status.ErrMsg == "", "expected first-page retry to succeed, got %+v", status)
+		snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(snaps) == nat, "expected %d targets, got %v", nat, snaps)
+		for tid, all := range snaps {
+			tassert.Fatalf(t, len(all) == 1 && all[0].IsFinished() && !all[0].IsAborted(), "target %s: %+v", tid, all)
+		}
+		tassert.Errorf(t, b.calls.Load() == 2, "expected two backend LISTs, got %d", b.calls.Load())
+	})
+	t.Run("membership-change", func(t *testing.T) {
+		tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
+		b := remote.addBck(t, bp, "prefetch-membership", lsoCtxBlock)
+		xid, err := api.Prefetch(bp, b.bck, &apc.PrefetchMsg{})
+		tassert.CheckFatal(t, err)
+		waitLsoCtxCount(t, &b.calls, 1)
+		smap := tools.GetClusterMap(t, bp.URL)
+		dt, err := smap.HrwTargetTask(xid)
+		tassert.CheckFatal(t, err)
+		args := &apc.ActValRmNode{SkipRebalance: true}
+		for _, tsi := range smap.Tmap.ActiveNodes() {
+			if tsi.ID() != dt.ID() {
+				args.DaemonID = tsi.ID()
+				break
+			}
+		}
+		_, err = startMaintenanceRetry(t, bp, args)
+		tassert.CheckFatal(t, err)
+		t.Cleanup(func() {
+			_, err := stopMaintenanceRetry(t, bp, args)
+			tassert.CheckError(t, err)
+			_, err = tools.WaitForClusterState(bp.URL, "restore prefetch target", smap.Version, smap.CountActivePs(), nat)
+			tassert.CheckError(t, err)
+		})
+		waitLsoCtxCount(t, &b.canceled, 1)
+		status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout})
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, status.IsAborted(), "expected membership change to abort prefetch, got %+v", status)
+		tassert.Errorf(t, b.calls.Load() == 1, "expected one backend LIST, got %d", b.calls.Load())
+	})
+}
+
 func attachLsoCtxRemote(t *testing.T, bp api.BaseParams, nat int) *lsoCtxRemote {
 	t.Helper()
 	remote := newLsoCtxRemote()
@@ -255,6 +449,9 @@ func (remote *lsoCtxRemote) addBck(t *testing.T, bp api.BaseParams, name string,
 		bck:  cmn.Bck{Name: name + "-" + strings.ToLower(cos.GenTie()), Provider: apc.AIS, Ns: cmn.Ns{UUID: remote.smap.UUID}},
 		mode: mode,
 	}
+	if mode == lsoCtxSlowPrefetch {
+		b.ready = make(chan struct{})
+	}
 	remote.mu.Lock()
 	remote.bcks[b.bck.Name] = b
 	remote.mu.Unlock()
@@ -267,8 +464,12 @@ func (remote *lsoCtxRemote) addBck(t *testing.T, bp api.BaseParams, name string,
 func (remote *lsoCtxRemote) lookup(r *http.Request) *lsoCtxBck {
 	name, ok := strings.CutPrefix(r.URL.Path, apc.URLPathBuckets.S+"/")
 	if !ok {
-		return nil
+		name, ok = strings.CutPrefix(r.URL.Path, apc.URLPathObjects.S+"/")
+		if !ok {
+			return nil
+		}
 	}
+	name, _, _ = strings.Cut(name, "/")
 	remote.mu.Lock()
 	b := remote.bcks[name]
 	remote.mu.Unlock()
@@ -291,11 +492,56 @@ func (remote *lsoCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unexpected "+r.Method+" "+r.URL.Path, http.StatusBadRequest)
 		return
 	}
+	if b.mode == lsoCtxSlowPrefetch && strings.HasPrefix(r.URL.Path, apc.URLPathObjects.S+"/") {
+		b.gets.Add(1)
+		w.Header().Set(cos.HdrContentLength, "1")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+		b.canceled.Add(1)
+		return
+	}
+	if b.mode == lsoCtxPrefetchPages && strings.HasPrefix(r.URL.Path, apc.URLPathObjects.S+"/") {
+		b.gets.Add(1)
+		_, _ = w.Write([]byte("x"))
+		return
+	}
 	n := b.calls.Add(1)
 	switch b.mode {
-	case lsoCtxLastPage:
+	case lsoCtxLastPage, lsoCtxFinalPages:
 		w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
-		_ = msgp.Encode(w, &cmn.LsoRes{})
+		page := &cmn.LsoRes{}
+		if b.mode == lsoCtxFinalPages && n <= lsoCtxStress {
+			page.ContinuationToken = strconv.FormatInt(n, 10)
+		}
+		_ = msgp.Encode(w, page)
+	case lsoCtxListFailure:
+		if n == 1 {
+			w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
+			_ = msgp.Encode(w, &cmn.LsoRes{ContinuationToken: "next"})
+		} else {
+			http.Error(w, "injected LIST error", http.StatusInternalServerError)
+		}
+	case lsoCtxPrefetchPages:
+		token := ""
+		if n < lsoCtxStress {
+			token = strconv.FormatInt(n, 10)
+		}
+		servePage(w, fmt.Sprintf("obj-%d", n), token)
+	case lsoCtxSlowPrefetch:
+		select {
+		case <-b.ready:
+			w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
+			_ = msgp.Encode(w, &cmn.LsoRes{Entries: b.entries, ContinuationToken: strconv.FormatInt(n, 10)})
+		case <-r.Context().Done():
+		}
+	case lsoCtxRetryOnce:
+		if n == 1 {
+			http.Error(w, "retry LIST", http.StatusTooManyRequests)
+		} else {
+			w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
+			_ = msgp.Encode(w, &cmn.LsoRes{})
+		}
 	case lsoCtxRetry:
 		http.Error(w, "throttled", http.StatusTooManyRequests)
 	case lsoCtxSparse:

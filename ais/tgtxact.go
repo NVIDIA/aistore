@@ -137,14 +137,16 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			t.writeErrf(w, r, "%v: %s", err, xargs.String())
 			return
 		}
+
 		if xargs.Kind == apc.ActPrefetchObjects {
-			ecode, err := t.runPrefetch(xargs.ID, bck, &apc.PrefetchMsg{})
-			if err != nil {
-				t.writeErr(w, r, err, ecode)
-			}
+			// v5.3 or later: two-phase prefetch
+			err := fmt.Errorf("%s: cannot start %q via generic x-start (sender: %s)", t, xargs.Kind, r.Header.Get(apc.HdrSenderName))
+			debug.AssertNoErr(err)
+			t.writeErr(w, r, err)
 			return
 		}
-		// all other _startable_ xactions
+
+		// all _startable_ xactions - see xact/api_table.go
 		xid, err := t.xstart(&xargs, bck, msg)
 		if err != nil {
 			t.writeErr(w, r, err)

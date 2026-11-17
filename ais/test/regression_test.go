@@ -802,6 +802,7 @@ func TestPrefetchSpecificTargets(t *testing.T) {
 		{"single-list", apc.ListRange{ObjNames: m.objNames}, pair[:1], m.objNames},
 		{"subset-prefix", apc.ListRange{Template: m.prefix}, pair, m.objNames},
 		{"subset-range", apc.ListRange{Template: rangeTmpl}, pair, rangeNames},
+		{"all-prefix", apc.ListRange{Template: m.prefix}, nil, m.objNames},
 		{"all-list", apc.ListRange{ObjNames: m.objNames}, nil, m.objNames},
 		{"excluded-object", apc.ListRange{ObjNames: excluded}, pair, excluded},
 	} {
