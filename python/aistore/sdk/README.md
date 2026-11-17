@@ -201,6 +201,24 @@ To learn more about working with AIS ETL, check out [examples](https://github.co
 
 For more information on SDK usage, refer to the [SDK reference documentation](https://docs.nvidia.com/aistore/python/aistore/sdk) or see the examples [here](https://github.com/NVIDIA/aistore/blob/main/python/examples/sdk/).
 
+---
+
+## Threading
+
+`Client`, `AuthNClient`, and `SessionManager` do not support concurrent use across threads. Use a separate client per thread, since bucket and object handles and internal `RequestClient` clones share the original client's session.
+
+## Multiprocessing
+
+Create a client in each process, or pass an open client and its handles using `fork`, `spawn`, or `forkserver`, with a separate session created from SDK configuration on first use in each child. For process setup, see Python's [multiprocessing documentation](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods).
+
+For PyTorch DataLoader support and an example, see [PyTorch DataLoader](../pytorch/README.md#pytorch-dataloader).
+
+### Considerations
+
+- Forking a process with background threads is unsupported. Use `spawn` or `forkserver` instead.
+- Passing a client to `spawn` or `forkserver` workers resets a custom `RetryConfig.network_retry` policy to the SDK default. Create and configure the client inside each worker to use a custom network retry policy.
+- Sharing readers, writers, streaming responses, or iterators across threads or processes is unsupported. Finish requests and close streams, iterators, and file-like writers before closing the client.
+- Parallel reads (`Object.get_reader(num_workers=N)`) require fork support, always use `fork`, and are unsupported inside DataLoader workers. Close the returned `ParallelBuffer` or iterator when finished, including on early exit.
 
 ## References
 

@@ -14,6 +14,13 @@ In our plugin, we extend the base Dataset, Sampler, and IterableDataset Torch cl
 
 The PyTorch DataLoader class gives you an iterable over a Dataset. It can be used to shuffle, batch and parallelize operations over your data.
 
+`AISMapDataset`, `AISIterDataset`, `AISBatchIterDataset`, and `AISShardReader` support DataLoader workers using `fork`, `spawn`, or `forkserver`, following the SDK's [multiprocessing requirements](../sdk/README.md#multiprocessing). For worker setup and `persistent_workers`, see PyTorch's [multi-process data loading documentation](https://docs.pytorch.org/docs/stable/data.html#multi-process-data-loading).
+
+- Keep the source client open until data loading is finished, since workers start on iteration and may restart each epoch.
+- For `spawn` and `forkserver`, define custom dataset classes and callbacks at module scope and use a fresh iterable dataset that has not been iterated or passed to `len()` in the parent.
+- Use `AISMultiShardStream` with `num_workers=0` unless your application partitions the input across workers.
+- When using `AISParallelMapDataset` with a DataLoader, set the loader's `num_workers=0`. The caller or collate function must consume and close each returned `ParallelBuffer`.
+
 ### PyTorch Dataset
 
 To create a DataLoader, you need to first create a Dataset, which is a class to read samples into memory. Most of the logic of the DataLoader resides on the Dataset.
