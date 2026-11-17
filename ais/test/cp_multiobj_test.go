@@ -160,6 +160,60 @@ func TestCopyMultiObjPeerAbort(t *testing.T) {
 	}
 }
 
+// tco calls DemandBase.Stop before Quiesce and each target must still count the 'done' of its peers
+func TestCopyMultiObjQuiesce(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2})
+	var (
+		bckFrom  = cmn.Bck{Name: "cp-qui-from" + cos.GenTie(), Provider: apc.AIS}
+		bckTo    = cmn.Bck{Name: "cp-qui-to" + cos.GenTie(), Provider: apc.AIS}
+		m        = &ioContext{t: t, num: 100, fileSize: cos.KiB, fixedSize: true, bck: bckFrom}
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+	)
+	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
+	m.initAndSaveState(true /*cleanup*/)
+	m.puts()
+	tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
+
+	const progressTimeout = time.Minute
+	config := tools.GetClusterConfig(t)
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"timeout.send_file_time": config.Timeout.SendFile.String()})
+	})
+	tools.SetClusterConfig(t, cos.StrKVs{"timeout.send_file_time": progressTimeout.String()})
+
+	msg := cmn.TCOMsg{ToBck: bckTo}
+	msg.ObjNames = m.objNames
+	xid, err := api.CopyMultiObj(bp, bckFrom, &msg)
+	tassert.CheckFatal(t, err)
+
+	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects, Timeout: 2*xact.IdleDefault + 2*progressTimeout}
+	snaps, err := api.WaitForSnaps(bp, args, func(snaps xact.MultiSnap) (bool, bool, error) {
+		return allTargetsFinished(snaps, m.smap.CountActiveTs()), false, nil
+	})
+	tassert.CheckFatal(t, err)
+
+	var first, last time.Time
+	for tid, tsnaps := range snaps {
+		snap := tsnaps[0]
+		tassert.Errorf(t, !snap.IsAborted(), "%s: %s aborted: %s", meta.Tname(tid), xid, snap.AbortErr)
+		if first.IsZero() || snap.EndTime.Before(first) {
+			first = snap.EndTime
+		}
+		if snap.EndTime.After(last) {
+			last = snap.EndTime
+		}
+	}
+	tlog.Logfln("%s: the targets finished within %v", xid, last.Sub(first))
+
+	list, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(list.Entries) == len(m.objNames), "expected %d objects in %s, got %d",
+		len(m.objNames), bckTo.Cname(""), len(list.Entries))
+	tassert.Errorf(t, last.Sub(first) < progressTimeout/2, "%s: the targets finished %v apart (progress timeout %v)",
+		xid, last.Sub(first), progressTimeout)
+}
+
 func TestCopyMultiObj(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		testCopyMobj(t, bck)

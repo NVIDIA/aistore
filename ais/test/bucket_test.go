@@ -2267,6 +2267,90 @@ func TestCopyBucketSimple(t *testing.T) {
 	t.Run("MultiWorker", func(t *testing.T) { f(); testCopyBucketMultiWorker(t, srcBck, m) })
 }
 
+func TestCopyBucketSlowPeer(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 3})
+	const numObjs = 5000
+	var (
+		bckFrom  = cmn.Bck{Name: "cp-slow-from" + cos.GenTie(), Provider: apc.AIS}
+		bckTo    = cmn.Bck{Name: "cp-slow-to" + cos.GenTie(), Provider: apc.AIS}
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+		smap     = tools.GetClusterMap(t, proxyURL)
+		names    = cos.NewStrSet()
+	)
+	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
+	p, err := api.HeadBucket(bp, bckFrom, false /*don't add*/)
+	tassert.CheckFatal(t, err)
+
+	// all objects on the slow target
+	tsi, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	tlog.Logfln("PUT %d objects on %s => %s", numObjs, tsi.StringEx(), bckFrom.Cname(""))
+	for i := range numObjs {
+		name := tools.GenerateObjectNameOnTarget(fmt.Sprintf("slow-%d-", i), bckFrom, smap, tsi)
+		tassert.CheckFatal(t, tools.PutObjRR(bp, bckFrom, name, cos.KiB, p.Cksum.Type))
+		names.Add(name)
+	}
+
+	const progressTimeout = time.Minute
+	config := tools.GetClusterConfig(t)
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{
+			"timeout.send_file_time": config.Timeout.SendFile.String(),
+			"timeout.max_host_busy":  config.Timeout.MaxHostBusy.String(),
+		})
+	})
+	tools.SetClusterConfig(t, cos.StrKVs{
+		"timeout.send_file_time": progressTimeout.String(),
+		"timeout.max_host_busy":  progressTimeout.String(),
+	})
+
+	started := time.Now()
+	xid, err := api.CopyBucket(bp, bckFrom, bckTo, &apc.TCBMsg{})
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
+
+	stop, stopped := make(chan struct{}), make(chan struct{})
+	go slowNode(t, tsi, stop, stopped)
+	status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: 5 * time.Minute})
+	close(stop)
+	<-stopped
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, !status.IsAborted(), "%s aborted: %s", xid, status.ErrMsg)
+	elapsed := time.Since(started)
+	tassert.Errorf(t, elapsed > progressTimeout, "%s took %v, not longer than the progress timeout %v (increase numObjs)",
+		xid, elapsed, progressTimeout)
+
+	list, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Errorf(t, len(list.Entries) == len(names), "expected %d to be copied, got %d", len(names), len(list.Entries))
+	for _, e := range list.Entries {
+		tassert.Errorf(t, names.Contains(e.Name), "unexpected %q in %s", e.Name, bckTo.Cname(""))
+	}
+}
+
+// pause the node for most of the time (SIGSTOP)
+func slowNode(t *testing.T, node *meta.Snode, stop <-chan struct{}, stopped chan<- struct{}) {
+	defer close(stopped)
+	for {
+		resume, err := tools.PauseNode(node)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		time.Sleep(3 * time.Second)
+		if err := resume(); err != nil {
+			t.Error(err)
+			return
+		}
+		select {
+		case <-stop:
+			return
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+}
+
 func testCopyBucketStats(t *testing.T, srcBck cmn.Bck, m *ioContext) {
 	dstBck := cmn.Bck{Name: "cpybck_dst" + cos.GenTie(), Provider: apc.AIS}
 

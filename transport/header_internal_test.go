@@ -189,7 +189,7 @@ func testObjHdr() *ObjHdr {
 			Cksum:    cos.NewCksum(cos.ChecksumCesXxh, "0123456789abcdef"),
 			CustomMD: cos.StrKVs{"key": "value"},
 		},
-		Opcode: OpcRequest,
+		Opcode: OpcDone,
 	}
 	hdr.ObjAttrs.SetVersion("version")
 	return hdr

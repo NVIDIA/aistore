@@ -424,6 +424,10 @@ func (t *target) xactCtrl(w http.ResponseWriter, r *http.Request, kind, xid, wid
 		err = xmoss.RecvCtrl(wid, sid, opcode, body)
 	case opcode == xact.OpcodeAbortXact:
 		xact.RecvAbortXact(xctn, sid, string(body))
+	case opcode == xact.OpcodeStatus:
+		if xctn.IsAborted() || !xctn.EndTime().IsZero() {
+			err = fmt.Errorf("%s: not running", xctn.Name())
+		}
 	default:
 		err = fmt.Errorf("%s: unsupported T2T control [%q, %q]", xctn.Name(), wid, opcode)
 	}

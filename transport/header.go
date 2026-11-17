@@ -38,9 +38,6 @@ const (
 // group 1: application-level opcodes (sentinels)
 const (
 	OpcDone = iota + 27182
-	OpcAbort
-	OpcRequest
-	OpcResponse
 	OpcStarted
 )
 

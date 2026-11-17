@@ -30,6 +30,7 @@ const (
 	OpcodeStartedWI = "startedWI"
 	OpcodeAbortXact = "abortXact"
 	OpcodeAbortWI   = "abortWI"
+	OpcodeStatus    = "status"
 )
 
 const NoneWID = "-" // wid is optional, may not be present

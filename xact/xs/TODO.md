@@ -157,20 +157,21 @@ and still draining any work deferred by callbacks; prefer a count-based protocol
 
 ## Out-of-band control for all xactions
 
-Replace in-stream control opcodes (`transport.OpcDone`, `OpcRequest`, `OpcResponse`) with
+Replace the in-stream control opcode (`transport.OpcDone`) with
 T2T control (xact/t2tctrl.go: `POST /v1/xactions/t2tctrl/{xkind}/{xid}/{wid}/{opcode}`; `SendCtrl`, `BcastCtrl`).
 
 Goal: reliable control, independent of data streams and DM. HTTP alone does not supply delivery or completion guarantees.
 
-- today, `target.xactCtrl` (ais/tgtxact.go) dispatches to x-moss (moss.go; ais/ml.go), and aborts
-  other kinds on `xact.OpcodeAbortXact` (see `xact.RecvAbortXact`)
+- today, `target.xactCtrl` (ais/tgtxact.go) dispatches to x-moss (moss.go; ais/ml.go), aborts
+  other kinds on `xact.OpcodeAbortXact` (see `xact.RecvAbortXact`), and answers `xact.OpcodeStatus`
 - abort: T2T only (`xact.Base.BcastAbort`, gated by `SkipAbortBcast`) - tcb, tco, archive, and
   x-list (designated target) start a `ChanAbort` watcher in `Run` (see `bcastOnAbort`)
-- still in-stream only: sentinel.go (done, progress), archive.go (done)
+- sentinel progress: T2T `xact.OpcodeStatus` poll, only to the peers that did not send done (`sentinel.poll`)
+- still in-stream only: sentinel.go and archive.go (done)
 - x-list page timeout: the proxy sends one asynchronous `Abort2PC` to the designated target if its
   page call times out. peers waiting for the page can time out locally
   - best-effort, single attempt: a lost abort leaves the designated target running until `lso.idle_time`
-- add opcodes as needed: done (with per-destination counts, see above), progress request/response
+- add opcodes as needed: done (with per-destination counts, see above)
 - delivery: `SendCtrl` waits for an HTTP response; `BcastCtrl` launches asynchronous sends and only logs
   failures. Add bounded retries/acknowledgments or a receiver-side status fallback for completion
 - ordering: initialize receive state before producers start; handle control arriving before xaction/work-item

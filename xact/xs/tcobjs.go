@@ -6,7 +6,6 @@
 package xs
 
 import (
-	"encoding/binary"
 	"fmt"
 	"io"
 	"sync"
@@ -408,16 +407,6 @@ func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 				//     Sender's whole xaction is done; mark them complete for Quiesce.
 				r.sntl.rxDone(hdr)
 			}
-		case transport.OpcRequest:
-			// progress request during quiesce - respond with current count
-			o := transport.AllocSend()
-			o.Hdr.Opcode = transport.OpcResponse
-			b := make([]byte, cos.SizeofI64)
-			binary.BigEndian.PutUint64(b, uint64(r.Objs()))
-			o.Hdr.Opaque = b
-			r.p.dm.Bcast(o, nil)
-		case transport.OpcResponse:
-			r.sntl.rxProgress(hdr)
 		default:
 			return abortOpcode(r, hdr.Opcode)
 		}

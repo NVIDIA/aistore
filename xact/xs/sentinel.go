@@ -5,7 +5,6 @@
 package xs
 
 import (
-	"encoding/binary"
 	"fmt"
 	"time"
 
@@ -17,22 +16,23 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/sys"
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
+
+	"golang.org/x/sync/errgroup"
 )
 
 const apairDeleted int64 = -1
 
 type (
 	apair struct {
-		last     atomic.Int64 // last progress update
-		progress atomic.Int64 // num visited objects
+		last atomic.Int64 // last time the peer answered
 	}
 	sentinel struct {
 		r      core.Xact
 		base   *xact.Base
-		dm     *bundle.DM
 		config *cmn.Config
 		smap   *meta.Smap
 		pend   struct {
@@ -48,7 +48,6 @@ type (
 func (s *sentinel) init(r core.Xact, base *xact.Base, dm *bundle.DM, config *cmn.Config, smap *meta.Smap, nat int) {
 	s.r = r
 	s.base = base
-	s.dm = dm
 	s.config = config
 	s.smap = smap
 	s.nat = nat
@@ -139,29 +138,49 @@ func (s *sentinel) _qcb(tot, ival, progressTimeout time.Duration, ecnt int) core
 		return s._qabort(err)
 	}
 
-	// 3. check progress timeout
-	now := mono.NanoTime()
-	for tid := range s.pend.m {
-		apair := s.pend.m[tid]
-		if last := apair.last.Load(); last != apairDeleted {
-			debug.Assert(last != 0)
-			if since := time.Duration(now - last); since > progressTimeout {
-				err := fmt.Errorf("%s: timed out waiting for %s [ %v, %v, %v ]", s.r.Name(), meta.Tname(tid), since, tot, s.pend.p)
-				return s._qabort(err)
-			}
-		}
-	}
-
-	// 4. request progress
-	o := transport.AllocSend()
-	o.Hdr.Opcode = transport.OpcRequest
-
-	if err := s.dm.Bcast(o, nil); err != nil {
-		// (is it too harsh?)
-		nlog.Warningln(s.r.Name(), err)
+	// 3. poll status; abort if a target did not answer for longer than progressTimeout
+	if err := s.poll(progressTimeout); err != nil {
 		return s._qabort(err)
 	}
 	return core.QuiActive
+}
+
+// poll the targets that did not send 'done' (T2T status)
+func (s *sentinel) poll(progressTimeout time.Duration) error {
+	var (
+		g    errgroup.Group
+		ecnt atomic.Int64
+	)
+	g.SetLimit(max(128, sys.NumCPU()))
+	for _, tid := range s.pend.p {
+		g.Go(func() error { return s.status(tid, progressTimeout, &ecnt) })
+	}
+	return g.Wait()
+}
+
+func (s *sentinel) status(tid string, progressTimeout time.Duration, ecnt *atomic.Int64) error {
+	var (
+		tsi   = s.smap.GetTarget(tid)
+		apair = s.pend.m[tid]
+	)
+	if err := s.base.SendCtrl(tsi, "", xact.OpcodeStatus, nil); err != nil {
+		cmn.SparseWarn(cos.ModXs, ecnt.Inc(), s.r.Name(), xact.OpcodeStatus, tsi.StringEx(), err)
+		last := apair.last.Load()
+		if last == apairDeleted {
+			return nil
+		}
+		debug.Assert(last != 0)
+		if since := time.Duration(mono.NanoTime() - last); since > progressTimeout {
+			return fmt.Errorf("%s: timed out waiting for %s [ %v, %v ]", s.r.Name(), meta.Tname(tid), since, s.pend.p)
+		}
+		return nil
+	}
+	apair.alive()
+
+	if cmn.Rom.V(5, cos.ModXs) {
+		nlog.Infoln(s.r.Name(), "recv 'status' from:", meta.Tname(tid), "pending:", s.pend.n.Load())
+	}
+	return nil
 }
 
 func (s *sentinel) _qabort(err error) core.QuiRes {
@@ -189,7 +208,7 @@ func (s *sentinel) pending() {
 //
 
 func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
-	if s.r.IsAborted() || s.r.IsDone() {
+	if s.r.IsAborted() || !s.r.EndTime().IsZero() { // not IsDone (tco and archive call Stop before Quiesce)
 		return
 	}
 	apair := s.pend.m[hdr.SID]
@@ -206,21 +225,8 @@ func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
 	}
 }
 
-func (s *sentinel) rxProgress(hdr *transport.ObjHdr) {
-	var (
-		numvis = int64(binary.BigEndian.Uint64(hdr.Opaque))
-		apair  = s.pend.m[hdr.SID]
-	)
-	if apair == nil { // unlikely
-		debug.Assert(false, "missing apair ", hdr.SID)
-		return
-	}
-	prev := apair.progress.Swap(numvis)
-	debug.Assert(prev <= numvis, "progress regression: ", prev, " > ", numvis)
-	// always update last: receiving a response means the target is alive
-	apair.last.Store(mono.NanoTime())
-
-	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.InfoDepth(1, s.r.Name(), "recv 'progress'", numvis, "from:", meta.Tname(hdr.SID), "pending:", s.pend.n.Load())
+func (a *apair) alive() {
+	if last := a.last.Load(); last != apairDeleted {
+		a.last.CAS(last, mono.NanoTime())
 	}
 }

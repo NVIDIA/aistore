@@ -8,7 +8,6 @@ package xs
 import (
 	"archive/tar"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
@@ -481,16 +480,6 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 				// (2) Xaction-level OpcDone: sender's whole xaction is done
 				r.sntl.rxDone(hdr)
 			}
-		case transport.OpcRequest:
-			// progress request during quiesce - respond with current count
-			o := transport.AllocSend()
-			o.Hdr.Opcode = transport.OpcResponse
-			b := make([]byte, cos.SizeofI64)
-			binary.BigEndian.PutUint64(b, uint64(r.Objs()))
-			o.Hdr.Opaque = b
-			r.p.dm.Bcast(o, nil)
-		case transport.OpcResponse:
-			r.sntl.rxProgress(hdr)
 		default:
 			return abortOpcode(r, hdr.Opcode)
 		}
