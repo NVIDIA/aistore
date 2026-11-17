@@ -35,6 +35,7 @@ secretGenerator:
 - name: gcp-credentials
   files:
   - creds.json=${GOOGLE_APPLICATION_CREDENTIALS}
+  - token=${GCP_ID_TOKEN_FILE}
   options:
     annotations:
       kapp.k14s.io/change-group: "setup"
@@ -103,6 +104,11 @@ patches:
       value:
         name: GOOGLE_APPLICATION_CREDENTIALS
         value: /tmp/gcp/creds.json
+    - op: add
+      path: /spec/template/spec/containers/0/env/-
+      value:
+        name: GOOGLE_CLOUD_PROJECT
+        value: ${GOOGLE_CLOUD_PROJECT}
     - op: add
       path: /spec/template/spec/containers/0/volumeMounts/-
       value:

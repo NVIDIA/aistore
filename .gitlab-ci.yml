@@ -16,8 +16,11 @@ variables:
     value: "aws://ais-blossom gs://ais-ci-kube oc://ais-ci-long" # NOTE: additionally used: aws://ais-cicd and aws://ais-ci-python
     description: "Set of buckets used when running cloud tests."
   GOOGLE_APPLICATION_CREDENTIALS:
-    value: "$GCP_JSON_FILE"
-    description: "GitLab file variable containing credentials for GCP"
+    value: "$GCP_WIF_JSON_FILE"
+    description: "GitLab file variable containing external_account (WIF) credentials for GCP; its credential_source.file must equal GCP_ID_TOKEN_FILE."
+  GCP_ID_TOKEN_FILE:
+    value: "/tmp/gcp/token"
+    description: "File that receives the GitLab ID token for the GCP credentials."
   ORACLE_PRIVATE_KEY:
     value: "$OCI_PRIVATE_KEY_FILE"
     description: "GitLab file variable containing private key for OCI"
@@ -112,6 +115,18 @@ stages:
     when: on_failure
     paths: [ logs/ ]
     expire_in: 1 days
+
+# GCP Workload Identity Federation: GitLab signs the ID token at job start (it expires with the job
+# timeout, or after 5 minutes if the job sets none). The before_script writes it to GCP_ID_TOKEN_FILE,
+# which GOOGLE_APPLICATION_CREDENTIALS references as its token source.
+# The Google client library exchanges it with Google STS for GCS access tokens.
+.gcp_wif:
+  id_tokens:
+    GCP_ID_TOKEN:
+      aud: $GCP_WIF_AUDIENCE
+  before_script:
+    - mkdir -p "$(dirname "$GCP_ID_TOKEN_FILE")"
+    - printf '%s' "$GCP_ID_TOKEN" > "$GCP_ID_TOKEN_FILE"
 
 .test_short_template: &test_short_def
   stage: test-short
@@ -673,6 +688,7 @@ test:short:aws:
 
 test:short:gcp:
   <<: *test_short_skip_scheduled_def
+  extends: .gcp_wif
   variables:
     BUCKET: "gs://ais-ci"
   timeout: 70m
@@ -765,6 +781,7 @@ test:long:aws:
 
 test:long:gcp:
   <<: *test_long_def
+  extends: .gcp_wif
   variables:
     BUCKET: "gs://ais-ci"
   rules:
@@ -839,6 +856,7 @@ test:long:chunks:
 #
 
 .test_k8s:
+  extends: .gcp_wif
   tags:
     - $RUNNER_TAG
   variables:
@@ -854,6 +872,7 @@ test:long:chunks:
     - !reference [.default_test_rules, rules]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /.*k8s-ci.*/'
   before_script:
+    - !reference [.gcp_wif, before_script]
     - cd deploy/dev/k8s
     - ./utils/ci/generate_kind_config.sh > kind_config.yml
     - kind create cluster --config=kind_config.yml --wait=5m
@@ -873,6 +892,7 @@ test:long:chunks:
 .test_k8s_short_template:
   stage: test-short
   extends: .test_k8s
+  timeout: 1h # explicit: the GCP ID token expires with the job timeout, or after 5 minutes if unset
   variables:
     NUM_PROXY: 1
     NUM_TARGET: 3
@@ -994,6 +1014,7 @@ test:long:k8s:all:
   variables:
     AIS_BACKEND_PROVIDERS: "gcp aws oci"
   before_script:
+    - !reference [.gcp_wif, before_script]
     - cd deploy/dev/k8s
     - ./utils/ci/generate_kind_config.sh > kind_config.yml
     - kind create cluster --config=kind_config.yml
