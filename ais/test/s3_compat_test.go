@@ -1372,6 +1372,8 @@ func testS3ContentTypeRemote(t *testing.T, provider, absentContentType string) {
 
 func TestS3ObjMetadataGCP(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck, RequiredCloudProvider: apc.GCP})
+	_, err := api.HeadBucket(baseParams, cliBck, false /*dontAddRemote*/)
+	tassert.CheckFatal(t, err)
 
 	var (
 		bck             = cliBck
@@ -1426,7 +1428,7 @@ func TestS3ObjMetadataGCP(t *testing.T) {
 	}
 
 	body := strings.NewReader("metadata round trip")
-	_, err := s3Client.PutObject(t.Context(), &s3.PutObjectInput{
+	_, err = s3Client.PutObject(t.Context(), &s3.PutObjectInput{
 		Bucket: aws.String(bck.Name), Key: aws.String(objName), Body: body,
 		ContentLength: aws.Int64(int64(body.Len())), Metadata: requestMetadata,
 	})
