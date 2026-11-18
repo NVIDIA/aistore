@@ -19,7 +19,7 @@ type (
 		Init(names []string, rnd *rand.Rand)
 
 		// when mixed read/write
-		// `Random` and `RandomUnique` implement Add()
+		// only `Random` implements Add()
 		Add(objName string)
 
 		// pick a random name
@@ -44,14 +44,7 @@ type (
 	Random struct {
 		base
 		rnd  *rand.Rand
-		seen bitSet // batch-level uniqueness (here and elsewhere)
-	}
-
-	RandomUnique struct {
-		base
-		rnd     *rand.Rand
-		seen    bitSet
-		tracker bitmaskTracker // uniqueness across epochs (here and elsewhere)
+		seen bitSet // batch-level uniqueness
 	}
 
 	// PermShuffle generates repeated random permutations of an open interval [0..n)
@@ -66,9 +59,7 @@ type (
 		nextReady sync.WaitGroup
 	}
 
-	// epoch-based affine sequence over nextPrimeGE(n);
-	// each epoch emits exactly n unique indices; IterBatch never crosses epochs,
-	// so duplicates within a single batch are impossible
+	// PermAffinePrime uses an affine sequence to visit each name index once per epoch.
 	PermAffinePrime struct {
 		base
 		rnd  *rand.Rand
@@ -137,77 +128,6 @@ func (rng *Random) IterBatch(limit int, yield func(name string) bool) {
 			return
 		}
 		emitted++
-	}
-}
-
-//////////////////
-// RandomUnique //
-//////////////////
-
-// interface guard
-var _ Basic = (*RandomUnique)(nil)
-
-func (rng *RandomUnique) Init(names []string, rnd *rand.Rand) {
-	rng.names = names
-	rng.rnd = rnd
-	rng.tracker.init(len(names))
-}
-
-func (rng *RandomUnique) Add(objName string) {
-	if len(rng.names)%64 == 0 {
-		rng.tracker.grow()
-	}
-	rng.names = append(rng.names, objName)
-}
-
-func (rng *RandomUnique) Pick() string {
-	n := len(rng.names)
-	debug.Assert(n > 0)
-	if rng.tracker.needsReset(n) {
-		rng.tracker.reset()
-	}
-	for {
-		idx := rng.rnd.IntN(n)
-		if rng.tracker.tryMark(idx) {
-			return rng.names[idx]
-		}
-	}
-}
-
-// strictly unique within the yielded batch; still advances the epoch tracker
-func (rng *RandomUnique) IterBatch(limit int, yield func(name string) bool) {
-	total := len(rng.names)
-	n := min(total, limit)
-	debug.Assert(n > 0)
-
-	rng.seen.reinit(total)
-	if rng.tracker.needsReset(total) {
-		rng.tracker.reset()
-	}
-
-	emitted := 0
-	for emitted < n {
-		if rng.tracker.needsReset(total) {
-			rng.tracker.reset()
-		}
-		for {
-			idx := rng.rnd.IntN(total)
-			if !rng.tracker.tryMark(idx) {
-				// exhausted or collision; maybe epoch is done
-				if rng.tracker.needsReset(total) {
-					rng.tracker.reset()
-				}
-				continue
-			}
-			if !rng.seen.testAndSet(idx) {
-				continue
-			}
-			if !yield(rng.names[idx]) {
-				return
-			}
-			emitted++
-			break
-		}
 	}
 }
 

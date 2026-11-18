@@ -34,14 +34,6 @@ func TestMain(m *testing.M) {
 // Benchmarks
 //
 
-func BenchmarkRandomUnique(b *testing.B) {
-	ng := &RandomUnique{}
-	ng.Init(objNames, cos.NowRand())
-	for b.Loop() {
-		_ = ng.Pick()
-	}
-}
-
 func BenchmarkPermShuffle(b *testing.B) {
 	ng := &PermShuffle{}
 	ng.Init(objNames, cos.NowRand())
@@ -61,13 +53,6 @@ func BenchmarkPermAffinePrime(b *testing.B) {
 //
 // Tests
 //
-
-func TestRandomUnique(t *testing.T) {
-	ng := &RandomUnique{}
-	checkGetsAllOncePerEpoch(t, ng, "RandomUnique")
-	checkSmallSampleRandomness(t, ng, "RandomUnique")
-	checkIterBatchUniqueness(t, ng, "RandomUnique")
-}
 
 func TestPermShuffle(t *testing.T) {
 	ng := &PermShuffle{}

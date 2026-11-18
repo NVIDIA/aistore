@@ -850,16 +850,13 @@ func objNamesFromObj(p *params) ([]string, error) {
 
 func newNameGetter(names []string) (ng namegetter.Basic, isPermBased bool) {
 	var (
-		readOnly  = runParams.putPct == 0
-		epoching  = runParams.numEpochs > 0
+		addsNames = runParams.putPct > 0 // new PUTs add names at runtime ('-pctupdate' only overwrites existing ones)
 		threshold = runParams.permShuffleMax
 		n         = len(names)
 	)
 	switch {
-	case !readOnly && !epoching:
+	case addsNames:
 		ng = &namegetter.Random{}
-	case !readOnly && epoching:
-		ng = &namegetter.RandomUnique{}
 	case n > int(threshold) && n > namegetter.AffineMinN:
 		// O(1) memory, strict per-epoch
 		ng = &namegetter.PermAffinePrime{}

@@ -23,7 +23,6 @@ func TestNewNameGetter(t *testing.T) {
 		name        string
 		nameCount   int
 		putPct      int
-		epochs      uint
 		threshold   uint
 		expected    any
 		isPermBased bool
@@ -33,13 +32,6 @@ func TestNewNameGetter(t *testing.T) {
 			putPct:    10,
 			threshold: 100,
 			expected:  &namegetter.Random{},
-		},
-		{
-			name:      "mixed epoch workload",
-			putPct:    10,
-			epochs:    1,
-			threshold: 100,
-			expected:  &namegetter.RandomUnique{},
 		},
 		{
 			name:        "read-only with count at or below permShuffleMax",
@@ -73,7 +65,6 @@ func TestNewNameGetter(t *testing.T) {
 			runParams = &params{
 				workloadParams: workloadParams{
 					putPct:         test.putPct,
-					numEpochs:      test.epochs,
 					permShuffleMax: test.threshold,
 				},
 			}

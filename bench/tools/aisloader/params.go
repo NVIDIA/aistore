@@ -41,7 +41,7 @@ type (
 	}
 
 	// Workload timing and intensity
-	// NOTE: defines name-getter type via (putPct, numEpochs, permShuffleMax) and number of objects in the bucket
+	// NOTE: defines name-getter type via (putPct, permShuffleMax) and number of objects in the bucket
 	workloadParams struct {
 		duration             DurationExt // benchmark duration
 		putSizeUpperBoundStr string      // total PUT size limit (unparsed)

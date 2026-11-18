@@ -9,7 +9,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/debug"
 )
 
-// low-level bit-set and bit-mask-tracker for aisloader
+// low-level bit-set for aisloader
 
 const (
 	bitsPerWord = cos.SizeofI64 * 8
@@ -17,53 +17,9 @@ const (
 	bitsShift   = 6 // log2(64)
 )
 
-type (
-	bitmaskTracker struct {
-		mask []uint64
-		used int
-	}
-
-	bitSet struct {
-		bits []uint64
-		n    int
-	}
-)
-
-////////////////////
-// bitmaskTracker //
-////////////////////
-
-func (t *bitmaskTracker) init(size int) {
-	words := (size + bitsPerWord - 1) >> bitsShift
-	t.mask = make([]uint64, words)
-	t.used = 0
-}
-
-func (t *bitmaskTracker) grow() {
-	t.mask = append(t.mask, 0)
-}
-
-// fast path
-func (t *bitmaskTracker) tryMark(idx int) bool {
-	w := idx >> bitsShift              // idx / 64
-	b := uint64(1) << (idx & bitsMask) // 1 << (idx % 64)
-	if t.mask[w]&b != 0 {
-		return false
-	}
-	t.mask[w] |= b
-	t.used++
-	return true
-}
-
-func (t *bitmaskTracker) reset() {
-	for i := range t.mask {
-		t.mask[i] = 0
-	}
-	t.used = 0
-}
-
-func (t *bitmaskTracker) needsReset(totalSize int) bool {
-	return t.used >= totalSize
+type bitSet struct {
+	bits []uint64
+	n    int
 }
 
 ////////////

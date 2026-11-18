@@ -709,11 +709,11 @@ The `--epochs N` flag enables full-dataset read passes in read-only workloads (`
 
 | Workload | Dataset Size | Selected Algorithm |
 |---|---:|---|
-| Mixed read/write or non-epoched workloads | any | Random / RandomUnique |
-| Read-only | <= `100k` objects (default) | PermShuffle |
-| Read-only | >  `100k` objects (--/--) | PermAffinePrime |
+| `-pctput > 0` | any | Random |
+| `-pctput=0` | <= `100k` objects (default) | PermShuffle |
+| `-pctput=0` | > `100k` objects (default) | PermAffinePrime |
 
-> Command-line override to set the size threshold (instead of default `100k`): `--perm-shuffle-max` flag.
+> Use `--perm-shuffle-max` to adjust the threshold for `PermShuffle`. However, datasets with 10 or fewer names always use `PermShuffle` when `-pctput=0`.
 
 ## Examples
 

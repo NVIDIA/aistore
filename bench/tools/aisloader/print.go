@@ -452,8 +452,6 @@ func ngLabel() string {
 	switch objnameGetter.(type) {
 	case *namegetter.Random:
 		return "random non-unique"
-	case *namegetter.RandomUnique:
-		return "random unique"
 	case *namegetter.PermShuffle:
 		return "unique sequential"
 	case *namegetter.PermAffinePrime:
