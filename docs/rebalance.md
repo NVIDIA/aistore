@@ -142,7 +142,7 @@ First, populate a bucket:
 $ MODE=debug make aisloader
 Building aisloader... done.
 
-$ aisloader -bucket=ais://nnn -pctput=100 -duration=3m -numworkers=4 -maxsize 1k -minsize 1k -cleanup=false -quiet -epochs 7
+$ aisloader -bucket=ais://nnn -pctput=100 -duration=3m -numworkers=4 -maxsize 1k -minsize 1k -cleanup=false -quiet
 Runtime configuration:
 {
    "proxy": "http://localhost:8080",

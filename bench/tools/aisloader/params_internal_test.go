@@ -340,7 +340,26 @@ func TestParamsValidate(t *testing.T) {
 			mutate: func(p *params) {
 				p.duration.Val = 0
 				p.numEpochs = 1
+				p.putPct = 0
 			},
+		},
+		{
+			name: "epochs with 100% PUT",
+			mutate: func(p *params) {
+				p.duration.Val = 0
+				p.numEpochs = 1
+				p.putPct = 75
+			},
+			wantErr: "cannot combine epochs flag with pctput 75 (epochs require a read-only workload)",
+		},
+		{
+			name: "epochs with update existing",
+			mutate: func(p *params) {
+				p.numEpochs = 1
+				p.putPct = 0
+				p.updateExistingPct = 10
+			},
+			wantErr: "cannot combine epochs flag with pctupdate 10 (epochs require a read-only workload)",
 		},
 		{
 			name: "allow zero duration with stoppable",

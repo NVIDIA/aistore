@@ -697,7 +697,7 @@ With version 2.1, `aisloader` can now benchmark [Get-Batch](#getbatch-distribute
 
 The tool uses the [`name-getter`] abstraction (see https://github.com/NVIDIA/aistore/blob/main/bench/tools/aisloader/namegetter/ng.go) to enable efficient random reads across very large collections: objects and archived files.
 
-The `--epochs N` flag enables full-dataset read passes, with different algorithms selected automatically based on dataset size:
+The `--epochs N` flag enables full-dataset read passes in read-only workloads (`-pctput=0` and `-pctupdate=0`), with different algorithms selected automatically based on dataset size:
 
 **PermAffinePrime**: For datasets larger than `100k` (by default) objects, an affine transformation with prime modulus provides memory-efficient pseudo-random access without storing full permutations. The algorithm fills batch requests completely and may span epoch boundaries.
 

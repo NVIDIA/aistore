@@ -53,7 +53,7 @@ type (
 		numWorkers           int         // number of concurrent workers
 		putPct               int         // percentage of PUT operations (rest are GETs)
 		updateExistingPct    int         // percentage of GETs followed by PUT updates
-		numEpochs            uint        // number of full passes through bucket (enables permutation name-getter)
+		numEpochs            uint        // number of full read-only passes through bucket
 		permShuffleMax       uint        // threshold for switching to affine name-getter (memory vs compute tradeoff)
 	}
 
@@ -634,6 +634,14 @@ func (p *params) validate() error {
 	}
 	if p.updateExistingPct < 0 || p.updateExistingPct > 100 {
 		return fmt.Errorf("invalid %d percentage of GET requests that are followed by a PUT \"update\"", p.updateExistingPct)
+	}
+	if p.numEpochs > 0 {
+		if p.putPct > 0 {
+			return fmt.Errorf("cannot combine epochs flag with pctput %d (epochs require a read-only workload)", p.putPct)
+		}
+		if p.updateExistingPct > 0 {
+			return fmt.Errorf("cannot combine epochs flag with pctupdate %d (epochs require a read-only workload)", p.updateExistingPct)
+		}
 	}
 	if p.cleanUp.Val {
 		if p.evictBatchSize <= 0 {
