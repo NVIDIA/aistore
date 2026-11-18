@@ -219,8 +219,9 @@ type (
 		// archive objects, the prefix also matches paths inside the
 		// archive (e.g. `"A.tar/tutorials/"`).
 		Prefix string `json:"prefix"` // +gen:optional
-		// Start listing strictly after this name (exclusive). AIS
-		// buckets only.
+		// Start listing strictly after this name (exclusive).
+		// When listing from a remote backend, this is supported only for S3.
+		// Cannot be combined with LsDiff.
 		StartAfter string `json:"start_after,omitempty"` // +gen:optional
 		// Opaque token returned by the previous page; pass it back to
 		// fetch the next page. Empty on the first request; empty again

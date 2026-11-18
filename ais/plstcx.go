@@ -105,9 +105,8 @@ func (p *proxy) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bc
 func (c *lsoCtx) lso() {
 	bck, lsmsg := c.bck, c.lsmsg
 
-	// LsVerChanged a.k.a. '--check-versions' limitations
 	if lsmsg.IsFlagSet(apc.LsDiff) {
-		if err := _checkVerChanged(bck, lsmsg); err != nil {
+		if err := validateLsoDiff(bck, lsmsg); err != nil {
 			c.writeErr(err)
 			return
 		}
@@ -163,8 +162,12 @@ func (c *lsoCtx) nativePage() {
 	lst.Entries = nil
 }
 
-func _checkVerChanged(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
+func validateLsoDiff(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
 	const a = "cannot perform remote versions check (or diff vs remote bucket)"
+	// TODO: honor StartAfter in the local LsDiff iterator to avoid false remote-deletion reports.
+	if lsmsg.StartAfter != "" {
+		return cmn.NewErrNotImpl("list objects", "with start_after and LsDiff")
+	}
 	if !bck.HasVersioningMD() {
 		return errors.New(a + ": bucket " + bck.Cname("") + " does not provide remote versioning info")
 	}

@@ -577,6 +577,7 @@ Page 29: 230 names in 130ms
 
 - When using `--paged` with remote buckets, the footer will show both page number and in-cluster object count when applicable
 - The `--diff` option requires remote backends supporting some form of versioning (e.g., object version, checksum, and/or ETag)
+- The `--diff` option cannot be combined with `--start-after`
 - For more information on working with archived content, see docs/archive.md
 - To fully synchronize in-cluster content with remote backend, see documentation on [out-of-band updates](/docs/out_of_band.md)
 
