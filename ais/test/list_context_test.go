@@ -231,6 +231,8 @@ func TestLsoContext(t *testing.T) {
 	})
 }
 
+const injectedListErr = "injected LIST error"
+
 func TestPrefetchDT(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 1})
 	bp := tools.BaseAPIParams()
@@ -303,20 +305,27 @@ func TestPrefetchDT(t *testing.T) {
 		tassert.CheckFatal(t, err)
 		status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout})
 		tassert.CheckFatal(t, err)
-		tassert.Fatalf(t, status.IsAborted() && strings.Contains(status.ErrMsg, "injected LIST error"), "expected backend error and abort, got %s (err=%q)", status, status.ErrMsg)
+		tassert.Fatalf(t, status.IsAborted(), "expected abort, got %s (err=%q)", status, status.ErrMsg)
+
+		var cause string
 		err = tools.WaitForCondition(func() bool {
 			snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid})
 			if err != nil || len(snaps) != nat {
 				return false
 			}
+			cause = ""
 			for _, all := range snaps {
 				if len(all) != 1 || !all[0].IsFinished() || !all[0].IsAborted() {
 					return false
+				}
+				if strings.Contains(all[0].AbortErr, injectedListErr) {
+					cause = all[0].AbortErr // DT's abort error
 				}
 			}
 			return true
 		}, tools.WaitRetryOpts{MaxRetries: 300, Interval: 50 * time.Millisecond})
 		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, cause != "", "expected backend error in at least one target's abort error (IC: %q)", status.ErrMsg)
 		tassert.Errorf(t, b.calls.Load() == 2, "expected two backend LISTs, got %d", b.calls.Load())
 	})
 	for _, workers := range []int{1, xact.NwpNone} {
@@ -520,7 +529,7 @@ func (remote *lsoCtxRemote) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(cos.HdrContentType, cos.ContentMsgPack)
 			_ = msgp.Encode(w, &cmn.LsoRes{ContinuationToken: "next"})
 		} else {
-			http.Error(w, "injected LIST error", http.StatusInternalServerError)
+			http.Error(w, injectedListErr, http.StatusInternalServerError)
 		}
 	case lsoCtxPrefetchPages:
 		token := ""
