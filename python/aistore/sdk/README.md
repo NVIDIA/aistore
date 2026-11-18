@@ -56,6 +56,8 @@ from aistore.sdk import Client
 client = Client("http://localhost:8080")
 ```
 
+For initialization and cleanup, see [Client Lifecycle](#client-lifecycle).
+
 > Note: `http://localhost:8080` address (above and elsewhere) must be understood as a placeholder for an _arbitrary_ AIStore endpoint (`AIS_ENDPOINT`).
 
 The newly created `client` object can be used to interact with your AIS cluster, buckets, and objects. 
@@ -93,6 +95,54 @@ Please note that certain operations do **not** support external cloud storage bu
 
 ---
 
+## Client Lifecycle
+
+> These examples require Python SDK 2.3.0 or newer for lifecycle management support.
+
+### Explicit Initialization and Cleanup
+
+Creating a `Client` makes no network requests. The optional `initialize()` method
+fetches and caches cluster information, such as the AIS version, for compatibility
+and feature decisions. You can make SDK requests without calling it first.
+
+Call `close()` when finished to release HTTP connections and prevent further
+requests. The examples below read an existing object from `my-bucket`.
+
+```python
+from aistore.sdk import Client
+
+client = Client("http://localhost:8080")
+try:
+    client.initialize()  # Optional, fetches state from cluster
+    obj = client.bucket("my-bucket").object("hello.txt")
+    content = obj.get_reader().read_all()
+finally:
+    client.close()
+```
+
+Repeated calls to `initialize()` do not refetch cached state. Repeated calls to
+`close()` do nothing after the first call. After closing, `client.closed` is `True`.
+Requests through the client or its bucket and object handles raise
+`ClientClosedError`, a subclass of `RuntimeError`. Closing does not wait for active
+requests.
+
+### Context Manager
+
+If you prefer not to manage the lifecycle yourself, use `with` to initialize the
+client on entry and close it on exit:
+
+```python
+from aistore.sdk import Client
+
+with Client("http://localhost:8080") as client:
+    obj = client.bucket("my-bucket").object("hello.txt")
+    content = obj.get_reader().read_all()
+```
+
+Note that initialization is always run when using a context manager.
+
+---
+
 ## Environment Variables
 
 The AIS Python SDK supports several environment variables that allow you to configure client behavior without explicitly passing parameters to the `Client` constructor. This is particularly useful for containerized environments or when you want to centralize configuration.
@@ -125,7 +175,7 @@ ETL webservers support all SDK client environment variables above (same semantic
 
 ### Configuration Precedence
 
-When the `Client` is initialized, configuration values are resolved in the following order (highest to lowest precedence):
+When the `Client` is constructed, configuration values are resolved in the following order (highest to lowest precedence):
 
 1. **Explicit parameters** passed to the `Client()` constructor
 2. **Environment variables** (listed above)
