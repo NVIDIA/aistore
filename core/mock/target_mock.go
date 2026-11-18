@@ -53,16 +53,18 @@ func (*TargetMock) ByteMM() *memsys.MMSA           { return memsys.ByteMM() }
 
 func (*TargetMock) MaxUtilLoad() (int64, float64) { return 0, 0 }
 
-func (*TargetMock) GetAllRunning(*core.AllRunningInOut, bool)                      {}
-func (*TargetMock) PutObject(*core.LOM, *core.PutParams) error                     { return nil }
-func (*TargetMock) FinalizeObj(*core.LOM, string, core.Xact, cmn.OWT) (int, error) { return 0, nil }
-func (*TargetMock) EvictObject(*core.LOM) (int, error)                             { return 0, nil }
-func (*TargetMock) DeleteObject(*core.LOM, bool) (int, error)                      { return 0, nil }
-func (*TargetMock) Promote(*core.PromoteParams) (int, error)                       { return 0, nil }
-func (t *TargetMock) Backend(bck *meta.Bck) core.Backend                           { return t.Backends[bck.Provider] }
-func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)                      {}
-func (*TargetMock) GetFromNeighbor(*core.GfnParams) (*http.Response, error)        { return nil, nil }
-func (*TargetMock) OOS(*fs.CapStatus, *cmn.Config, *fs.Tcdf) fs.CapStatus          { return fs.CapStatus{} }
+func (*TargetMock) GetAllRunning(*core.AllRunningInOut, bool)  {}
+func (*TargetMock) PutObject(*core.LOM, *core.PutParams) error { return nil }
+func (*TargetMock) FinalizeObj(*core.LOM, string, core.Xact, cmn.OWT, bool) (int, error) {
+	return 0, nil
+}
+func (*TargetMock) EvictObject(*core.LOM) (int, error)                      { return 0, nil }
+func (*TargetMock) DeleteObject(*core.LOM, bool) (int, error)               { return 0, nil }
+func (*TargetMock) Promote(*core.PromoteParams) (int, error)                { return 0, nil }
+func (t *TargetMock) Backend(bck *meta.Bck) core.Backend                    { return t.Backends[bck.Provider] }
+func (*TargetMock) BMDVersionFixup(*http.Request, ...cmn.Bck)               {}
+func (*TargetMock) GetFromNeighbor(*core.GfnParams) (*http.Response, error) { return nil, nil }
+func (*TargetMock) OOS(*fs.CapStatus, *cmn.Config, *fs.Tcdf) fs.CapStatus   { return fs.CapStatus{} }
 
 func (*TargetMock) HeadCold(context.Context, *core.LOM, *http.Request) (*cmn.ObjAttrs, int, error) {
 	return nil, 0, nil

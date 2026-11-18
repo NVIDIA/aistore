@@ -67,6 +67,7 @@ type (
 		restful     bool          // being invoked via RESTful API
 		t2t         bool          // by another target
 		skipEC      bool          // do not erasure-encode when finalizing
+		keepWork    bool          // keep workFQN on error (the caller removes it or rolls back)
 		skipVC      bool          // skip loading existing Version and skip comparing Checksums (skip VC)
 		skipBackend bool          // don't write to backend (e.g., cold-GET caching, rechunk)
 		locked      bool          // true if the LOM is already locked by the caller
@@ -451,7 +452,8 @@ func (poi *putOI) loghdr() string {
 
 func (poi *putOI) finalize() (ecode int, err error) {
 	if ecode, err = poi.fini(); err != nil {
-		if err1 := cos.Stat(poi.workFQN); err1 == nil || !cos.IsNotExist(err1) {
+		rmWork := !poi.keepWork // (see FinalizeObj)
+		if err1 := cos.Stat(poi.workFQN); rmWork && (err1 == nil || !cos.IsNotExist(err1)) {
 			// cleanup: rm work-fqn
 			if err1 == nil {
 				err1 = err
@@ -2152,9 +2154,8 @@ func (coi *coi) _writer(t *target, lom, dst *core.LOM, args *core.ETLArgs) (res 
 
 	// finalize
 	dst.SetSize(size)
-	ecode, err = t.FinalizeObj(dst, workFQN, coi.Xact, coi.OWT)
+	ecode, err = t.FinalizeObj(dst, workFQN, coi.Xact, coi.OWT, true /*rm work*/)
 	if err != nil {
-		cos.RemoveFile(workFQN)
 		return xs.CoiRes{Err: err, Ecode: ecode}
 	}
 	res.Lsize = size

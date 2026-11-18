@@ -614,9 +614,11 @@ func (r *XactArch) _fini(wi *archwi) (ecode int, err error) {
 	}
 	debug.Assert(wi.wfh == nil)
 
+	origSize := wi.archlom.Lsize(true /*may be new*/)
 	wi.archlom.SetSize(size)
-	ecode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r, cmn.OwtArchive)
+	ecode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r, cmn.OwtArchive, false /*rm work*/)
 	if err != nil {
+		wi.archlom.SetSize(origSize)
 		wi.cleanup()
 		return ecode, err
 	}
@@ -949,6 +951,9 @@ func (wi *archwi) rollback() {
 
 func (wi *archwi) _rollback() error {
 	if _, err := os.Lstat(wi.archlom.FQN); err == nil {
+		if _, err := os.Lstat(wi.fqn); cos.IsNotExist(err) {
+			return nil // rename already consumed the work file
+		}
 		// a newer object took the name while the append ran (e.g. a PUT) - keep it as before
 		nlog.Warningln(wi.r.Name(), "rollback:", wi.archlom.Cname(), "has a newer object, not restoring the original")
 		return cos.RemoveFile(wi.fqn)

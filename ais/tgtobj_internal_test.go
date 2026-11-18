@@ -42,6 +42,42 @@ const (
 	testBucket    = "bck"
 )
 
+func TestFinalizeObjKeepsArchiveWorkfile(t *testing.T) {
+	mpath := t.TempDir()
+	mi, err := fs.AddTestMpath(mpath, mockTarget.SID())
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { fs.Remove(mpath) })
+
+	bck := meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal)
+	lom := core.AllocLOM("archive-finalize.tar")
+	defer core.FreeLOM(lom)
+	tassert.CheckFatal(t, lom.InitFQN(mi.MakePathFQN(bck.Bucket(), fs.ObjCT, lom.ObjName), bck.Bucket()))
+	// the bucket directory on this mountpath is absent, so rename fails
+	_, err = os.Stat(mi.MakePathBck(bck.Bucket()))
+	tassert.Fatalf(t, os.IsNotExist(err), "expected a missing bucket directory, got %v", err)
+
+	workFQN := filepath.Join(t.TempDir(), "archive.tar")
+	data := []byte("original archive")
+	tassert.CheckFatal(t, os.WriteFile(workFQN, data, cos.PermRWR))
+	_, err = mockTarget.FinalizeObj(lom, workFQN, nil, cmn.OwtArchive, false /*rm work*/)
+	tassert.Fatalf(t, err != nil, "expected finalization to fail before rename")
+	got, err := os.ReadFile(workFQN)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, bytes.Equal(got, data), "archive work file changed: %q", got)
+
+	poi := &putOI{
+		t:       mockTarget,
+		atime:   time.Now().UnixNano(),
+		lom:     lom,
+		workFQN: workFQN,
+		owt:     cmn.OwtPut,
+	}
+	_, err = poi.finalize()
+	tassert.Fatalf(t, err != nil, "expected PUT finalization to fail before rename")
+	_, err = os.Stat(workFQN)
+	tassert.Fatalf(t, os.IsNotExist(err), "expected PUT to remove its work file, got %v", err)
+}
+
 func TestCopyRegularSameUnameAboveHardLimit(t *testing.T) {
 	const objName = "copy-regular-same-uname"
 	data := []byte("oversized")

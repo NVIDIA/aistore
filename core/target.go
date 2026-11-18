@@ -133,7 +133,8 @@ type (
 		ControlClient() *http.Client
 
 		// core object (+ PutObject above)
-		FinalizeObj(lom *LOM, workFQN string, xctn Xact, owt cmn.OWT) (ecode int, err error)
+		// rmWork: remove workFQN on error (otherwise, the caller removes it or rolls back)
+		FinalizeObj(lom *LOM, workFQN string, xctn Xact, owt cmn.OWT, rmWork bool) (ecode int, err error)
 		EvictObject(lom *LOM) (ecode int, err error)
 		DeleteObject(lom *LOM, evict bool) (ecode int, err error)
 

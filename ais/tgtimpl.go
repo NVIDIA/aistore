@@ -80,7 +80,7 @@ func (t *target) PutObject(lom *core.LOM, params *core.PutParams) (err error) {
 	return err
 }
 
-func (t *target) FinalizeObj(lom *core.LOM, workFQN string, xctn core.Xact, owt cmn.OWT) (ecode int, err error) {
+func (t *target) FinalizeObj(lom *core.LOM, workFQN string, xctn core.Xact, owt cmn.OWT, rmWork bool) (ecode int, err error) {
 	if err = cos.Stat(workFQN); err != nil {
 		return
 	}
@@ -92,6 +92,7 @@ func (t *target) FinalizeObj(lom *core.LOM, workFQN string, xctn core.Xact, owt 
 		poi.workFQN = workFQN
 		poi.owt = owt
 		poi.xctn = xctn
+		poi.keepWork = !rmWork
 	}
 	ecode, err = poi.finalize()
 	freePOI(poi)
