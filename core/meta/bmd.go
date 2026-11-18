@@ -130,6 +130,17 @@ func (m *BMD) GetBucketWithPlacement() (found *Bck) {
 	return found
 }
 
+func (m *BMD) GetBucketWithBackendOnDemand() (found *Bck) {
+	m.RangeProps(func(name, provider string, ns cmn.Ns, props *cmn.Bprops) bool {
+		if props.RateLimit.Backend.OnDemand {
+			found = NewBck(name, provider, ns, props)
+			return true
+		}
+		return false
+	})
+	return found
+}
+
 // visit immutable bucket properties without constructing buckets; stop when the callback returns true
 func (m *BMD) RangeProps(callback func(name, provider string, ns cmn.Ns, props *cmn.Bprops) bool) {
 	for provider, namespaces := range m.Providers {

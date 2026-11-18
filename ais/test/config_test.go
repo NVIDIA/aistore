@@ -126,6 +126,101 @@ func TestConfig(t *testing.T) {
 	}
 }
 
+func TestConfigBackendOnDemand(t *testing.T) {
+	bp := tools.BaseAPIParams(tools.GetPrimaryURL())
+	original, err := api.GetClusterConfig(bp)
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() {
+		tassert.CheckError(t, api.SetClusterConfig(bp, cos.StrKVs{
+			"rate_limit.backend.enabled":   strconv.FormatBool(original.RateLimit.Backend.Enabled),
+			"rate_limit.backend.on_demand": strconv.FormatBool(original.RateLimit.Backend.OnDemand),
+		}, false))
+	})
+	for _, tc := range []struct {
+		name     string
+		enabled  bool
+		onDemand bool
+		useMsg   bool
+		invalid  bool
+	}{
+		{name: "disabled-default"},
+		{name: "stage-on-demand-while-disabled", onDemand: true, useMsg: true},
+		{name: "enabled-on-demand", enabled: true, onDemand: true},
+		{name: "explicit-false-clears-on-demand", enabled: true, useMsg: true},
+		{name: "reject-invalid-boolean", invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.invalid {
+				before, err := api.GetClusterConfig(bp)
+				tassert.CheckFatal(t, err)
+				err = api.SetClusterConfig(bp, cos.StrKVs{"rate_limit.backend.on_demand": "invalid"}, false)
+				herr := cmn.AsErrHTTP(err)
+				tassert.Fatalf(t, herr != nil && herr.Status == http.StatusBadRequest, "expected HTTP 400, got %v", err)
+				after, err := api.GetClusterConfig(bp)
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, after.RateLimit.Backend == before.RateLimit.Backend, "invalid update changed policy")
+				return
+			}
+			existing := cmn.Bck{Name: "on-demand-existing-" + cos.GenTie(), Provider: apc.AIS}
+			tools.CreateBucket(t, bp.URL, existing, nil, true)
+			before, err := api.HeadBucket(bp, existing, false)
+			tassert.CheckFatal(t, err)
+			if tc.useMsg {
+				err = api.SetClusterConfigUsingMsg(bp, &cmn.ConfigToSet{RateLimit: &cmn.RateLimitConfToSet{
+					Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{Enabled: apc.Ptr(tc.enabled)},
+						OnDemand: apc.Ptr(tc.onDemand)},
+				}}, false)
+			} else {
+				err = api.SetClusterConfig(bp, cos.StrKVs{
+					"rate_limit.backend.enabled":   strconv.FormatBool(tc.enabled),
+					"rate_limit.backend.on_demand": strconv.FormatBool(tc.onDemand),
+				}, false)
+			}
+			tassert.CheckFatal(t, err)
+			want := original.RateLimit.Backend
+			want.Enabled, want.OnDemand = tc.enabled, tc.onDemand
+			config, err := api.GetClusterConfig(bp)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, config.RateLimit.Backend == want, "cluster policy mismatch: %+v", config.RateLimit.Backend)
+			smap := tools.GetClusterMap(t, bp.URL)
+			for _, nodes := range []meta.NodeMap{smap.Pmap, smap.Tmap} {
+				for _, node := range nodes {
+					tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+						config, err := api.GetDaemonConfig(bp, node)
+						tassert.CheckFatal(t, err)
+						return config.RateLimit.Backend == want
+					}, tools.WaitRetryOpts{MaxRetries: 20, Interval: 100 * time.Millisecond}))
+				}
+			}
+			props, err := api.HeadBucket(bp, existing, false)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, props.RateLimit == before.RateLimit, "cluster update changed an existing bucket")
+			bck := cmn.Bck{Name: "on-demand-inherited-" + cos.GenTie(), Provider: apc.AIS}
+			tools.CreateBucket(t, bp.URL, bck, nil, true)
+			props, err = api.HeadBucket(bp, bck, false)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, props.RateLimit.Backend == want, "new bucket did not inherit policy: %+v", props.RateLimit.Backend)
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+				Backend: &cmn.AdaptiveToSet{OnDemand: apc.Ptr(!tc.onDemand)},
+			}})
+			tassert.CheckFatal(t, err)
+			props, err = api.HeadBucket(bp, bck, false)
+			tassert.CheckFatal(t, err)
+			want.OnDemand = !tc.onDemand
+			tassert.Fatalf(t, props.RateLimit.Backend == want, "bucket override not applied: %+v", props.RateLimit.Backend)
+			_, err = api.ResetBucketProps(bp, bck)
+			tassert.CheckFatal(t, err)
+			props, err = api.HeadBucket(bp, bck, false)
+			tassert.CheckFatal(t, err)
+			want.OnDemand = tc.onDemand
+			tassert.Fatalf(t, props.RateLimit.Backend == want, "reset did not restore cluster defaults: %+v", props.RateLimit.Backend)
+			config, err = api.GetClusterConfig(bp)
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, config.RateLimit.Backend == want, "bucket override/reset changed cluster defaults")
+		})
+	}
+}
+
 func TestConfigGet(t *testing.T) {
 	smap := tools.GetClusterMap(t, tools.GetPrimaryURL())
 

@@ -12,6 +12,7 @@ This text explains how it all fits together.
 3. [Configuration](#3-configuration)
    - [Configuration: Summary Table](#31-configuration-summary-table)
 4. [Unified Rate-Limiting Logic](#4-unified-rate-limiting-logic)
+   - [Backend Activation Modes](#backend-activation-modes)
 5. [Handling Batch Jobs](#5-handling-batch-jobs)
 6. [Use Cases](#6-use-cases)
    - [Handling Backend-Imposed Limits](#61-handling-backend-imposed-limits)
@@ -120,11 +121,14 @@ rate_limit.frontend.per_op_max_tokens
 | Parameter | Description |
 |-----------|-------------|
 | `enabled` | Enables/disables rate limiting for frontend or backend |
+| `on_demand` | (Backend only) Delays rate limiting until the first backend `429`/`503`. Can be set while disabled; takes effect only when `enabled=true`. Defaults to `false`. |
 | `interval` | Time window for token replenishment (e.g., "1m", "10s") |
 | `max_tokens` | Maximum number of operations allowed in the interval |
 | `burst_size` | (Frontend only) Maximum burst allowed above steady rate |
 | `num_retries` | (Backend only) Maximum number of retry attempts when handling `429` or `503` |
 | `per_op_max_tokens` | Optional per-operation (GET/PUT/DELETE) token configuration |
+
+Cluster defaults apply to newly created buckets, while existing buckets retain their properties and can be configured independently.
 
 ---
 
@@ -136,7 +140,11 @@ Although frontend and backend differ in their specific mechanisms (bursty vs. sh
 
 - **Backend**: Each target enforces the configured limit for outbound calls. This is wrapped by a dedicated `ais/rlbackend` layer that shapes traffic to remote AIS clusters or external clouds (e.g., S3, GCS).
 
-Here's a simplified snippet of logic with (4) inline comments:
+### Backend Activation Modes
+
+With `rate_limit.backend.enabled=true`, the default `on_demand=false` paces requests from the start. Setting `on_demand=true` allows requests without backend-limiter pacing until the first `429`/`503` for that bucket and operation on a target. That response activates the limiter: subsequent requests are paced, and rate-limit errors receive bounded retries using the configured token budget, interval, and retry count. With `enabled=false`, neither mode applies.
+
+Here's a simplified snippet of proactive-mode logic (`on_demand=false`) with (4) inline comments:
 
 ```go
 func (bp *rlbackend) GetObj() (int, error) {
@@ -166,7 +174,7 @@ func (bp *rlbackend) GetObj() (int, error) {
 
 ### Backend Retry Waits
 
-`rlbackend` acquires a token once before each operation. After a backend `429` or `503`, retries use backoff without acquiring additional tokens; errors still contribute to the shared limiter's error statistics.
+Once active, `rlbackend` acquires a token once before each operation. After a backend `429` or `503`, retries use backoff without acquiring additional tokens; errors still contribute to the shared limiter's error statistics.
 
 - Each wait starts from the larger of the previous retry sleep and the current token-derived interval.
 - The error percentage determines the multiplier: **2x** at 30% or below, **4x** above 30%, and **8x** above 50%. With fewer than three recorded requests, the multiplier is 2x.

@@ -272,7 +272,7 @@ func TestCluPostVerify(t *testing.T) {
 			config.Rebalance = &cmn.RebalanceConf{Enabled: test.rebalance}
 			c := &clupost{
 				p: p, w: httptest.NewRecorder(), r: req, config: config, apiOp: test.apiOp, body: body,
-				smap: smap, nsi: nsi, nversStr: cmn.VersionAIStore,
+				smap: smap, bmd: newBucketMD(), nsi: nsi, nversStr: cmn.VersionAIStore,
 				regReq: cluMeta{Flags: test.flags},
 			}
 

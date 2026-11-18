@@ -27,6 +27,45 @@ var (
 	invalidIssUrls = []string{"invalid-scheme"}
 )
 
+func TestAdaptiveOnDemandJSON(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		payload string
+		want    bool
+		invalid bool
+	}{
+		{name: "old-metadata-defaults-to-false", payload: `{}`},
+		{name: "explicit-false", payload: `{"on_demand":false}`},
+		{name: "explicit-true", payload: `{"on_demand":true}`, want: true},
+		{name: "reject-string", payload: `{"on_demand":"true"}`, invalid: true},
+		{name: "reject-number", payload: `{"on_demand":1}`, invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var current cmn.Adaptive
+			err := cos.JSON.Unmarshal([]byte(tc.payload), &current)
+			if tc.invalid {
+				tassert.Fatalf(t, err != nil, "accepted invalid boolean: %s", tc.payload)
+				return
+			}
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, current.OnDemand == tc.want, "unexpected on_demand: %+v", current)
+			var previous struct {
+				cmn.RateLimitBase
+				NumRetries int `json:"num_retries"`
+			}
+			err = cos.JSON.Unmarshal(cos.MustMarshal(current), &previous)
+			tassert.Fatalf(t, (err != nil) == tc.want, "old decoder compatibility mismatch: %v", err)
+			var update cmn.AdaptiveToSet
+			tassert.CheckFatal(t, cos.JSON.Unmarshal([]byte(tc.payload), &update))
+			if tc.payload == `{}` {
+				tassert.Fatalf(t, update.OnDemand == nil, "omitted update must preserve the current value")
+			} else {
+				tassert.Fatalf(t, update.OnDemand != nil && *update.OnDemand == tc.want, "explicit update lost its value")
+			}
+		})
+	}
+}
+
 func TestConfigTestEnv(t *testing.T) {
 	oldConfig := cmn.GCO.Get()
 	defer func() {

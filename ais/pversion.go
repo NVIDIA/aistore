@@ -165,3 +165,14 @@ func (c *clupost) checkJoinPlacement(smap *smapX, bmd *bucketMD) error {
 	return fmt.Errorf("%s: cannot join %s (version %q) - cluster has %s that requires version %s or later",
 		c.p, c.nsi.StringEx(), c.nversStr, what, cmn.MinVerPlacement)
 }
+
+func (c *clupost) checkJoinBackendOnDemand() error {
+	if cos.VersionAtLeast(c.nversStr, cmn.MinVerBackendOnDemand) {
+		return nil
+	}
+	if bck := c.bmd.GetBucketWithBackendOnDemand(); bck != nil {
+		return fmt.Errorf("%s: cannot join %s (version %q) - bucket %s has backend on-demand rate limiting that requires version %s or later",
+			c.p, c.nsi.StringEx(), c.nversStr, bck.Cname(""), cmn.MinVerBackendOnDemand)
+	}
+	return nil
+}

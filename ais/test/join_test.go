@@ -10,9 +10,11 @@ import (
 	"encoding/base64"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,6 +37,198 @@ type joinTestBody struct {
 }
 
 const invalidNodeJoinSecret = "invalid-node-join-secret"
+
+func TestJoinBackendOnDemand(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinProxies: 2})
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		bp       = tools.BaseAPIParams(proxyURL)
+		smap     = tools.GetClusterMap(t, proxyURL)
+		bck      = cmn.Bck{Name: "join-on-demand-" + cos.GenTie(), Provider: apc.AIS}
+	)
+	node, err := smap.GetRandProxy(true)
+	tassert.CheckFatal(t, err)
+	joinBP := bp
+	joinBP.Method = http.MethodPost
+	rp := &api.ReqParams{
+		BaseParams: joinBP,
+		Path:       apc.URLPathCluAutoReg.S,
+		Body:       cos.MustMarshal(joinTestBody{SI: node}),
+		Header:     http.Header{apc.HdrNodeVersion: []string{cmn.VersionAIStore}},
+	}
+	t.Cleanup(func() {
+		rp.Header.Set(apc.HdrNodeVersion, cmn.VersionAIStore)
+		tassert.CheckError(t, rp.DoRequest())
+	})
+	tools.CreateBucket(t, proxyURL, bck, nil, true)
+	for _, tc := range []struct {
+		name     string
+		version  string
+		onDemand bool
+		enabled  bool
+		reject   bool
+	}{
+		{name: "5.2-without-on-demand", version: "5.2"},
+		{name: "5.2-with-staged-on-demand", version: "5.2", onDemand: true, reject: true},
+		{name: "5.2-with-enabled-on-demand", version: "5.2", onDemand: true, enabled: true, reject: true},
+		{name: "5.3-with-on-demand", version: "5.3", onDemand: true, enabled: true},
+		{name: "5.3-rc-with-on-demand", version: "5.3.rc1", onDemand: true},
+		{name: "current-version-with-on-demand", version: cmn.VersionAIStore, onDemand: true, enabled: true},
+		{name: "5.2-after-clearing-on-demand", version: "5.2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+				Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{Enabled: apc.Ptr(tc.enabled)},
+					OnDemand: apc.Ptr(tc.onDemand)},
+			}})
+			tassert.CheckFatal(t, err)
+			rp.Header.Set(apc.HdrNodeVersion, tc.version)
+			err = rp.DoRequest()
+			if tc.reject {
+				herr := cmn.AsErrHTTP(err)
+				tassert.Fatalf(t, herr != nil && herr.Status == http.StatusConflict,
+					"expected incompatible join to return HTTP 409, got %v", err)
+			} else {
+				tassert.CheckFatal(t, err)
+			}
+			current := tools.GetClusterMap(t, proxyURL).GetNode(node.ID())
+			tassert.Fatalf(t, current != nil && current.EqNetID(node) && current.SameIncarnation(node),
+				"join changed the registered node: %v", current)
+		})
+	}
+}
+
+func TestJoinBackendOnDemandRefreshedBMD(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 1})
+	var (
+		proxyURL = tools.GetPrimaryURL()
+		bp       = tools.BaseAPIParams(proxyURL)
+		config   = tools.GetClusterConfig(t)
+	)
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": strconv.FormatBool(config.Rebalance.Enabled)})
+	})
+	for _, tc := range []struct {
+		name     string
+		version  string
+		onDemand bool
+		reject   bool
+	}{
+		{name: "5.2-rejected-after-on-demand-is-set", version: "5.2", onDemand: true, reject: true},
+		{name: "5.2-accepted-after-unrelated-bmd-update", version: "5.2"},
+		{name: "5.3-accepted-after-on-demand-is-set", version: "5.3", onDemand: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tassert.CheckFatal(t, api.EnableRebalance(bp))
+			bck := cmn.Bck{Name: "join-bmd-refresh-" + cos.GenTie(), Provider: apc.AIS}
+			tools.CreateBucket(t, proxyURL, bck, nil, true)
+			observer := newJoinBMDTarget(t, bp, "5.3", true)
+			_, _, err := api.JoinCluster(bp, observer.si, 0)
+			tassert.CheckFatal(t, err)
+			joiner := newJoinBMDTarget(t, bp, tc.version, false)
+			joined, updated, disabled := make(chan error, 1), make(chan error, 1), make(chan error, 1)
+			go joiner.join(bp, joined)
+			select {
+			case <-observer.entered:
+			case err := <-joined:
+				t.Fatalf("join completed before early GFN: %v", err)
+			case <-t.Context().Done():
+				t.Fatal(t.Context().Err())
+			}
+			go disableJoinRebalance(bp, disabled)
+			tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+				return !tools.GetClusterConfig(t).Rebalance.Enabled
+			}, tools.WaitRetryOpts{Interval: 10 * time.Millisecond, MaxRetries: 100}))
+			go updateJoinBMD(bp, bck, tc.onDemand, updated)
+			tassert.CheckFatal(t, tools.WaitForCondition(func() bool {
+				bmd, err := api.GetBMD(bp)
+				tassert.CheckFatal(t, err)
+				props, exists := bmd.Get(meta.CloneBck(&bck))
+				return exists && props.RateLimit.Backend.Enabled && props.RateLimit.Backend.OnDemand == tc.onDemand
+			}, tools.WaitRetryOpts{Interval: 10 * time.Millisecond, MaxRetries: 100}))
+			close(observer.resume)
+			tassert.CheckFatal(t, <-disabled)
+			tassert.CheckFatal(t, <-updated)
+			err = <-joined
+			if tc.reject {
+				herr := cmn.AsErrHTTP(err)
+				tassert.Errorf(t, herr != nil && herr.Status == http.StatusConflict,
+					"expected refreshed BMD to reject join with HTTP 409, got %v", err)
+			} else {
+				tassert.CheckError(t, err)
+			}
+			smap := tools.GetClusterMap(t, proxyURL)
+			tassert.Errorf(t, (smap.GetNode(joiner.si.ID()) == nil) == tc.reject,
+				"unexpected membership after BMD refresh: %s", smap.StringEx())
+		})
+	}
+}
+
+type joinBMDTarget struct {
+	t       *testing.T
+	si      *meta.Snode
+	version string
+	entered chan struct{}
+	resume  chan struct{}
+	once    sync.Once
+}
+
+func newJoinBMDTarget(t *testing.T, bp api.BaseParams, version string, pause bool) *joinBMDTarget {
+	target := &joinBMDTarget{t: t, si: &meta.Snode{}, version: version}
+	if pause {
+		target.entered, target.resume = make(chan struct{}), make(chan struct{})
+		target.si.Flags = meta.SnodeMaint
+	}
+	server := httptest.NewUnstartedServer(target)
+	host, port, err := net.SplitHostPort(server.Listener.Addr().String())
+	tassert.CheckFatal(t, err)
+	target.si.Init("join-bmd-"+cos.GenDaemonID(), apc.Target, nil)
+	target.si.PubNet.Init("http", host, port)
+	target.si.ControlNet, target.si.DataNet = target.si.PubNet, target.si.PubNet
+	server.Start()
+	t.Cleanup(server.Close)
+	t.Cleanup(func() {
+		if tools.GetClusterMap(t, bp.URL).GetNode(target.si.ID()) != nil {
+			tassert.CheckError(t, api.RemoveNodeUnsafe(bp, target.si.ID()))
+		}
+	})
+	return target
+}
+
+func (target *joinBMDTarget) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(apc.HdrNodeVersion, target.version)
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == apc.URLPathDae.S:
+		_, _ = w.Write(cos.MustMarshal(target.si))
+	case r.Method == http.MethodPost && r.URL.Path == apc.URLPathMetasync.S && target.entered != nil:
+		target.once.Do(target.pauseGFN)
+	}
+}
+
+func (target *joinBMDTarget) pauseGFN() {
+	close(target.entered)
+	select {
+	case <-target.resume:
+	case <-target.t.Context().Done():
+	}
+}
+
+func (target *joinBMDTarget) join(bp api.BaseParams, result chan<- error) {
+	_, _, err := api.JoinCluster(bp, target.si, 0)
+	result <- err
+}
+
+func updateJoinBMD(bp api.BaseParams, bck cmn.Bck, onDemand bool, result chan<- error) {
+	_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+		Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{Enabled: apc.Ptr(true)},
+			OnDemand: apc.Ptr(onDemand)},
+	}})
+	result <- err
+}
+
+func disableJoinRebalance(bp api.BaseParams, result chan<- error) {
+	result <- api.DisableRebalance(bp)
+}
 
 func TestPodDerivedRejoin(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal})

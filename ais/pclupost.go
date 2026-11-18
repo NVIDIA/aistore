@@ -859,7 +859,10 @@ func (c *clupost) checkVer() error {
 	if err := checkNodeVer(c.p.String(), c.nsi.StringEx(), c.nversStr); err != nil {
 		return err
 	}
-	return c.checkJoinPlacement(c.smap, c.bmd)
+	if err := c.checkJoinPlacement(c.smap, c.bmd); err != nil {
+		return err
+	}
+	return c.checkJoinBackendOnDemand()
 }
 
 // record the version of an existing member that fails checkVer (see checkSameVersion, startupWeights)
@@ -992,6 +995,9 @@ func (c *clupost) _joinedPre(ctx *smapModifier, clone *smapX) error {
 	}
 	if err := c.recheckJoinPlacement(ctx.smap); err != nil {
 		return err
+	}
+	if err := c.checkJoinBackendOnDemand(); err != nil {
+		return cmn.NewErrHTTP(nil, err, http.StatusConflict)
 	}
 	ctx.osi = clone.putNode(ctx.nsi, ctx.flags)
 	if c.joinWeight > 0 {

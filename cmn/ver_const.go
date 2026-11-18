@@ -26,7 +26,7 @@ const GitHubHome = "https://github.com/NVIDIA/aistore"
 //   `jsp` formats its *signature* and other implementation details.
 
 const (
-	VersionAIStore = "5.2"
+	VersionAIStore = "5.3.rc1"
 	VersionCLI     = "1.34"
 	VersionLoader  = "2.27"
 	VersionAuthN   = "2.4"
@@ -49,6 +49,7 @@ const (
 	MinVerKaliveReject     = "5.2" // typed keepalive rejection understood by the sender
 	MinVerPlacement        = "5.2" // weighted Smap and bucket placement overrides
 	MinVerBsummPerTarget   = "5.2" // per-target bucket summary (apc.BsummCtrlMsg.PerTarget; proxy-side)
+	MinVerBackendOnDemand  = "5.3"
 )
 
 // NOTE: for (local) LOM meta-versions, see core/lom*

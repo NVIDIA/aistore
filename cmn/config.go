@@ -1134,6 +1134,8 @@ type (
 	Adaptive struct {
 		RateLimitBase
 		NumRetries int `json:"num_retries"`
+		// Delay an enabled backend limiter's activation until the first 429/503; defaults to false.
+		OnDemand bool `json:"on_demand,omitempty"`
 	}
 	// AdaptiveToSet is the partial-update counterpart of Adaptive.
 	AdaptiveToSet struct {
@@ -1141,6 +1143,8 @@ type (
 		// Automatic retries on throttled (429) or unavailable (503)
 		// responses before propagating the error. Range `[1, 10]`.
 		NumRetries *int `json:"num_retries,omitempty"` // +gen:optional
+		// Activate an enabled backend limiter only after the first 429/503.
+		OnDemand *bool `json:"on_demand,omitempty"` // +gen:optional
 	}
 
 	// rate limit that fails 'too-many requests' while permitting a certain level of burstiness
