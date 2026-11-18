@@ -63,11 +63,6 @@ type (
 func (m *LsoMsg) ValidateNBI() error {
 	const epref = "invalid list via native bucket inventory"
 
-	// inventory snapshot is flat; StartAfter currently unsupported
-	if m.StartAfter != "" {
-		return errors.New(epref + ": start_after is not supported")
-	}
-
 	// flags that do not make sense for inventory listing
 	const badFlags = LsNotCached | LsMissing | LsDeleted | LsArchDir |
 		lsWantOnlyRemoteProps | LsDiff

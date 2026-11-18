@@ -1095,6 +1095,127 @@ func TestLsoNbiNoRecursionPagination(t *testing.T) {
 	}
 }
 
+func TestLsoNbiStartAfter(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: cliBck})
+
+	var (
+		bck    = cliBck
+		bp     = tools.BaseAPIParams()
+		parent = "nbisa-" + cos.GenTie() + "/"
+	)
+
+	_nbiIniCln(t, bck)
+
+	var objNames []string
+	for _, dir := range []string{"", "aaa/", "bbb/", "ccc/"} {
+		for i := range 8 {
+			objNames = append(objNames, fmt.Sprintf("%s%sobj-%02d", parent, dir, i))
+		}
+	}
+	t.Cleanup(func() {
+		for _, name := range objNames {
+			api.DeleteObject(bp, bck, name)
+		}
+	})
+	for _, name := range objNames {
+		r, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: 128, CksumType: cos.ChecksumNone})
+		_, err := api.PutObject(&api.PutArgs{
+			BaseParams: bp,
+			Bck:        bck,
+			ObjName:    name,
+			Reader:     r,
+		})
+		tassert.CheckFatal(t, err)
+	}
+	err := tools.WaitForCondition(func() bool {
+		lst, err := api.ListObjects(bp, bck, &apc.LsoMsg{Prefix: parent, Props: apc.GetPropsName}, api.ListArgs{})
+		return err == nil && len(lst.Entries) == len(objNames)
+	}, tools.DefaultWaitRetry)
+	tassert.CheckFatal(t, err)
+
+	invName := "inv-sa-" + cos.GenTie()
+	createMsg := &apc.CreateNBIMsg{
+		Name: invName,
+		LsoMsg: apc.LsoMsg{
+			Prefix:   parent,
+			Props:    apc.GetPropsName,
+			PageSize: 5,
+		},
+		NamesPerChunk: 3, // start-after must seek across chunks
+		Force:         true,
+	}
+	xid, err := api.CreateNBI(bp, bck, createMsg)
+	tassert.CheckFatal(t, err)
+	wargs := xact.ArgsMsg{ID: xid, Kind: apc.ActCreateNBI, Timeout: nbiCreateTimeout}
+	err = api.WaitForXaction(bp, &wargs)
+	tassert.CheckFatal(t, err)
+
+	largs := api.ListArgs{Header: http.Header{apc.HdrInvName: []string{invName}}}
+
+	flat := _lsoNbiAll(t, bp, bck, largs, &apc.LsoMsg{Prefix: parent, Props: apc.GetPropsName, Flags: apc.LsNBI})
+	tassert.Fatalf(t, len(flat) == len(objNames), "flat: expected %d, got %d", len(objNames), len(flat))
+
+	var (
+		mid  = flat[len(flat)/2]
+		last = flat[len(flat)-1]
+	)
+	tests := []struct {
+		tag    string
+		prefix string
+		after  string
+		flags  uint64
+	}{
+		{"before-first", parent, parent, 0},
+		{"first", parent, flat[0], 0},
+		{"middle", parent, mid, 0},
+		{"between", parent, mid + "-", 0},
+		{"last", parent, last, 0},
+		{"past-last", parent, parent + "zzz", 0},
+		{"below-prefix", parent + "bbb/", parent + "aaa/obj-05", 0},
+		{"in-prefix", parent + "bbb/", parent + "bbb/obj-02", 0},
+		{"above-prefix", parent + "bbb/", parent + "ccc/obj-00", 0},
+		{"nr-in-dir", parent, parent + "bbb/obj-00", apc.LsNoRecursion},
+		{"nr-before-dir", parent, parent + "aaa", apc.LsNoRecursion},
+	}
+	for _, tc := range tests {
+		t.Run(tc.tag, func(t *testing.T) {
+			var base, exp []string
+			if tc.flags&apc.LsNoRecursion != 0 {
+				base = _expectedNR(flat, tc.prefix)
+			} else {
+				for _, name := range flat {
+					if strings.HasPrefix(name, tc.prefix) {
+						base = append(base, name)
+					}
+				}
+			}
+			for _, name := range base {
+				if name > tc.after {
+					exp = append(exp, name)
+				}
+			}
+			for _, ps := range []int64{1, 3, 0} {
+				lsmsg := &apc.LsoMsg{
+					Prefix:     tc.prefix,
+					Props:      apc.GetPropsName,
+					PageSize:   ps,
+					StartAfter: tc.after,
+					Flags:      apc.LsNBI | tc.flags,
+				}
+				got := _lsoNbiAll(t, bp, bck, largs, lsmsg)
+				tassert.Fatalf(t, len(got) == len(exp),
+					"start-after %q ps=%d: expected %d, got %d\n  exp: %v\n  got: %v",
+					tc.after, ps, len(exp), len(got), exp, got)
+				for i := range got {
+					tassert.Fatalf(t, got[i] == exp[i],
+						"start-after %q ps=%d [%d]: expected %q, got %q", tc.after, ps, i, exp[i], got[i])
+				}
+			}
+			tlog.Logfln("%s: start-after %q, %d entries OK", tc.tag, tc.after, len(exp))
+		})
+	}
+}
+
 //
 // local helpers
 //
@@ -1122,6 +1243,29 @@ func _expectedNR(flatNames []string, prefix string) []string {
 	}
 	sort.Strings(result) // defensive; should already be sorted
 	return result
+}
+
+func _lsoNbiAll(t *testing.T, bp api.BaseParams, bck cmn.Bck, largs api.ListArgs, lsmsg *apc.LsoMsg) []string {
+	t.Helper()
+	var names []string
+	for {
+		uuid, token := lsmsg.UUID, lsmsg.ContinuationToken
+		lst, err := api.ListObjectsPage(bp, bck, lsmsg, largs)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, uuid == "" || lst.UUID == uuid, "listing UUID changed: %q => %q", uuid, lst.UUID)
+		tassert.Fatalf(t, len(lst.Entries) > 0 || lst.ContinuationToken == "",
+			"empty page with token %q", lst.ContinuationToken)
+		names = append(names, _lsoNames(lst.Entries)...)
+		if lst.ContinuationToken == "" {
+			break
+		}
+		tassert.Fatalf(t, lst.ContinuationToken > token,
+			"continuation token did not advance: %q => %q", token, lst.ContinuationToken)
+	}
+	for i := 1; i < len(names); i++ {
+		tassert.Fatalf(t, names[i-1] < names[i], "not sorted at [%d]: %q >= %q", i, names[i-1], names[i])
+	}
+	return names
 }
 
 func _lsoNames(entries []*cmn.LsoEnt) []string {

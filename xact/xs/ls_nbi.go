@@ -283,7 +283,7 @@ func (nbi *nbiCtx) skip() { nbi.nidx = len(nbi.entries) } // in re: prefix
 
 // nrCollapse checks whether the entry should be collapsed into a virtual directory
 // (i.e., the object name has a '/' separator below the listing prefix).
-// If so, appends the directory entry to lst (when past the continuation token)
+// If so, appends the directory entry to lst (when past the continuation token and start-after)
 // and returns the directory prefix for subsequent skipping.
 // Returns "" when no collapsing is needed.
 func nrCollapse(name string, msg *apc.LsoMsg, lst *cmn.LsoRes) string {
@@ -294,7 +294,7 @@ func nrCollapse(name string, msg *apc.LsoMsg, lst *cmn.LsoRes) string {
 		return ""
 	}
 	dirName := msg.Prefix + rel[:idx+1]
-	if dirName > msg.ContinuationToken {
+	if dirName > max(msg.ContinuationToken, msg.StartAfter) {
 		lst.Entries = append(lst.Entries, &cmn.LsoEnt{Name: dirName, Flags: apc.EntryIsDir})
 	}
 	return dirName
@@ -320,7 +320,8 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		return nil
 	}
 
-	switch msg.ContinuationToken {
+	token := max(msg.ContinuationToken, msg.StartAfter)
+	switch token {
 	case "":
 		debug.Assert(nbi.chunkNum == 1 && nbi.nidx == 0)
 	case nbi.prevToken:
@@ -328,20 +329,20 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	default:
 		// resync nbi iterator
 		nbi.nidx = 0
-		if msg.ContinuationToken < nbi.hdr.first {
-			if err := nbi.rewind(msg.ContinuationToken); err != nil {
+		if token < nbi.hdr.first {
+			if err := nbi.rewind(token); err != nil {
 				return err
 			}
 		} else if nbi.chunkNum > nbi.ufest.Count() {
-			if msg.ContinuationToken >= nbi.hdr.last {
+			if token >= nbi.hdr.last {
 				// we are done
 				return nil
 			}
-			if err := nbi.rewind(msg.ContinuationToken); err != nil {
+			if err := nbi.rewind(token); err != nil {
 				return err
 			}
 		}
-		if err := nbi.seekAfter(msg.ContinuationToken); err != nil {
+		if err := nbi.seekAfter(token); err != nil {
 			return err
 		}
 		if nbi.chunkNum > nbi.ufest.Count() {

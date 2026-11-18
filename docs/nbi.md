@@ -279,6 +279,7 @@ ais ls gs://abc --inventory
 ais ls oci://abc --inventory --paged --prefix subdir
 ais ls s3://abc --inventory --inv-name my-first-inventory
 ais ls s3://abc --inventory --nr --prefix images/
+ais ls s3://abc --inventory --start-after images/0999.jpg
 ```
 
 `--inventory` now means NBI-backed listing.
@@ -301,7 +302,7 @@ The flow is:
 
 1. A list-objects-page request with `--inventory` arrives at the proxy.
 2. The proxy broadcasts the request to all targets.
-3. Each target seeks to the first inventory name greater than the provided continuation token within its local, lexicographically ordered chunks.
+3. Each target seeks to the first inventory name greater than the provided continuation token (or `start_after`, whichever is greater) within its local, lexicographically ordered chunks.
 4. Each target returns its next locally sorted batch, together with its own continuation token if more names remain.
 5. The proxy merges the returned names into a single sorted stream and applies min-token logic:
 
@@ -396,7 +397,6 @@ That is why several options that make sense for a live list request do **not** m
 
 | Option / behavior              | Description                                                                                                           |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `start_after`                  | Not supported for inventory-backed listing. Use prefix and continuation-based pagination instead.                     |
 | `--not-cached` (`LsNotCached`) | Not applicable. NBI serves a stored snapshot rather than computing "not present in cluster" against the live backend. |
 | `LsMissing`                    | Not supported. Inventory listing is not a missing-copy inspection mode.                                               |
 | `LsDeleted`                    | Not supported. Inventory snapshots do not currently track objects marked for deletion.                                |
