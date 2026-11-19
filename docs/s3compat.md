@@ -471,6 +471,10 @@ Use [native bucket inventory (NBI)](/docs/nbi.md) for fast, inventory-backed lis
 
 Note that S3-compatible clients may request NBI-backed listing via `Ais-Bucket-Inventory: true`, and optionally select a specific inventory via `Ais-Inv-Name`.
 
+NBI-backed listing supports the `ListObjectsV2` parameters `prefix`, `start-after`, `delimiter` (`/` only), `max-keys`, and `continuation-token`. For `start-after` in a non-recursive listing, see [Start after](/docs/nbi.md#start-after).
+
+By default, an inventory stores only the name, size, and cached status, so the response has no `LastModified` and `ETag` is empty. To include them, create the inventory with `ais nbi create --all`.
+
 ---
 
 ## Deleting nonexistent object
@@ -661,7 +665,7 @@ Boto3 can request parallel (blob) download of large cold objects by adding the `
 | Presigned URL fails                            | Add header `ais-s3-signed-request-style: path` for path‑style URLs |
 | `Authorization header missing` (s3cmd + AuthN) | Patch `S3.py` to include JWT as shown in [Authentication](#authentication-jwt-tips) |
 | Upload fails with timeout                      | Try with smaller multipart chunks (e.g., `--multipart-chunk-size-mb=5`) |
-| Unable to list large S3 bucket                 | Use [bucket inventory](#s3-bucket-inventory-support) to efficiently list contents |
+| Unable to list large S3 bucket                 | Use [native bucket inventory](#use-native-bucket-inventory) to efficiently list contents |
 | Boto3/TensorFlow integration issues            | See [Boto3 compatibility patch](https://docs.nvidia.com/aistore/api-reference/python/aistore/botocore_patch) for redirects |
 
 ---

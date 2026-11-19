@@ -22,6 +22,7 @@ This document occasionally references Go types and constants from the AIS codeba
 - [Showing inventories](#showing-inventories)
 - [Listing via inventory](#listing-via-inventory)
   - [Pagination](#pagination)
+  - [Start after](#start-after)
   - [How inventory-backed listing works](#how-inventory-backed-listing-works)
   - [Non-recursive listing](#non-recursive-listing)
 - [Inventory metadata](#inventory-metadata)
@@ -293,6 +294,15 @@ In the Python SDK, the corresponding flag is [`ListObjectFlag.NBI`](https://gith
 When listing via NBI, page size is **best-effort and approximate**.
 
 Because NBI listing is distributed across targets, each target returns an approximate share of the requested page size, subject to local chunking and minimum bounds. This behavior is intentional: it reduces roundtrips and improves list latency.
+
+### Start after
+
+`start_after` (CLI `--start-after`) lists only the names that are greater than the given value, the same as a regular listing.
+
+* `start_after` changes only the first page. Later pages continue from the continuation token.
+* An S3 request uses `start-after` only if it has no continuation token. Clients can send it on every page.
+* In the Python SDK, pass `start_after` with `inventory_name` (or `ListObjectFlag.NBI`).
+* A non-recursive listing shows a virtual directory only if its name is greater than `start_after`. For example, `--nr --start-after images/0999.jpg` does not show `images/`. A non-recursive listing of an `ais://` bucket does the same.
 
 ### How inventory-backed listing works
 

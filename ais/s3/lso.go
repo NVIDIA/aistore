@@ -37,7 +37,7 @@ type (
 	}
 	ObjInfo struct {
 		Key          string `xml:"Key"`
-		LastModified string `xml:"LastModified"`
+		LastModified string `xml:"LastModified,omitempty"`
 		ETag         string `xml:"ETag"`
 		Class        string `xml:"StorageClass"`
 		Size         int64  `xml:"Size"`

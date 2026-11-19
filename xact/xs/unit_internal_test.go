@@ -210,4 +210,9 @@ func TestNBICachedChunkRewind(t *testing.T) {
 	expected = append(expected, chunks[2]...)
 	checkNames(lst.Entries, expected)
 	tassert.Fatalf(t, lst.ContinuationToken == "", "expected exhausted inventory, got token %q", lst.ContinuationToken)
+
+	// A marker equal to an earlier page token must not match a stale iterator position.
+	msg.ContinuationToken = "l"
+	tassert.CheckFatal(t, nbi.nextPage(msg, lst))
+	checkNames(lst.Entries, chunks[2][3:])
 }

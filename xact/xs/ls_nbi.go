@@ -320,11 +320,15 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		return nil
 	}
 
+	// set again only if this page returns a token
+	prev := nbi.prevToken
+	nbi.prevToken = ""
+
 	token := max(msg.ContinuationToken, msg.StartAfter)
 	switch token {
 	case "":
 		debug.Assert(nbi.chunkNum == 1 && nbi.nidx == 0)
-	case nbi.prevToken:
+	case prev:
 		// do nothing
 	default:
 		// resync nbi iterator

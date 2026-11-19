@@ -13,8 +13,10 @@ import (
 	"testing"
 	"time"
 
+	aiss3 "github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api"
 	"github.com/NVIDIA/aistore/api/apc"
+	"github.com/NVIDIA/aistore/api/env"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -24,6 +26,11 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/xact"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 //
@@ -1152,6 +1159,17 @@ func TestLsoNbiStartAfter(t *testing.T) {
 
 	largs := api.ListArgs{Header: http.Header{apc.HdrInvName: []string{invName}}}
 
+	// S3 ListObjectsV2 of the same inventory
+	cfg, err := config.LoadDefaultConfig(
+		t.Context(),
+		config.WithCredentialsProvider(getS3Credentials(t)),
+		config.WithRegion(env.AwsDefaultRegion()),
+	)
+	tassert.CheckFatal(t, err)
+	cfg.HTTPClient = newS3Client(false /*pathStyle*/)
+	cfg.BaseEndpoint = aws.String(tools.GetPrimaryURL() + "/s3")
+	s3Client := s3.NewFromConfig(cfg, s3.WithAPIOptions(smithyhttp.AddHeaderValue(apc.HdrInvName, invName)))
+
 	flat := _lsoNbiAll(t, bp, bck, largs, &apc.LsoMsg{Prefix: parent, Props: apc.GetPropsName, Flags: apc.LsNBI})
 	tassert.Fatalf(t, len(flat) == len(objNames), "flat: expected %d, got %d", len(objNames), len(flat))
 
@@ -1202,14 +1220,12 @@ func TestLsoNbiStartAfter(t *testing.T) {
 					StartAfter: tc.after,
 					Flags:      apc.LsNBI | tc.flags,
 				}
-				got := _lsoNbiAll(t, bp, bck, largs, lsmsg)
-				tassert.Fatalf(t, len(got) == len(exp),
-					"start-after %q ps=%d: expected %d, got %d\n  exp: %v\n  got: %v",
-					tc.after, ps, len(exp), len(got), exp, got)
-				for i := range got {
-					tassert.Fatalf(t, got[i] == exp[i],
-						"start-after %q ps=%d [%d]: expected %q, got %q", tc.after, ps, i, exp[i], got[i])
-				}
+				_checkNames(t, exp, _lsoNbiAll(t, bp, bck, largs, lsmsg), tc.after, fmt.Sprintf("ps=%d", ps))
+			}
+			nr := tc.flags&apc.LsNoRecursion != 0
+			for _, maxKeys := range []int32{3, 0} {
+				got := _lsoNbiS3All(t, s3Client, bck, tc.prefix, tc.after, nr, maxKeys)
+				_checkNames(t, exp, got, tc.after, fmt.Sprintf("s3 max-keys=%d", maxKeys))
 			}
 			tlog.Logfln("%s: start-after %q, %d entries OK", tc.tag, tc.after, len(exp))
 		})
@@ -1266,6 +1282,69 @@ func _lsoNbiAll(t *testing.T, bp api.BaseParams, bck cmn.Bck, largs api.ListArgs
 		tassert.Fatalf(t, names[i-1] < names[i], "not sorted at [%d]: %q >= %q", i, names[i-1], names[i])
 	}
 	return names
+}
+
+// list all pages via S3 ListObjectsV2 and return the names and common prefixes
+func _lsoNbiS3All(t *testing.T, s3Client *s3.Client, bck cmn.Bck, prefix, after string, nr bool, maxKeys int32) []string {
+	t.Helper()
+	var (
+		names                     []string
+		uuid, orig, lastK, lastCP string
+		token                     *string
+	)
+	for {
+		in := &s3.ListObjectsV2Input{
+			Bucket:            aws.String(bck.Name),
+			Prefix:            aws.String(prefix),
+			StartAfter:        aws.String(after),
+			ContinuationToken: token,
+		}
+		if maxKeys > 0 {
+			in.MaxKeys = aws.Int32(maxKeys)
+		}
+		if nr {
+			in.Delimiter = aws.String("/")
+		}
+		out, err := s3Client.ListObjectsV2(t.Context(), in)
+		tassert.CheckFatal(t, err)
+		if maxKeys > 0 {
+			n := len(out.Contents) + len(out.CommonPrefixes)
+			tassert.Fatalf(t, n <= int(maxKeys), "page has %d entries, max-keys %d", n, maxKeys)
+		}
+		// each list must be ascending across all pages
+		for _, o := range out.Contents {
+			key := aws.ToString(o.Key)
+			tassert.Fatalf(t, key > lastK, "contents not ascending: %q after %q", key, lastK)
+			names, lastK = append(names, key), key
+		}
+		for _, cp := range out.CommonPrefixes {
+			pfx := aws.ToString(cp.Prefix)
+			tassert.Fatalf(t, pfx > lastCP, "common prefixes not ascending: %q after %q", pfx, lastCP)
+			names, lastCP = append(names, pfx), pfx
+		}
+		if !aws.ToBool(out.IsTruncated) {
+			break
+		}
+		nextUUID, nextOrig := aiss3.DecodeToken(aws.ToString(out.NextContinuationToken))
+		tassert.Fatalf(t, uuid == "" || nextUUID == uuid, "listing UUID changed: %q => %q", uuid, nextUUID)
+		tassert.Fatalf(t, nextOrig > orig, "continuation token did not advance: %q => %q", orig, nextOrig)
+		uuid, orig, token = nextUUID, nextOrig, out.NextContinuationToken
+	}
+	// merge the two lists
+	sort.Strings(names)
+	for i := 1; i < len(names); i++ {
+		tassert.Fatalf(t, names[i-1] < names[i], "duplicate at [%d]: %q", i, names[i])
+	}
+	return names
+}
+
+func _checkNames(t *testing.T, exp, got []string, after, via string) {
+	t.Helper()
+	tassert.Fatalf(t, len(got) == len(exp), "start-after %q %s: expected %d, got %d\n  exp: %v\n  got: %v",
+		after, via, len(exp), len(got), exp, got)
+	for i := range got {
+		tassert.Fatalf(t, got[i] == exp[i], "start-after %q %s [%d]: expected %q, got %q", after, via, i, exp[i], got[i])
+	}
 }
 
 func _lsoNames(entries []*cmn.LsoEnt) []string {
