@@ -215,4 +215,14 @@ func TestNBICachedChunkRewind(t *testing.T) {
 	msg.ContinuationToken = "l"
 	tassert.CheckFatal(t, nbi.nextPage(msg, lst))
 	checkNames(lst.Entries, chunks[2][3:])
+
+	// A rewind after a header skip past the end must not use stale entries.
+	nbi = &nbiCtx{bck: bck, ufest: ufest, buf: make([]byte, cmn.MsgpLsoBufSize), cksum: cos.NewCksumHash(cos.ChecksumCRC32C), chunkNum: 1, nat: 1}
+	tassert.CheckFatal(t, nbi.readChunk())
+	tassert.CheckFatal(t, nbi.nextPage(&apc.LsoMsg{StartAfter: "o"}, lst))
+	checkNames(lst.Entries, nil)
+	tassert.CheckFatal(t, nbi.nextPage(&apc.LsoMsg{ContinuationToken: "h"}, lst))
+	expected = append(cmn.LsoEntries(nil), chunks[1][2:]...)
+	expected = append(expected, chunks[2]...)
+	checkNames(lst.Entries, expected)
 }

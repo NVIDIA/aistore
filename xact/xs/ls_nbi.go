@@ -190,6 +190,13 @@ func (nbi *nbiCtx) cacheIt() {
 }
 
 func (nbi *nbiCtx) readChunk() error {
+	_, err := nbi.readChunkAfter("")
+	return err
+}
+
+// read chunk header and decode entries only if hdr.last > token
+// - returns false otherwise (nbi.hdr updated, nbi.entries stale)
+func (nbi *nbiCtx) readChunkAfter(token string) (bool, error) {
 	// cache
 	if nbi.chunkNum == nbi.cache.chunkNum {
 		clear(nbi.entries)
@@ -201,17 +208,17 @@ func (nbi *nbiCtx) readChunk() error {
 		}
 		copy(nbi.entries, nbi.cache.entries)
 		nbi.hdr = nbi.cache.hdr
-		return nil
+		return true, nil
 	}
 
 	chunk, err := nbi.ufest.GetChunk(nbi.chunkNum)
 	if err != nil {
-		return nbi.emit(err)
+		return false, nbi.emit(err)
 	}
 
 	fh, err := os.Open(chunk.Path())
 	if err != nil {
-		return nbi.emit(err)
+		return false, nbi.emit(err)
 	}
 	defer cos.Close(fh)
 
@@ -221,13 +228,13 @@ func (nbi *nbiCtx) readChunk() error {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		return nbi.emit(err)
+		return false, nbi.emit(err)
 	}
 
 	// 2. read chunk header
 	hdrLen := binary.BigEndian.Uint32(frame[:])
 	if hdrLen == 0 || hdrLen > nbiMaxHdrLen {
-		return nbi.emit(fmt.Errorf("invalid chunk header length %d", hdrLen))
+		return false, nbi.emit(fmt.Errorf("invalid chunk header length %d", hdrLen))
 	}
 
 	hdrBuf := nbi.buf[:hdrLen] // note: using the same buffer for hdr and msgp payload
@@ -235,7 +242,7 @@ func (nbi *nbiCtx) readChunk() error {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		return nbi.emit(err)
+		return false, nbi.emit(err)
 	}
 
 	// 2.1. checksum
@@ -246,13 +253,16 @@ func (nbi *nbiCtx) readChunk() error {
 	exp := binary.BigEndian.Uint32(frame[cos.SizeofI32:])
 	got := binary.BigEndian.Uint32(crc)
 	if got != exp {
-		return nbi.emit(fmt.Errorf("invalid chunk [%d, %q] header hash: expected %08x, got %08x",
+		return false, nbi.emit(fmt.Errorf("invalid chunk [%d, %q] header hash: expected %08x, got %08x",
 			nbi.chunkNum, chunk.Path(), exp, got))
 	}
 
 	unpacker := cos.NewUnpacker(hdrBuf)
 	if err := nbi.hdr.Unpack(unpacker); err != nil {
-		return nbi.emit(err)
+		return false, nbi.emit(err)
+	}
+	if nbi.hdr.last <= token {
+		return false, nil
 	}
 
 	nbi.nidx = 0
@@ -267,7 +277,7 @@ func (nbi *nbiCtx) readChunk() error {
 		nbi.entries = nbi.entries[:0]
 	}
 	if err := nbi.entries.DecodeMsg(mr); err != nil {
-		return err
+		return false, err
 	}
 
 	// TODO: remove eventually
@@ -276,7 +286,7 @@ func (nbi *nbiCtx) readChunk() error {
 	debug.AssertFunc(func() bool { return nbi.hdr.first == nbi.entries[0].Name })
 	debug.AssertFunc(func() bool { return nbi.hdr.last == nbi.entries[len(nbi.entries)-1].Name })
 
-	return nil
+	return true, nil
 }
 
 func (nbi *nbiCtx) skip() { nbi.nidx = len(nbi.entries) } // in re: prefix
@@ -475,26 +485,26 @@ func (nbi *nbiCtx) seekAfter(token string) error {
 		}
 	}
 
-	// token is >= current chunk's last item, move forward until we find
-	// the first chunk whose range may contain something > token
+	// token is >= current chunk's last item: move forward reading only chunk headers
+	// until the first chunk that has a name > token, and decode that chunk
+	nbi.cacheIt()
 	for {
-		nbi.cacheIt()
 		nbi.chunkNum++
 		if nbi.chunkNum > nbi.ufest.Count() {
+			// nbi.entries may be stale (nextPage returns or rewinds)
 			return nil
 		}
-		if err := nbi.readChunk(); err != nil {
+		decoded, err := nbi.readChunkAfter(token)
+		if err != nil {
 			return err
 		}
-		if len(nbi.entries) == 0 || nbi.hdr.last <= token {
+		if !decoded {
 			continue
 		}
 		i := sort.Search(len(nbi.entries), func(i int) bool { return nbi.entries[i].Name > token })
-		if i < len(nbi.entries) {
-			nbi.nidx = i
-			debug.Func(func() { debug.Assert(nbi.entries[i].Name > token, "seekAfter: ", token, " -> ", nbi.entries[i].Name) })
-			return nil
-		}
+		debug.Func(func() { debug.Assert(i < len(nbi.entries), "seekAfter: ", token, " vs last ", nbi.hdr.last) })
+		nbi.nidx = i
+		return nil
 	}
 }
 
