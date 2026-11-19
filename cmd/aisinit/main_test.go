@@ -71,6 +71,7 @@ func TestApplyHostNet(t *testing.T) {
 		lb     = "203.0.113.7"
 		lbHost = "elb.example.com"
 		ovr    = "t-0.example.com"
+		node   = "node-1"
 	)
 	tests := []struct {
 		name             string
@@ -87,7 +88,8 @@ func TestApplyHostNet(t *testing.T) {
 		{name: "target IP", params: hostNetParams{isTarget: true, dnsMode: env.PubNetDNSModeIP}, wantHostname: pub},
 		{name: "target Pod", params: hostNetParams{isTarget: true, dnsMode: env.PubNetDNSModePod}, wantHostname: podDNS},
 		{name: "target host network IP discovers", params: hostNetParams{isTarget: true, hostNetwork: true, dnsMode: env.PubNetDNSModeIP}, wantHostname: "", intraDataCleared: true},
-		{name: "target host network Node", params: hostNetParams{isTarget: true, hostNetwork: true, dnsMode: env.PubNetDNSModeNode}, wantHostname: pub},
+		{name: "target host network Node uses node name", params: hostNetParams{isTarget: true, hostNetwork: true, dnsMode: env.PubNetDNSModeNode, nodeName: node}, wantHostname: node},
+		{name: "target Node without host network uses public hostname", params: hostNetParams{isTarget: true, dnsMode: env.PubNetDNSModeNode, nodeName: node}, wantHostname: pub},
 		{name: "target host network Pod", params: hostNetParams{isTarget: true, hostNetwork: true, dnsMode: env.PubNetDNSModePod}, wantHostname: podDNS},
 		{name: "target external access", params: hostNetParams{isTarget: true, externalAccess: true, dnsMode: env.PubNetDNSModePod}, wantHostname: lb},
 		{name: "target external access beats host network", params: hostNetParams{isTarget: true, externalAccess: true, hostNetwork: true, dnsMode: env.PubNetDNSModeIP}, wantHostname: lb, intraDataCleared: true},

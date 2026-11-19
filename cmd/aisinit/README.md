@@ -78,7 +78,9 @@ When `hostPort` is configured, the operator sets `AIS_PUBLIC_HOSTNAME` to the fo
 
 1. If `AIS_PUBLIC_HOSTNAME_OVERRIDE` is set, `aisinit` uses its value.
 2. If `ENABLE_EXTERNAL_ACCESS` is true, `aisinit` uses the first LoadBalancer ingress IP of the target, or the first ingress hostname if no entry has an IP.
-3. If `HOST_NETWORK` is true and the DNS mode is `IP`, `aisinit` leaves the public hostname empty. `aisnode` discovers the host IP at startup.
+3. If `HOST_NETWORK` is true:
+   1. For DNS mode `IP`, `aisinit` leaves the public hostname empty. `aisnode` discovers the host IP at startup.
+   2. For DNS mode `Node`, `aisinit` uses the K8s node name (`MY_NODE`).
 4. If the DNS mode is `Pod`, `aisinit` uses the pod DNS name.
 5. If none of the above apply, `aisinit` uses `AIS_PUBLIC_HOSTNAME` as set by the operator in the [section above](#dns-mode).
 

@@ -109,6 +109,7 @@ func pickIngressAddr(ingress []corev1.LoadBalancerIngress) string {
 type hostNetParams struct {
 	k8s            kubernetes.Interface // optional; defaults to the in-cluster client
 	podName        string
+	nodeName       string
 	namespace      string
 	serviceName    string
 	clusterDomain  string
@@ -155,6 +156,8 @@ func (p *hostNetParams) resolvePublicHostname() string {
 		return p.externalAddr()
 	case p.discoversIP():
 		return ""
+	case p.isTarget && p.hostNetwork && p.dnsMode == env.PubNetDNSModeNode:
+		return p.nodeName
 	case p.dnsMode == env.PubNetDNSModePod:
 		return p.podDNS()
 	case p.dnsMode != env.PubNetDNSModeNode && p.dnsMode != env.PubNetDNSModeIP:
@@ -180,6 +183,7 @@ func (p *hostNetParams) apply(hostNet *aiscmn.LocalNetConfig) {
 func configureHostNet(hostNet *aiscmn.LocalNetConfig, role, hostnameMapFile string) {
 	params := hostNetParams{
 		podName:        getRequiredEnv(env.AisK8sPod),
+		nodeName:       getOrDefaultEnv(env.AisK8sNode, ""),
 		namespace:      getRequiredEnv(env.AisK8sNamespace),
 		serviceName:    getRequiredEnv(env.AisK8sServiceName),
 		clusterDomain:  getOrDefaultEnv(env.AisK8sClusterDomain, defaultClusterDomain),

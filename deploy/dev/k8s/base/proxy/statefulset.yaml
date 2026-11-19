@@ -50,6 +50,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: MY_NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: K8S_NS
               valueFrom:
                 fieldRef:
