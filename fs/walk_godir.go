@@ -7,8 +7,13 @@
 package fs
 
 import (
+	"cmp"
 	"context"
+	"fmt"
+	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
@@ -59,7 +64,12 @@ func (godir) walk(fqns []string, opts *WalkOpts) error {
 		ScratchBuffer: scratch,
 	}
 	for _, fqn := range fqns {
-		err1 := godirwalk.Walk(fqn, gOpts)
+		var err1 error
+		if opts.Sorted {
+			err1 = WalkSorted(fqn, gOpts)
+		} else {
+			err1 = godirwalk.Walk(fqn, gOpts)
+		}
 		if err1 == nil || cos.IsNotExist(err1) {
 			continue
 		}
@@ -85,6 +95,83 @@ func (godir) walk(fqns []string, opts *WalkOpts) error {
 	}
 	slab.Free(scratch)
 	return err
+}
+
+// WalkSorted walks the tree in the order of object names ("a.json" before "a/b")
+func WalkSorted(root string, gOpts *godirwalk.Options) error {
+	if len(gOpts.ScratchBuffer) < godirwalk.MinimumScratchBufferSize {
+		gOpts.ScratchBuffer = make([]byte, godirwalk.MinimumScratchBufferSize)
+	}
+	root = filepath.Clean(root)
+	de, err := godirwalk.NewDirent(root)
+	if err != nil {
+		return err
+	}
+	if !de.IsDir() {
+		return fmt.Errorf("cannot walk non-directory: %s", root)
+	}
+	switch err := _walkSorted(root, de, gOpts); err {
+	case nil, filepath.SkipDir:
+		return nil
+	default:
+		return err
+	}
+}
+
+func _walkSorted(fqn string, de *godirwalk.Dirent, gOpts *godirwalk.Options) error {
+	if err := gOpts.Callback(fqn, de); err != nil {
+		if err == filepath.SkipDir {
+			return err
+		}
+		if gOpts.ErrorCallback(fqn, err) == godirwalk.SkipNode {
+			return nil
+		}
+		return err
+	}
+	if !de.IsDir() {
+		return nil
+	}
+	children, err := godirwalk.ReadDirents(fqn, gOpts.ScratchBuffer)
+	if err != nil {
+		if gOpts.ErrorCallback(fqn, err) == godirwalk.SkipNode {
+			return nil
+		}
+		return err
+	}
+	slices.SortFunc(children, cmpDirent)
+
+	for _, child := range children {
+		err := _walkSorted(filepath.Join(fqn, child.Name()), child, gOpts)
+		switch {
+		case err == nil:
+		case err != filepath.SkipDir:
+			return err
+		case !child.IsDir():
+			return nil // skip the remaining siblings
+		}
+	}
+	return nil
+}
+
+// sort a directory as its name with a trailing '/'
+func cmpDirent(a, b *godirwalk.Dirent) int {
+	an, bn := a.Name(), b.Name()
+	n := min(len(an), len(bn))
+	if c := strings.Compare(an[:n], bn[:n]); c != 0 {
+		return c
+	}
+	return cmp.Compare(_nextByte(an, n, a.IsDir()), _nextByte(bn, n, b.IsDir()))
+}
+
+func _nextByte(name string, n int, isDir bool) int {
+	switch {
+	case n < len(name):
+		return int(name[n])
+	case isDir:
+		return '/'
+	default:
+		return -1
+	}
 }
 
 func (godir) mpathChildren(opts *WalkOpts) (children []string, err error) {

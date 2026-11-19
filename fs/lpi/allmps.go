@@ -91,13 +91,12 @@ func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string, l
 		wg       = &sync.WaitGroup{}
 	)
 	debug.AssertFunc(func() bool { return lpis.Enabled() })
-	if num == 0 {
-		debug.Assert(false)
-		return
+	if num == 0 && !last {
+		return // no names of this target in the remote page
 	}
 
 	prevLast := lpis.prevRemoteLast
-	if lpis.ooo(lastPage, prevLast, tag) {
+	if num > 0 && lpis.ooo(lastPage, prevLast, tag) {
 		return
 	}
 

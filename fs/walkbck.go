@@ -1,6 +1,6 @@
 // Package fs provides mountpath and FQN abstractions and methods to resolve/map stored content
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package fs
 
@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 
@@ -161,17 +162,9 @@ func (j *joggerBck) cb(fqn string, de DirEntry) error {
 // wbeHeap //
 /////////////
 
-func (h wbeHeap) Len() int { return len(h) }
-func (h wbeHeap) Less(i, j int) bool {
-	if h[i].objName == h[j].objName {
-		// When a file and directory have the same name (e.g., "bbb" file and "bbb/" directory),
-		// file must come before directory to maintain lexicographical order with trailing slash.
-		// This ensures "bbb" < "bbb/" for correct continuation token handling.
-		return !h[i].dirEntry.IsDir() && h[j].dirEntry.IsDir()
-	}
-	return h[i].objName < h[j].objName
-}
-func (h wbeHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+func (h wbeHeap) Len() int           { return len(h) }
+func (h wbeHeap) Less(i, j int) bool { return h[i].objName < h[j].objName }
+func (h wbeHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 
 func (h *wbeHeap) Push(x any) {
 	var (
@@ -183,6 +176,10 @@ func (h *wbeHeap) Push(x any) {
 		return
 	}
 	info.objName = parsed.ObjName
+	if info.dirEntry.IsDir() {
+		// same order as WalkSorted (e.g. "bbb" < "bbb.json" < "bbb/")
+		info.objName += cos.PathSeparator
+	}
 	*h = append(*h, info)
 }
 

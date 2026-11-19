@@ -42,7 +42,7 @@ tombstones during listing/sync flows.
 Each `Next(Msg, out Page)` call:
 
 1. Clears and fills `out` in-place.
-2. Uses `godirwalk.Walk(root, Unsorted:false, ...)` to traverse the directory tree.
+2. Uses `fs.WalkSorted` (with the `godirwalk.Walk` callbacks) to traverse the directory tree in the order of object names.
 3. Prunes aggressively:
    - skips directories lexicographically "behind" the current start position
    - skips directories outside `root/prefix` when `prefix` is provided

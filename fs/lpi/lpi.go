@@ -17,6 +17,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 
 	"github.com/karrick/godirwalk"
 )
@@ -94,15 +95,13 @@ func (lpi *Iter) Next(msg Msg, out Page) error {
 	}
 	debug.AssertFunc(func() bool { return strings.HasPrefix(lpi.current, lpi.root) }, lpi.current, " vs ", lpi.root)
 
-	if lpi.msg.EOP != AllPages {
-		if lpi.current > lpi.msg.EOP {
-			return fmt.Errorf("expected (end-of-page) %q > %q (current)", lpi.msg.EOP, lpi.current)
-		}
+	if lpi.msg.EOP != AllPages && lpi.current > lpi.msg.EOP {
+		lpi.next = lpi.current // no local names in this page
+		return nil
 	}
 
 	// next page
-	err := godirwalk.Walk(lpi.root, &godirwalk.Options{
-		Unsorted:      false,
+	err := fs.WalkSorted(lpi.root, &godirwalk.Options{
 		Callback:      lpi.Callback,
 		ErrorCallback: lpi.ErrorCallback,
 	})

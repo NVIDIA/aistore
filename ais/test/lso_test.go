@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -2674,5 +2675,120 @@ func TestLsoNoRecursion_DirBoundaryVsUnderscoreCollision(t *testing.T) {
 	for i := 1; i < len(allEntries); i++ {
 		tassert.Fatalf(t, allEntries[i-1].Name < allEntries[i].Name,
 			"not lex-ordered: %q >= %q", allEntries[i-1].Name, allEntries[i].Name)
+	}
+}
+
+// paging must not lose the siblings of a directory that sort before it
+func TestLsoDirSiblingsBeforeSlash(t *testing.T) {
+	var (
+		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		objs       []string
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	for i := range 20 {
+		objs = append(objs, fmt.Sprintf("p/d/%03d", i))
+	}
+	for i := range 10 {
+		objs = append(objs, fmt.Sprintf("p/d.%03d", i), fmt.Sprintf("p/d-%03d", i), fmt.Sprintf("p/d+%03d", i))
+	}
+	objs = append(objs, "p/d.x/a", "p/d.x/b")
+	for _, nm := range objs {
+		reader, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: 16, CksumType: cos.ChecksumNone})
+		_, err := api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: nm, Reader: reader})
+		tassert.CheckFatal(t, err)
+	}
+
+	wantNoRecurs := []string{"p/d.x/", "p/d/"}
+	for _, nm := range objs {
+		if !strings.HasPrefix(nm, "p/d/") && !strings.HasPrefix(nm, "p/d.x/") {
+			wantNoRecurs = append(wantNoRecurs, nm)
+		}
+	}
+
+	tests := []struct {
+		name  string
+		flags uint64
+		want  []string
+	}{
+		{name: "recursive", want: objs},
+		{name: "no-recursion", flags: apc.LsNoRecursion, want: wantNoRecurs},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			want := slices.Sorted(slices.Values(test.want))
+			for _, pageSize := range []int64{1, 3, 7} {
+				var (
+					names []string
+					msg   = &apc.LsoMsg{Prefix: "p/", Flags: test.flags, PageSize: pageSize}
+				)
+				for {
+					lst, err := api.ListObjectsPage(baseParams, bck, msg, api.ListArgs{})
+					tassert.CheckFatal(t, err)
+					for _, en := range lst.Entries {
+						names = append(names, en.Name)
+					}
+					if lst.ContinuationToken == "" {
+						break
+					}
+					msg.ContinuationToken = lst.ContinuationToken
+				}
+				tassert.Fatalf(t, slices.Equal(names, want), "page-size %d: listed %q, expected %q", pageSize, names, want)
+			}
+		})
+	}
+}
+
+// ls --diff must report the remotely deleted names before a directory and after the last remote name
+func TestLsoDiffDirSiblings(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiresRemoteCluster: true})
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		remoteBP   = tools.BaseAPIParams(tools.RemoteCluster.URL)
+		remoteBck  = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		bck        = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.Alias}}
+		removed    = []string{"p/d-1", "p/d.json", "p/e"} // sorted
+		objs       = slices.Clone(removed)
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	for i := range 10 {
+		objs = append(objs, fmt.Sprintf("p/d/%03d", i))
+	}
+	for _, nm := range objs {
+		reader, _ := readers.New(&readers.Arg{Type: readers.Rand, Size: 16, CksumType: cos.ChecksumNone})
+		_, err := api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: nm, Reader: reader})
+		tassert.CheckFatal(t, err)
+	}
+	for _, nm := range removed {
+		tassert.CheckFatal(t, api.DeleteObject(remoteBP, remoteBck, nm))
+	}
+
+	for _, pageSize := range []int64{1, 3} {
+		var (
+			got []string
+			msg = &apc.LsoMsg{Prefix: "p/", PageSize: pageSize}
+		)
+		msg.AddProps(apc.GetPropsName, apc.GetPropsSize, apc.GetPropsCustom)
+		msg.SetFlag(apc.LsDiff)
+		for {
+			lst, err := api.ListObjectsPage(baseParams, bck, msg, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			for _, en := range lst.Entries {
+				if en.IsAnyFlagSet(apc.EntryVerRemoved) {
+					got = append(got, en.Name)
+				}
+			}
+			if lst.ContinuationToken == "" {
+				break
+			}
+			msg.ContinuationToken = lst.ContinuationToken
+		}
+		sort.Strings(got)
+		tassert.Fatalf(t, slices.Equal(got, removed),
+			"page-size %d: version-removed %v, expected %v", pageSize, got, removed)
 	}
 }

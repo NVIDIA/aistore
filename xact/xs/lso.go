@@ -926,6 +926,9 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		return err
 	}
 	entry.Flags |= apc.EntryIsArchive // the parent archive
+
+	// TODO: the members "x.tar/a" go out before the siblings that sort below '/' ("x.tar-1", "x.tar.gz"),
+	// and the next page then skips those siblings (compare w/ fs.WalkSorted)
 	for _, archEntry := range archList {
 		e := &cmn.LsoEnt{
 			Name: path.Join(entry.Name, archEntry.Name),
