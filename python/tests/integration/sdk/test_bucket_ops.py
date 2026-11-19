@@ -500,6 +500,11 @@ class TestBucketOps(ParallelTestBase):
             ),
         )
 
+    def test_list_objects_start_after_with_diff(self):
+        with self.assertRaises(AISError) as ctx:
+            self.bucket.list_objects(start_after="x", flags=[ListObjectFlag.DIFF])
+        self.assertEqual(501, ctx.exception.status_code)
+
     def test_list_object_flags_combined(self):
         self._create_objects()
         # Test a single flag

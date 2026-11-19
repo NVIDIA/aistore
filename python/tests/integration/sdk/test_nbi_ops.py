@@ -187,3 +187,39 @@ class TestNBIOps(unittest.TestCase):
             prefix=self.prefix, inventory_name="all-test", page_size=100
         )
         self.assertIsNotNone(entries)
+
+    def test_list_objects_start_after_with_inventory_name(self):
+        """List from an inventory with start_after: names strictly after the marker."""
+        names = [f"{self.prefix}obj-{i:02d}" for i in range(6)]
+        for name in names:
+            obj = self.bck.object(name)
+            obj.get_writer().put_content(b"nbi")
+            self.addCleanup(obj.delete)
+        self._create_and_wait(name="sa-test")
+
+        marker = names[2]
+        expected = names[3:]
+
+        page = self.bck.list_objects(
+            prefix=self.prefix, inventory_name="sa-test", start_after=marker
+        )
+        self.assertEqual(expected, [entry.name for entry in page.entries])
+
+        entries = self.bck.list_all_objects(
+            prefix=self.prefix, inventory_name="sa-test", start_after=marker
+        )
+        self.assertEqual(expected, [entry.name for entry in entries])
+
+        iter_names = [
+            entry.name
+            for entry in self.bck.list_objects_iter(
+                prefix=self.prefix, inventory_name="sa-test", start_after=marker
+            )
+        ]
+        self.assertEqual(expected, iter_names)
+
+        # past the last name: nothing to list
+        page = self.bck.list_objects(
+            prefix=self.prefix, inventory_name="sa-test", start_after=names[-1]
+        )
+        self.assertEqual([], page.entries)

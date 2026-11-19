@@ -64,7 +64,8 @@ class ListObjectFlag(Enum):
 
     # Bidirectional diff (remote <-> in-cluster). Requires remote buckets
     # with versioning metadata. Checks whether the remote version exists
-    # and whether it differs from the in-cluster copy.
+    # and whether it differs from the in-cluster copy. Cannot be combined
+    # with `start_after`.
     DIFF = 12
 
     # Do not return virtual subdirectories as listing entries.

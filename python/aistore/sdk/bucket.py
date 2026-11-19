@@ -592,7 +592,9 @@ class Bucket(AISSource):
             start_after (str, optional): List objects whose names are strictly greater than this
                 value (exclusive marker). Useful for sharding a flat bucket across parallel
                 listers. Applied to the first page only; subsequent pages continue via the
-                server-issued continuation token. Supported only for native AIS and general-purpose S3 buckets.
+                server-issued continuation token. Supported for native AIS buckets, general-purpose S3 buckets,
+                and inventory listings. S3 buckets and inventory listings require AIStore v5.3 or later.
+                Cannot be combined with `ListObjectFlag.DIFF`.
 
         Returns:
             BucketList: the page of objects in the bucket and the continuation token to get the next page
@@ -669,7 +671,9 @@ class Bucket(AISSource):
                 See `list_objects` for details.
             start_after (str, optional): List objects whose names are strictly greater than this
                 value (exclusive marker). Applied to the first page only.
-                Supported only for native AIS and general-purpose S3 buckets.
+                Supported for native AIS buckets, general-purpose S3 buckets, and inventory listings.
+                S3 buckets and inventory listings require AIStore v5.3 or later.
+                Cannot be combined with `ListObjectFlag.DIFF`.
 
         Returns:
             ObjectIterator: object iterator
@@ -730,7 +734,9 @@ class Bucket(AISSource):
                 See `list_objects` for details.
             start_after (str, optional): List objects whose names are strictly greater than this
                 value (exclusive marker). Applied to the first page only.
-                Supported only for native AIS and general-purpose S3 buckets.
+                Supported for native AIS buckets, general-purpose S3 buckets, and inventory listings.
+                S3 buckets and inventory listings require AIStore v5.3 or later.
+                Cannot be combined with `ListObjectFlag.DIFF`.
 
         Returns:
             List[BucketEntry]: list of objects in bucket
