@@ -15,6 +15,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 )
 
@@ -86,15 +87,12 @@ func GetBatch(bp BaseParams, bck cmn.Bck, req *apc.MossReq, w io.Writer) (resp a
 // - it is the caller's responsibility to close the body
 // - compare with GetBatch() above
 
-const zipext = ".zip"
-
 func GetBatchStream(bp BaseParams, bck cmn.Bck, req *apc.MossReq) (io.ReadCloser, http.Header, error) {
 	if !req.StreamingGet {
 		return nil, nil, errors.New("GetBatchStream: expecting req.StreamingGet to be set")
 	}
 	if req.OutputFormat != "" {
-		of := strings.ToLower(req.OutputFormat)
-		if of == zipext || strings.Contains(of, zipext[1:]) {
+		if f, err := archive.Mime(req.OutputFormat, ""); err == nil && f == archive.ExtZip {
 			return nil, nil, fmt.Errorf("GetBatchStream: output format %q is not streamable", req.OutputFormat)
 		}
 	}

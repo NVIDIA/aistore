@@ -1,7 +1,7 @@
 // Package archive: write, read, copy, append, list primitives
 // across all supported formats
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
  */
 package archive
 
@@ -89,14 +89,19 @@ func Mime(mime, filename string) (string, error) {
 
 // e.g. MIME: "application/zip"
 func normalize(mime string) (string, error) {
+	lower := strings.ToLower(mime) // media types are case-insensitive
 	switch {
-	case strings.Contains(mime, ExtTarGz[1:]): // ExtTarGz contains ExtTar
+	case strings.Contains(lower, ExtTarGz[1:]): // ExtTarGz contains ExtTar
 		return ExtTarGz, nil
-	case strings.Contains(mime, ExtTarLz4[1:]): // ditto
+	case strings.Contains(lower, ExtTarLz4[1:]): // ditto
 		return ExtTarLz4, nil
 	default:
+		// standard content types before the substring match (e.g., "application/gzip" contains "zip")
+		if ext := ExtFromContentType(lower); ext != "" {
+			return ext, nil
+		}
 		for _, ext := range FileExtensions {
-			if strings.Contains(mime, ext[1:]) {
+			if strings.Contains(lower, ext[1:]) {
 				return ext, nil
 			}
 		}

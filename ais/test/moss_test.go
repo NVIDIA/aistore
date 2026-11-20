@@ -1002,21 +1002,11 @@ func TestGetBatchStream_DrainTar(t *testing.T) {
 		tassert.CheckFatal(t, err)
 	}
 
-	// Build Moss request (streaming tar).
+	// Build Moss request.
 	in := make([]apc.MossIn, 0, len(names))
 	for _, n := range names {
 		in = append(in, apc.MossIn{ObjName: n})
 	}
-	req := &apc.MossReq{In: in, StreamingGet: true}
-
-	rc, _, err := api.GetBatchStream(bp, bck, req)
-	tassert.CheckFatal(t, err)
-	defer rc.Close()
-
-	// TAR is the default output format
-	ar, err := archive.NewReader(archive.ExtTar, rc)
-	tassert.CheckFatal(t, err)
-
 	// prep. tarch.DrainVerify
 	var (
 		wantNames = make([]string, len(in))
@@ -1027,9 +1017,22 @@ func TestGetBatchStream_DrainTar(t *testing.T) {
 		sum += sizes[i]
 	}
 
-	drain := tarch.NewDrainVerify(t, wantNames, sizes)
-	err = ar.ReadUntil(drain, "" /*match all*/, cos.EmptyMatchAll)
-	tassert.CheckFatal(t, err)
+	// TAR is the default output format
+	for _, test := range []struct{ of, mime string }{{"", archive.ExtTar}, {cos.ContentGzip, archive.ExtTgz}} {
+		t.Run(test.mime, func(t *testing.T) {
+			req := &apc.MossReq{In: in, StreamingGet: true, OutputFormat: test.of}
+			rc, _, err := api.GetBatchStream(bp, bck, req)
+			tassert.CheckFatal(t, err)
+			defer rc.Close()
+
+			ar, err := archive.NewReader(test.mime, rc)
+			tassert.CheckFatal(t, err)
+
+			drain := tarch.NewDrainVerify(t, wantNames, sizes)
+			err = ar.ReadUntil(drain, "" /*match all*/, cos.EmptyMatchAll)
+			tassert.CheckFatal(t, err)
+		})
+	}
 }
 
 //
