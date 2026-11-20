@@ -371,6 +371,57 @@ func TestArchMultiObjInvalidArchName(t *testing.T) {
 	}
 }
 
+// archive with a user-defined mime
+func TestArchMultiObjMime(t *testing.T) {
+	var (
+		proxyURL   = tools.RandomProxyURL(t)
+		baseParams = tools.BaseAPIParams(proxyURL)
+		bck        = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
+		objName    = "arch-source"
+	)
+	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
+
+	reader, err := readers.New(&readers.Arg{Type: readers.Rand, Size: cos.KiB, CksumType: cos.ChecksumNone})
+	tassert.CheckFatal(t, err)
+	_, err = api.PutObject(&api.PutArgs{BaseParams: baseParams, Bck: bck, ObjName: objName, Reader: reader})
+	tassert.CheckFatal(t, err)
+
+	for _, test := range []struct {
+		mime, archName string
+		ok             bool
+	}{
+		{mime: archive.ExtTar, archName: "shard-1.tar", ok: true},
+		{mime: "tar", archName: "shard-2.tar", ok: true},
+		{mime: "application/x-tar", archName: "shard-3.tar", ok: true},
+		{mime: "application/zip", archName: "shard-4.zip", ok: true},
+		{mime: "application/gzip", archName: "shard-5.tar.gz", ok: true},
+		{mime: archive.ExtTgz, archName: "shard-6.tar.gz", ok: true},
+		{mime: "application/zip", archName: "shard-7.tar", ok: false},
+	} {
+		msg := cmn.ArchiveBckMsg{
+			ToBck: bck,
+			ArchiveMsg: apc.ArchiveMsg{
+				ArchName:  test.archName,
+				Mime:      test.mime,
+				ListRange: apc.ListRange{ObjNames: []string{objName}},
+			},
+		}
+		xid, err := api.ArchiveMultiObj(baseParams, bck, &msg)
+		if !test.ok {
+			tassert.Errorf(t, err != nil, "expected error (mime %q, archname %q)", test.mime, test.archName)
+			continue
+		}
+		if err != nil {
+			t.Errorf("mime %q, archname %q: %v", test.mime, test.archName, err)
+			continue
+		}
+		flt := xact.ArgsMsg{ID: xid, Kind: apc.ActArchive, Timeout: tools.RebalanceTimeout}
+		tassert.CheckFatal(t, api.WaitForXaction(baseParams, &flt))
+		_, err = api.HeadObject(baseParams, bck, test.archName, api.HeadArgs{FltPresence: apc.FltPresent})
+		tassert.CheckFatal(t, err)
+	}
+}
+
 const (
 	archLargeSize = 128 * cos.MiB
 	archNumSmall  = 40

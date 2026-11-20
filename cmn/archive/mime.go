@@ -64,8 +64,9 @@ var (
 
 // motivation: prevent from creating archives with non-standard extensions
 func Strict(mime, filename string) (m string, err error) {
+	var nm string
 	if mime != "" {
-		if m, err = normalize(mime); err != nil {
+		if nm, err = normalize(mime); err != nil {
 			return
 		}
 	}
@@ -73,11 +74,24 @@ func Strict(mime, filename string) (m string, err error) {
 	if err != nil || mime == "" {
 		return
 	}
-	if mime != m {
+	if !eqExt(nm, m) {
 		// user-defined (non-empty) MIME must correspond
 		err = fmt.Errorf("mime mismatch %q vs %q", mime, m)
 	}
 	return
+}
+
+// .tgz and .tar.gz name the same format
+func eqExt(ext1, ext2 string) bool {
+	switch {
+	case ext1 == ext2:
+		return true
+	case ext1 == ExtTarGz && ext2 == ExtTgz:
+		return true
+	case ext2 == ExtTarGz && ext1 == ExtTgz:
+		return true
+	}
+	return false
 }
 
 func Mime(mime, filename string) (string, error) {
