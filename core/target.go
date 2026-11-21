@@ -49,7 +49,6 @@ type (
 	}
 
 	BlobParams struct {
-		Backend Backend
 		Lom     *LOM
 		Msg     *apc.BlobMsg
 		Context context.Context // optional; cancels range reads (client request, parent xaction)
@@ -120,7 +119,6 @@ type (
 
 		// backend
 		Backend(*meta.Bck) Backend
-		RateLimitBackend(Backend, *cos.AdaptRateLim) Backend
 
 		// Node health
 		Health(si *meta.Snode, timeout time.Duration, query url.Values) (body []byte, ecode int, err error)

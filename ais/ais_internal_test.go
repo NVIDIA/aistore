@@ -1016,6 +1016,48 @@ func TestRLBackendObjectOps(t *testing.T) {
 	}
 }
 
+func TestRLBackendOnDemand(t *testing.T) {
+	lom := core.AllocLOM("rate-limit-on-demand")
+	defer core.FreeLOM(lom)
+	err := lom.InitBck(meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal))
+	tassert.CheckFatal(t, err)
+
+	conf := &lom.Bck().Props.RateLimit.Backend
+	oldEnabled, oldOnDemand := conf.Enabled, conf.OnDemand
+	conf.Enabled, conf.OnDemand = false, true
+	defer func() { conf.Enabled, conf.OnDemand = oldEnabled, oldOnDemand }()
+
+	arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
+	tassert.CheckFatal(t, err)
+	key := lom.Bck().HashUname(http.MethodGet)
+	mockTarget.ratelim.Store(key, arl)
+	defer mockTarget.ratelim.Delete(key)
+
+	backend := &throttleBackend{}
+	bp := &rlbackend{Backend: backend, t: mockTarget}
+
+	// not pacing until the first 429/503
+	used := arl.LastUsed()
+	time.Sleep(time.Millisecond)
+	tassert.Fatalf(t, bp.acquire(lom.Bck(), http.MethodGet) == arl, "expected the shared (bucket, verb) limiter")
+	tassert.Fatalf(t, arl.LastUsed() == used && !arl.IsActive(), "paced before the first 429")
+
+	// the first 429 activates the limiter and gets retried
+	_, err = bp.GetObj(t.Context(), lom, cmn.OwtGet, nil)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, arl.IsActive(), "429 did not activate the limiter")
+	tassert.Fatalf(t, backend.calls == 2, "expected one retry, got %d calls", backend.calls)
+
+	// switching on-demand off and back on retains the activated limiter
+	conf.OnDemand = false
+	tassert.Fatalf(t, bp.acquire(lom.Bck(), http.MethodGet) == nil, "expected no limiter when not configured")
+	conf.OnDemand = true
+	used = arl.LastUsed()
+	time.Sleep(time.Millisecond)
+	tassert.Fatalf(t, bp.acquire(lom.Bck(), http.MethodGet) == arl, "expected the same limiter")
+	tassert.Fatalf(t, arl.LastUsed() > used, "not pacing after activation")
+}
+
 func TestRLBackendHeadReturnsRetryError(t *testing.T) {
 	lom := core.AllocLOM("rate-limit-head-retry-error")
 	defer core.FreeLOM(lom)

@@ -14,7 +14,6 @@ This text explains how it all fits together.
 4. [Unified Rate-Limiting Logic](#4-unified-rate-limiting-logic)
    - [Backend Activation Modes](#backend-activation-modes)
 5. [Handling Batch Jobs](#5-handling-batch-jobs)
-   - [Retry-Enabled Prefetch](#51-retry-enabled-prefetch)
 6. [Use Cases](#6-use-cases)
    - [Handling Backend-Imposed Limits](#61-handling-backend-imposed-limits)
    - [Limiting User Traffic](#62-limiting-user-traffic)
@@ -44,7 +43,7 @@ Not true! In reality, such integrations are always a balancing act: the goal is 
 
 **Reactive Rate Limiting** comes into play when the external service or remote storage actually enforces a limit (returning [429](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/429) or [503](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/503)).
 
-When that happens, we respond with adaptive backoff and retry logic if the bucket's backend rate-limiting policy is enabled. [Retry-enabled prefetch](#51-retry-enabled-prefetch) uses a job-local backend limiter when the bucket policy enables on-demand activation.
+When that happens, we respond with adaptive backoff and retry logic — **but only** if the corresponding bucket has its backend rate limiter configured: proactive (`enabled`) or on-demand (`on_demand`); see [Backend Activation Modes](#backend-activation-modes). This gives us a self-adjusting mechanism that converges on the maximum permissible speed with minimal overhead.
 
 ---
 
@@ -155,6 +154,8 @@ The backend limiter runs in one of two mutually exclusive modes:
 - Once active, both modes pace requests and retry rate-limit errors using the bucket's `max_tokens`, `interval`, and `num_retries`.
 - An explicitly enabled (proactive) limiter takes precedence: setting both `enabled` and `on_demand` to `true` fails, in cluster configuration and bucket properties alike.
 - The check applies to the resulting (merged) configuration: for instance, setting `on_demand=true` on a bucket that already has `enabled=true` fails as well.
+- On-demand activation is one-way: once activated, the limiter keeps pacing, while its learned rate recovers gradually as the remote stops throttling.
+- Switching `on_demand` off and back on does not reset the learned rate; a limiter that stays idle for several hours is discarded.
 
 Here's a simplified snippet of proactive-mode logic (`enabled=true`) with (4) inline comments:
 
@@ -212,19 +213,7 @@ AIStore supports numerous batch jobs that read and transform data across buckets
 At first, the permutations may seem too numerous, but in reality it is easy to state a single rule:
 
 - Frontend rate-limiting is enforced by a given running job and is _conjunctive_ (source and/or destination wise). When both limits are defined one of them will most likely "absorb" the other.
-- Backend is controlled by the corresponding `(bucket, verb)` rate limiter when enabled. With on-demand activation, prefetch uses the job-local limiter described below.
-
-### 5.1 Retry-Enabled Prefetch
-
-Prefetch uses the job-local policy below when both `rate_limit.backend.enabled` and `rate_limit.backend.on_demand` are `true`. Otherwise it uses the existing bucket backend unchanged. There is no per-job retry option.
-
-With the job-local policy:
-
-1. **Before a rate-limit error:** send cold GETs and blob range reads without acquiring from the job-local limiter.
-2. **On the first rate-limit error (`429` or `503`):** atomically install an `rlbackend` wrapper and resubmit the failed call through it. Concurrent workers share the installed wrapper; already-running calls are not paused.
-3. **If errors continue:** reuse `rlbackend` pacing and [growing retry waits](#backend-retry-waits). Subsequent covered calls use the wrapper for the rest of the job, even after successful requests.
-
-The job-local limiter uses the bucket's `max_tokens`, `interval`, and `num_retries`, with the standard per-target budget calculation.
+- Backend is controlled by the corresponding `(bucket, verb)` rate limiter that keeps adjusting its runtime state based on the responses from remote storage. The same limiter serves client requests and all jobs, in either mode (see [Backend Activation Modes](#backend-activation-modes)).
 
 ---
 

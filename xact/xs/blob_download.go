@@ -275,10 +275,7 @@ func (p *blobFactory) Start() (err error) {
 	bck := lom.Bck()
 	r.InitBase(nil, p.Args.UUID, p.Kind(), bck) //nolint:staticcheck // no parent here
 
-	r.bp = r.args.Backend
-	if r.bp == nil {
-		r.bp = core.T.Backend(bck)
-	}
+	r.bp = core.T.Backend(bck)
 
 	// resolve (metric, vlabs) pairings once; reuse on the hot path
 	vlabs := map[string]string{stats.VlabBucket: bck.Cname("")}
@@ -1037,7 +1034,7 @@ func (w *blobWorker) do(wi *blobWI, buf []byte) (int, error) {
 	defer cancel()
 
 	size := min(chunkSize, w.parent.fullSize-wi.roff) // exact range, incl. the last one
-	res := w.parent.bp.GetObjReader(ctx, lom, wi.roff, size, w.parent.pin)
+	res := core.T.Backend(lom.Bck()).GetObjReader(ctx, lom, wi.roff, size, w.parent.pin)
 	if res.Err != nil {
 		core.RR.Throttle(lom.Bprops(), w.parent.config, res.ErrCode, res.Err)
 		if res.R != nil {

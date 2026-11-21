@@ -38,7 +38,8 @@ import (
 // - StartMpt(), PutMptPart(), CompleteMpt(), AbortMpt()
 
 // retries:
-// - proactive: acquire (i.e., shape) before every call
+// - proactive (enabled): acquire (i.e., shape) before every call
+// - on-demand: acquire only after the first 429/503 activates the limiter (one way)
 // - reactive:  on 429/503 only, and only where the call is safely repeatable;
 //   PutObj requires a replayable (re-openable) body
 // - each reactive retry is a single attempt: the backend (SDK client) must not
@@ -52,8 +53,7 @@ import (
 type (
 	rlbackend struct {
 		core.Backend
-		t   *target
-		arl *cos.AdaptRateLim // optional owner-supplied limiter; nil selects the bucket/verb limiter
+		t *target
 	}
 )
 
@@ -202,17 +202,9 @@ func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) 
 // apply (compare with ais/prate_limit)
 //
 
-func (t *target) RateLimitBackend(bp core.Backend, arl *cos.AdaptRateLim) core.Backend {
-	return &rlbackend{Backend: bp, t: t, arl: arl}
-}
-
 func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim) {
-	// Pace requests with the owner's limiter, independent of bucket rate-limit configuration.
-	if bp.arl != nil {
-		bp.arl.RetryAcquire(time.Second)
-		return bp.arl
-	}
-	if !bck.Props.RateLimit.Backend.Enabled {
+	conf := &bck.Props.RateLimit.Backend
+	if !conf.Configured() {
 		return nil
 	}
 	var (
@@ -226,6 +218,11 @@ func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim)
 	}
 	arl = v.(*cos.AdaptRateLim)
 
+	// on-demand: not pacing until activated (see retry)
+	if !conf.Enabled && !arl.IsActive() {
+		return arl
+	}
+
 	// TODO: make acquisition context-aware so cancellation interrupts token waits
 	arl.RetryAcquire(time.Second)
 	return arl
@@ -236,6 +233,7 @@ func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim)
 // - sleep grows from the previous wait by 2x/4x/8x based on error rate, capped at max(6s, token-derived interval)
 // - bounded by both `num_retries` and DfltRateMaxWait
 // - `cb` gets no-retry context: one attempt per SDK request
+// - activate the limiter (on-demand: one way, see above)
 func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, ecode int, err error,
 	cb func(context.Context) (int, error)) (total time.Duration, _ int, _ error) {
 	var (
@@ -243,6 +241,7 @@ func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, ecode int, e
 		sleep   time.Duration
 		nctx    = cmn.WithNoRetry(ctx)
 	)
+	arl.Activate()
 	for retries < arl.NumRetries() && total < cos.DfltRateMaxWait {
 		sleep = arl.OnErr(sleep)
 		total += sleep

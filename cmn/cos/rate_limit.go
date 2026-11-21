@@ -9,6 +9,7 @@ import (
 	"math"
 	"runtime"
 	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -77,6 +78,7 @@ type (
 			// respectively, (errors, granted, prev. errors, prev. granted) counters
 			nerr, n, perr, pn int
 		}
+		active ratomic.Bool // on-demand: pacing since the first 429/503
 	}
 	// usage: rate limit user GET, PUT, and DELETE requests
 	BurstRateLim struct {
@@ -303,6 +305,12 @@ func (arl *AdaptRateLim) _str() string {
 }
 
 func (arl *AdaptRateLim) NumRetries() int { return arl.retries }
+
+// on-demand mode: start pacing upon the first 429/503 - one way
+// (learned rate recovers via recompute(), and the limiter itself is pruned when idle)
+// TODO: consider deactivating once fully recovered and error-free for a while
+func (arl *AdaptRateLim) Activate()      { arl.active.Store(true) }
+func (arl *AdaptRateLim) IsActive() bool { return arl.active.Load() }
 
 //////////////////
 // BurstRateLim //

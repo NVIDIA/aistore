@@ -3680,6 +3680,9 @@ func (*RateLimitConf) verbs(tag, name, value string) error {
 // NOTE: separately, frontend-rate-limiter validation in `makeNewBckProps`
 func (c *RateLimitConf) ValidateAsProps(...any) error { return c.Validate() }
 
+// either proactive (Enabled) or reactive (OnDemand): ais/rlbackend handles 429/503
+func (c *Adaptive) Configured() bool { return c.Enabled || c.OnDemand }
+
 //////////////////
 // GetBatchConf //
 //////////////////
