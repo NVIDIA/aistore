@@ -8,10 +8,8 @@ package xs
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"slices"
 	"sync"
-	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
@@ -30,11 +28,6 @@ import (
 )
 
 type (
-	prefetchBackend struct {
-		core.Backend
-		arl  *cos.AdaptRateLim
-		rlbp ratomic.Pointer[core.Backend]
-	}
 	prfFactory struct {
 		xctn *prefetch
 		*xreg.PrefetchArgs
@@ -159,18 +152,9 @@ func newPrefetch(xargs *xreg.Args, kind string, bck *meta.Bck, args *xreg.Prefet
 	if err != nil {
 		return nil, err
 	}
-	r.bp = core.T.Backend(bck)
-	conf := bck.Props.RateLimit.Backend
-	if conf.Enabled && conf.OnDemand {
-		// core.T.Backend(bck) would pace requests immediately because the bucket policy is enabled
-		// clear props on a copy to get the raw backend; prefetch activates its limiter on the first 429/503
-		remote := meta.CloneBck(bck.RemoteBck())
-		remote.Props = nil
-		// TODO: share the per-target budget across concurrent prefetch jobs for the same bucket/account
-		r.bp = &prefetchBackend{Backend: core.T.Backend(remote), arl: bck.NewBackendRateLim(nat)}
-	}
 	r.latestVer = bck.VersionConf().ValidateWarmGet || msg.LatestVer
 
+	r.bp = core.T.Backend(bck)
 	r.xlabs = map[string]string{
 		stats.VlabBucket: bck.Cname(""),
 		stats.VlabXkind:  r.Kind(),
@@ -242,45 +226,6 @@ func (r *prefetch) Abort(err error) bool {
 		r.BcastAbort(r.pages.smap)
 	}
 	return true
-}
-
-func (bp *prefetchBackend) activate() core.Backend {
-	wrapped := core.T.RateLimitBackend(bp.Backend, bp.arl)
-	bp.rlbp.CompareAndSwap(nil, &wrapped)
-	return *bp.rlbp.Load()
-}
-
-// used by prefetch cold GET
-func (bp *prefetchBackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, req *http.Request) (int, error) {
-	ctx = cmn.WithNoRetry(ctx)
-	if wrapped := bp.rlbp.Load(); wrapped != nil {
-		return (*wrapped).GetObj(ctx, lom, owt, req)
-	}
-	code, err := bp.Backend.GetObj(ctx, lom, owt, req)
-	if err == nil || bp.arl == nil || !cmn.IsErrTooManyRequests(err) {
-		// regular error, return it as is
-		return code, err
-	}
-	// activate the rlbackend and retry
-	return bp.activate().GetObj(ctx, lom, owt, req)
-}
-
-// used by blob-downloader
-func (bp *prefetchBackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, length int64, pin ...*core.ObjPin) core.GetReaderResult {
-	ctx = cmn.WithNoRetry(ctx)
-	if wrapped := bp.rlbp.Load(); wrapped != nil {
-		return (*wrapped).GetObjReader(ctx, lom, offset, length, pin...)
-	}
-	res := bp.Backend.GetObjReader(ctx, lom, offset, length, pin...)
-	if res.Err == nil || bp.arl == nil || !cmn.IsErrTooManyRequests(res.Err) {
-		// regular error, return it as is
-		return res
-	}
-	if res.R != nil {
-		cmn.CloseRemote(res.R, lom, 4, cos.ModBackend)
-	}
-	// activate the rlbackend and retry
-	return bp.activate().GetObjReader(ctx, lom, offset, length, pin...)
 }
 
 // NOTE ref 6735188: _not_ setting negative atime, flushing lom metadata
@@ -448,7 +393,6 @@ func (r *prefetch) Snap() (snap *core.Snap) {
 func (r *prefetch) blobdl(lom *core.LOM, oa *cmn.ObjAttrs) (int, error) {
 	// bucket auto-chunking has already taken precedence in prfFactory.Start
 	params := &core.BlobParams{
-		Backend: r.bp,
 		Lom:     &core.LOM{ObjName: lom.ObjName},
 		Context: r.BackendCtx(), // stop range reads while the iterator is still unwinding
 		Msg: &apc.BlobMsg{

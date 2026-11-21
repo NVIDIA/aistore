@@ -1359,15 +1359,14 @@ func TestPrefetchRetryRemoteAIS(t *testing.T) {
 		wantFailure bool
 	}{
 		{name: "unthrottled-with-policy-disabled", unlimited: true},
-		{name: "unthrottled-on-demand-runs-without-pacing", enabled: true, onDemand: true, unlimited: true},
+		{name: "unthrottled-on-demand-runs-without-pacing", onDemand: true, unlimited: true},
 		{name: "cold-get-with-policy-disabled", wantFailure: true},
-		{name: "on-demand-with-policy-disabled-does-not-retry", onDemand: true, wantFailure: true},
-		{name: "cold-get-with-proactive-policy", enabled: true},
-		{name: "cold-get-with-on-demand-policy", enabled: true, onDemand: true},
-		{name: "on-demand-honors-one-retry-budget", enabled: true, onDemand: true, numRetries: 1, wantFailure: true},
-		{name: "prefix-cold-get-with-on-demand-policy", prefix: "objects/", enabled: true, onDemand: true},
+		{name: "cold-get-with-bucket-configured-policy", enabled: true},
+		{name: "cold-get-with-on-demand-policy", onDemand: true},
+		{name: "on-demand-honors-one-retry-budget", onDemand: true, numRetries: 1, wantFailure: true},
+		{name: "prefix-cold-get-with-on-demand-policy", prefix: "objects/", onDemand: true},
 		{name: "blob-with-policy-disabled", blob: true, wantFailure: true},
-		{name: "blob-with-on-demand-policy", enabled: true, onDemand: true, blob: true},
+		{name: "blob-with-on-demand-policy", onDemand: true, blob: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tools.CheckSkip(t, &tools.SkipTestArgs{Long: tc.blob || tc.unlimited})

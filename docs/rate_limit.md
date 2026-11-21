@@ -1,4 +1,6 @@
-AIStore v3.28 introduces a unified **rate-limiting** capability that works at both the frontend (client-facing) and backend (cloud-facing) layers. It enables proactive control to prevent hitting limits and reactive handling when limits are encountered — all configurable at both the cluster and bucket levels, with zero performance overhead when disabled.
+AIStore rate-limits traffic at two layers: frontend (client-facing) and backend (cloud-facing). It paces requests to stay within limits, and backs off and retries when limits are encountered anyway — all configurable at both the cluster and bucket levels, with zero performance overhead when disabled.
+
+> Rate limiting was introduced in v3.28; v5.3 added the on-demand backend mode (see [Backend Activation Modes](#backend-activation-modes)).
 
 <img src="/docs/images/rate-limit.png" alt="Dual-layer Rate Limiting" width="80%">
 
@@ -7,14 +9,13 @@ This text explains how it all fits together.
 ## Table of Contents
 1. [Background](#1-background)
 2. [Elements](#2-elements)
-   - [Proactive vs. Reactive](#21-proactive-vs-reactive)
+   - [Pacing and Retries](#21-pacing-and-retries)
    - [Frontend vs. Backend](#22-frontend-vs-backend)
 3. [Configuration](#3-configuration)
    - [Configuration: Summary Table](#31-configuration-summary-table)
 4. [Unified Rate-Limiting Logic](#4-unified-rate-limiting-logic)
    - [Backend Activation Modes](#backend-activation-modes)
 5. [Handling Batch Jobs](#5-handling-batch-jobs)
-   - [Retry-Enabled Prefetch](#51-retry-enabled-prefetch)
 6. [Use Cases](#6-use-cases)
    - [Handling Backend-Imposed Limits](#61-handling-backend-imposed-limits)
    - [Limiting User Traffic](#62-limiting-user-traffic)
@@ -32,19 +33,19 @@ The original motivation was to **gracefully handle** rate-limited cloud storage 
 
 One common misconception is that integrating with systems that impose their own rate constraints boils down to simply retrying failed requests with exponential backoff.
 
-Not true! In reality, such integrations are always a balancing act: the goal is to **minimize retries** while running at the **maximum allowed speed** — which further requires configuration, runtime state, and a few more elements explained below.
+Not true! In reality, such integrations are always a balancing act: the goal is to **minimize retries** while running at the **maximum allowed speed** - which further requires configuration, runtime state, and a few more elements explained below.
 
 ---
 
 ## 2. Elements
 
-### 2.1 Proactive vs. Reactive
+### 2.1 Pacing and Retries
 
-**Proactive Rate Limiting** aims to keep requests within permitted throughput before hitting any system-imposed limits—cloud or otherwise. By governing the flow of requests in real time, we reduce the need for retries.
+**Pacing** keeps requests within permitted throughput before hitting any system-imposed limits—cloud or otherwise. By governing the flow of requests in real time, we reduce the need for retries.
 
-**Reactive Rate Limiting** comes into play when the external service or remote storage actually enforces a limit (returning [429](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/429) or [503](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/503)).
+**Retries** come into play when the external service or remote storage actually enforces a limit (returning [429](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/429) or [503](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/503)).
 
-When that happens, we respond with adaptive backoff and retry logic if the bucket's backend rate-limiting policy is enabled. [Retry-enabled prefetch](#51-retry-enabled-prefetch) uses a job-local backend limiter when the bucket policy enables on-demand activation.
+When that happens, we respond with adaptive backoff and retry logic - **but only** if the corresponding bucket has its backend rate limiter configured: bucket-configured (`enabled`) or on-demand (`on_demand`); see [Backend Activation Modes](#backend-activation-modes). This gives us a self-adjusting mechanism that converges on the maximum permissible speed with minimal overhead.
 
 ---
 
@@ -67,8 +68,7 @@ When that happens, we respond with adaptive backoff and retry logic if the bucke
 
 ## 3. Configuration
 
-Version 3.28 introduces **per-bucket configuration**, with **inheritable defaults** set at the **cluster level**. Buckets automatically inherit the global settings, but each bucket can override them at creation time or any point thereafter. For reference, see the updated configuration definitions in
-[cmn/config.go (lines 676–733)](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go#L676-L733).
+Rate limiting is configured **per bucket**, with **inheritable defaults** set at the **cluster level**. Buckets automatically inherit the global settings, but each bucket can override them at creation time or any point thereafter. For reference, see `RateLimitConf` in [cmn/config.go](https://github.com/NVIDIA/aistore/blob/main/cmn/config.go).
 
 ```console
 $ ais config cluster rate_limit --json
@@ -122,7 +122,7 @@ rate_limit.frontend.per_op_max_tokens
 | Parameter | Description |
 |-----------|-------------|
 | `enabled` | Enables/disables rate limiting for frontend or backend |
-| `on_demand` | (Backend only) Delays rate limiting until the first backend `429`/`503`. Can be set while disabled; takes effect only when `enabled=true`. Defaults to `false`. |
+| `on_demand` | (Backend only) On-demand: no pacing until the first backend `429`/`503`. Mutually exclusive with `enabled`. Defaults to `false`. |
 | `interval` | Time window for token replenishment (e.g., "1m", "10s") |
 | `max_tokens` | Maximum number of operations allowed in the interval |
 | `burst_size` | (Frontend only) Maximum burst allowed above steady rate |
@@ -143,13 +143,26 @@ Although frontend and backend differ in their specific mechanisms (bursty vs. sh
 
 ### Backend Activation Modes
 
-With `rate_limit.backend.enabled=true`, the default `on_demand=false` paces requests from the start. Setting `on_demand=true` allows requests without backend-limiter pacing until the first `429`/`503` for that bucket and operation on a target. That response activates the limiter: subsequent requests are paced, and rate-limit errors receive bounded retries using the configured token budget, interval, and retry count. With `enabled=false`, neither mode applies.
+The backend limiter runs in one of two mutually exclusive modes:
 
-Here's a simplified snippet of proactive-mode logic (`on_demand=false`) with (4) inline comments:
+| `enabled` | `on_demand` | Mode |
+|-----------|-------------|------|
+| `false` | `false` | Off |
+| `true` | `false` | **Bucket-configured**: paces requests from the start |
+| `false` | `true` | **On-demand**: no pacing until the first `429`/`503` for a given bucket and operation on a target; that response activates the limiter |
+| `true` | `true` | Rejected |
+
+- Once active, both modes pace requests and retry rate-limit errors using the bucket's `max_tokens`, `interval`, and `num_retries`.
+- An explicitly enabled (bucket-configured) limiter takes precedence: setting both `enabled` and `on_demand` to `true` fails, in cluster configuration and bucket properties alike.
+- The check applies to the resulting (merged) configuration: for instance, setting `on_demand=true` on a bucket that already has `enabled=true` fails as well.
+- On-demand activation is one-way: once activated, the limiter keeps pacing, while its learned rate recovers gradually as the remote stops throttling.
+- Switching `on_demand` off and back on does not reset the learned rate; a limiter that stays idle for several hours is discarded.
+
+Here's a simplified snippet of bucket-configured logic (`enabled=true`) with (4) inline comments:
 
 ```go
 func (bp *rlbackend) GetObj() (int, error) {
-	// 1. find or create rate limiter instance; proactively apply to optimize out error handling
+	// 1. find or create rate limiter instance; pace up front to optimize out error handling
 	arl := bp.acquire(bucket, http.MethodGet)
 
 	// 2. fast path
@@ -201,19 +214,7 @@ AIStore supports numerous batch jobs that read and transform data across buckets
 At first, the permutations may seem too numerous, but in reality it is easy to state a single rule:
 
 - Frontend rate-limiting is enforced by a given running job and is _conjunctive_ (source and/or destination wise). When both limits are defined one of them will most likely "absorb" the other.
-- Backend is controlled by the corresponding `(bucket, verb)` rate limiter when enabled. With on-demand activation, prefetch uses the job-local limiter described below.
-
-### 5.1 Retry-Enabled Prefetch
-
-Prefetch uses the job-local policy below when both `rate_limit.backend.enabled` and `rate_limit.backend.on_demand` are `true`. Otherwise it uses the existing bucket backend unchanged. There is no per-job retry option.
-
-With the job-local policy:
-
-1. **Before a rate-limit error:** send cold GETs and blob range reads without acquiring from the job-local limiter.
-2. **On the first rate-limit error (`429` or `503`):** atomically install an `rlbackend` wrapper and resubmit the failed call through it. Concurrent workers share the installed wrapper; already-running calls are not paused.
-3. **If errors continue:** reuse `rlbackend` pacing and [growing retry waits](#backend-retry-waits). Subsequent covered calls use the wrapper for the rest of the job, even after successful requests.
-
-The job-local limiter uses the bucket's `max_tokens`, `interval`, and `num_retries`, with the standard per-target budget calculation.
+- Backend is controlled by the corresponding `(bucket, verb)` rate limiter that keeps adjusting its runtime state based on the responses from remote storage. The same limiter serves client requests and all jobs, in either mode (see [Backend Activation Modes](#backend-activation-modes)).
 
 ---
 
@@ -310,7 +311,7 @@ When running a copy or transform job between these buckets, AIStore automaticall
 
 There are statistics and Prometheus metrics to [monitor](/docs/monitoring-overview.md) all performance-related aspects including (but not limited to) rate-limiting.
 
-Below are two tables — one for `GET`, another for `PUT` — that illustrate how the performance monitoring might look for an AIStore cluster under the described rate-limited scenario.
+Below are two tables - one for `GET`, another for `PUT` - that illustrate how the performance monitoring might look for an AIStore cluster under the described rate-limited scenario.
 
 ---
 
@@ -373,10 +374,10 @@ In practice, you’d adjust the rate-limit `interval` and `max_tokens` (and pote
 
 ## 8. Recap
 
-The objective for v3.28 was to maintain linear scalability and high performance while safeguarding against external throttling or internal overload.
+The objective is to maintain linear scalability and high performance while safeguarding against external throttling or internal overload.
 
 The solution features:
 
 - **Bursty** (frontend) and **adaptive** (backend) rate limiters configurable on a per-bucket basis.
-- **Proactive** controls, to keep runtime errors and retries to a minimum.
-- **Reactive** logic, to gracefully handle 429s and 503s from remote storages.
+- **Pacing**, to keep runtime errors and retries to a minimum.
+- **Adaptive backoff and retries**, to gracefully handle 429s and 503s from remote storages.

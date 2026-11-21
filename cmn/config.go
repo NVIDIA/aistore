@@ -1134,7 +1134,7 @@ type (
 	Adaptive struct {
 		RateLimitBase
 		NumRetries int `json:"num_retries"`
-		// Delay an enabled backend limiter's activation until the first 429/503; defaults to false.
+		// activate only upon the first 429/503; mutually exclusive with Enabled (bucket-configured)
 		OnDemand bool `json:"on_demand,omitempty"`
 	}
 	// AdaptiveToSet is the partial-update counterpart of Adaptive.
@@ -1143,7 +1143,8 @@ type (
 		// Automatic retries on throttled (429) or unavailable (503)
 		// responses before propagating the error. Range `[1, 10]`.
 		NumRetries *int `json:"num_retries,omitempty"` // +gen:optional
-		// Activate an enabled backend limiter only after the first 429/503.
+		// Activate the backend limiter only upon the first 429/503.
+		// Mutually exclusive with `enabled` (bucket-configured limiter).
 		OnDemand *bool `json:"on_demand,omitempty"` // +gen:optional
 	}
 
@@ -3589,6 +3590,10 @@ const (
 
 func (c *RateLimitConf) Validate() error {
 	const tag = "rate limit"
+	// bucket-configured vs on-demand: explicitly enabled limiter takes precedence - never both
+	if c.Backend.Enabled && c.Backend.OnDemand {
+		return fmt.Errorf("%s: backend.enabled and backend.on_demand are mutually exclusive", tag)
+	}
 	{
 		c.Backend.NumRetries = cos.NonZero(c.Backend.NumRetries, dfltRateRetries)
 		c.Backend.Interval = cos.Duration(cos.NonZero(c.Backend.Interval.D(), dfltRateIval))
@@ -3674,6 +3679,9 @@ func (*RateLimitConf) verbs(tag, name, value string) error {
 
 // NOTE: separately, frontend-rate-limiter validation in `makeNewBckProps`
 func (c *RateLimitConf) ValidateAsProps(...any) error { return c.Validate() }
+
+// either bucket-configured (Enabled) or on-demand (OnDemand): ais/rlbackend handles 429/503
+func (c *Adaptive) On() bool { return c.Enabled || c.OnDemand }
 
 //////////////////
 // GetBatchConf //

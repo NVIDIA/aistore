@@ -144,16 +144,21 @@ func TestConfigBackendOnDemand(t *testing.T) {
 		invalid  bool
 	}{
 		{name: "disabled-default"},
-		{name: "stage-on-demand-while-disabled", onDemand: true, useMsg: true},
-		{name: "enabled-on-demand", enabled: true, onDemand: true},
-		{name: "explicit-false-clears-on-demand", enabled: true, useMsg: true},
+		{name: "on-demand-using-msg", onDemand: true, useMsg: true},
+		{name: "on-demand", onDemand: true},
+		{name: "bucket-configured-clears-on-demand", enabled: true, useMsg: true},
 		{name: "reject-invalid-boolean", invalid: true},
+		{name: "reject-bucket-configured-and-on-demand", enabled: true, onDemand: true, invalid: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.invalid {
 				before, err := api.GetClusterConfig(bp)
 				tassert.CheckFatal(t, err)
-				err = api.SetClusterConfig(bp, cos.StrKVs{"rate_limit.backend.on_demand": "invalid"}, false)
+				nvs := cos.StrKVs{"rate_limit.backend.on_demand": "invalid"}
+				if tc.enabled && tc.onDemand {
+					nvs = cos.StrKVs{"rate_limit.backend.enabled": "true", "rate_limit.backend.on_demand": "true"}
+				}
+				err = api.SetClusterConfig(bp, nvs, false)
 				herr := cmn.AsErrHTTP(err)
 				tassert.Fatalf(t, herr != nil && herr.Status == http.StatusBadRequest, "expected HTTP 400, got %v", err)
 				after, err := api.GetClusterConfig(bp)
@@ -200,9 +205,17 @@ func TestConfigBackendOnDemand(t *testing.T) {
 			props, err = api.HeadBucket(bp, bck, false)
 			tassert.CheckFatal(t, err)
 			tassert.Fatalf(t, props.RateLimit.Backend == want, "new bucket did not inherit policy: %+v", props.RateLimit.Backend)
-			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
-				Backend: &cmn.AdaptiveToSet{OnDemand: apc.Ptr(!tc.onDemand)},
-			}})
+			toggle := &cmn.AdaptiveToSet{OnDemand: apc.Ptr(!tc.onDemand)}
+			if tc.enabled {
+				// partial update: on_demand=true on top of the inherited enabled=true
+				_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{Backend: toggle}})
+				herr := cmn.AsErrHTTP(err)
+				tassert.Fatalf(t, herr != nil && herr.Status == http.StatusBadRequest,
+					"expected HTTP 400 (bucket-configured and on-demand), got %v", err)
+				toggle.Enabled = apc.Ptr(false)
+				want.Enabled = false
+			}
+			_, err = api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{Backend: toggle}})
 			tassert.CheckFatal(t, err)
 			props, err = api.HeadBucket(bp, bck, false)
 			tassert.CheckFatal(t, err)
@@ -212,7 +225,7 @@ func TestConfigBackendOnDemand(t *testing.T) {
 			tassert.CheckFatal(t, err)
 			props, err = api.HeadBucket(bp, bck, false)
 			tassert.CheckFatal(t, err)
-			want.OnDemand = tc.onDemand
+			want.Enabled, want.OnDemand = tc.enabled, tc.onDemand
 			tassert.Fatalf(t, props.RateLimit.Backend == want, "reset did not restore cluster defaults: %+v", props.RateLimit.Backend)
 			config, err = api.GetClusterConfig(bp)
 			tassert.CheckFatal(t, err)

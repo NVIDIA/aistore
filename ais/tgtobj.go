@@ -509,7 +509,7 @@ func (poi *putOI) fini() (ecode int, err error) {
 				loghdr := poi.loghdr()
 				nlog.Errorln("PUT [", loghdr, err, ecode, "]")
 			}
-			if !bck.Props.RateLimit.Backend.Enabled {
+			if !bck.Props.RateLimit.Backend.On() {
 				if ecode == http.StatusServiceUnavailable || ecode == http.StatusTooManyRequests {
 					ecode, err = poi._retry503()
 				}

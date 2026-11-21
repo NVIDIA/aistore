@@ -49,7 +49,7 @@ const (
 	MinVerKaliveReject     = "5.2" // typed keepalive rejection understood by the sender
 	MinVerPlacement        = "5.2" // weighted Smap and bucket placement overrides
 	MinVerBsummPerTarget   = "5.2" // per-target bucket summary (apc.BsummCtrlMsg.PerTarget; proxy-side)
-	MinVerBackendOnDemand  = "5.3"
+	MinVerBackendOnDemand  = "5.3" // on_demand field in cluster config and BMD
 )
 
 // NOTE: for (local) LOM meta-versions, see core/lom*

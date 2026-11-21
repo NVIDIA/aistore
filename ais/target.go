@@ -164,7 +164,7 @@ func (t *target) Backend(bck *meta.Bck) core.Backend { // as core.Target
 }
 
 func (t *target) _rlbp(bp core.Backend, bprops *cmn.Bprops, provider string) core.Backend {
-	if bprops == nil || !bprops.RateLimit.Backend.Enabled {
+	if bprops == nil || !bprops.RateLimit.Backend.On() {
 		return bp
 	}
 	// with rate limit

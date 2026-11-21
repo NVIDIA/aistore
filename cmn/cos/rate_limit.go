@@ -9,6 +9,7 @@ import (
 	"math"
 	"runtime"
 	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn/debug"
@@ -65,7 +66,8 @@ type (
 			granted int64
 			refill  int64
 		}
-		mu sync.Mutex
+		mu       sync.Mutex
+		lastUsed ratomic.Int64 // housekeeping, independent of token accounting
 	}
 	// usage: adapt to the rate limit from s3, gcp, et al. ("rate shaper")
 	AdaptRateLim struct {
@@ -77,6 +79,7 @@ type (
 			// respectively, (errors, granted, prev. errors, prev. granted) counters
 			nerr, n, perr, pn int
 		}
+		active ratomic.Bool // on-demand: pacing since the first 429/503
 	}
 	// usage: rate limit user GET, PUT, and DELETE requests
 	BurstRateLim struct {
@@ -111,12 +114,13 @@ func (rl *RateLim) init(tag string, maxTokens int, tokenIval time.Duration) erro
 		rl.maxTokens = float64(maxTokens)
 		rl.tokenIval = float64(tokenIval)
 		rl.minBtwn = rl.recompute()
+		rl.Touch()
 	}
 	return nil
 }
 
-// NOTE: not locking (currently used to cleanup where we don't care about millisecond precision)
-func (rl *RateLim) LastUsed() int64 { return max(rl.tsb.granted, rl.tsb.refill) }
+func (rl *RateLim) LastUsed() int64 { return rl.lastUsed.Load() }
+func (rl *RateLim) Touch()          { rl.lastUsed.Store(mono.NanoTime()) }
 
 // recompute minBtwn
 func (rl *RateLim) recompute() time.Duration {
@@ -134,6 +138,7 @@ func (rl *RateLim) TryAcquire() bool {
 // is called under lock
 func (rl *RateLim) acquire() int {
 	now := mono.NanoTime()
+	rl.lastUsed.Store(now)
 	elapsed := time.Duration(now - rl.tsb.granted)
 	if elapsed < rl.minBtwn>>1 {
 		return acquireTooSoon
@@ -303,6 +308,15 @@ func (arl *AdaptRateLim) _str() string {
 }
 
 func (arl *AdaptRateLim) NumRetries() int { return arl.retries }
+
+// on-demand mode: start pacing upon the first 429/503 - one way
+// (learned rate recovers via recompute(), and the limiter itself is pruned when idle)
+// TODO: consider deactivating once fully recovered and error-free for a while
+func (arl *AdaptRateLim) Activate() {
+	arl.Touch()
+	arl.active.Store(true)
+}
+func (arl *AdaptRateLim) IsActive() bool { return arl.active.Load() }
 
 //////////////////
 // BurstRateLim //

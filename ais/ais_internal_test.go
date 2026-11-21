@@ -1003,7 +1003,7 @@ func TestRLBackendObjectOps(t *testing.T) {
 
 			arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
 			tassert.CheckFatal(t, err)
-			key := lom.Bck().HashUname(test.verb)
+			key := rateKey(lom.Bck(), test.verb)
 			mockTarget.ratelim.Store(key, arl)
 			defer mockTarget.ratelim.Delete(key)
 
@@ -1014,6 +1014,63 @@ func TestRLBackendObjectOps(t *testing.T) {
 			tassert.Fatalf(t, backend.calls == 2, "expected one retry, got %d calls", backend.calls)
 		})
 	}
+}
+
+func TestRLBackendOnDemand(t *testing.T) {
+	lom := core.AllocLOM("rate-limit-on-demand")
+	defer core.FreeLOM(lom)
+	err := lom.InitBck(meta.NewBck(testBucket, apc.AIS, cmn.NsGlobal))
+	tassert.CheckFatal(t, err)
+
+	conf := &lom.Bck().Props.RateLimit.Backend
+	oldEnabled, oldOnDemand := conf.Enabled, conf.OnDemand
+	conf.Enabled, conf.OnDemand = false, true
+	defer func() { conf.Enabled, conf.OnDemand = oldEnabled, oldOnDemand }()
+
+	arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
+	tassert.CheckFatal(t, err)
+	key := rateKey(lom.Bck(), http.MethodGet)
+	mockTarget.ratelim.Store(key, arl)
+	defer mockTarget.ratelim.Delete(key)
+
+	backend := &throttleBackend{}
+	bp := &rlbackend{Backend: backend, t: mockTarget}
+
+	// one-token limiters (minBtwn = 1s): TryAcquire succeeds iff acquire did not take the token
+	oneToken := func(verb string) *cos.AdaptRateLim {
+		arl, err := cos.NewAdaptRateLim(1, 1, time.Second)
+		tassert.CheckFatal(t, err)
+		key := rateKey(lom.Bck(), verb)
+		mockTarget.ratelim.Store(key, arl)
+		t.Cleanup(func() { mockTarget.ratelim.Delete(key) })
+		return arl
+	}
+
+	// not pacing until the first 429/503
+	unpaced := oneToken(http.MethodHead)
+	for range 3 {
+		tassert.Fatalf(t, bp.acquire(lom.Bck(), http.MethodHead) == unpaced, "expected the shared (bucket, verb) limiter")
+	}
+	tassert.Fatalf(t, !unpaced.IsActive() && unpaced.TryAcquire(), "paced before the first 429")
+
+	// pacing once active
+	paced := oneToken(http.MethodPut)
+	paced.Activate()
+	tassert.Fatalf(t, bp.acquire(lom.Bck(), http.MethodPut) == paced, "expected the shared (bucket, verb) limiter")
+	tassert.Fatalf(t, !paced.TryAcquire(), "not pacing after activation")
+
+	// the first 429 activates the limiter and gets retried
+	tassert.Fatalf(t, bp.acquire(lom.Bck(), http.MethodGet) == arl && !arl.IsActive(), "expected inactive (bucket, verb) limiter")
+	_, err = bp.GetObj(t.Context(), lom, cmn.OwtGet, nil)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, arl.IsActive(), "429 did not activate the limiter")
+	tassert.Fatalf(t, backend.calls == 2, "expected one retry, got %d calls", backend.calls)
+
+	// switching on-demand off and back on retains the activated limiter
+	conf.OnDemand = false
+	tassert.Fatalf(t, bp.acquire(lom.Bck(), http.MethodGet) == nil, "expected no limiter when not configured")
+	conf.OnDemand = true
+	tassert.Fatalf(t, bp.acquire(lom.Bck(), http.MethodGet) == arl && arl.IsActive(), "expected the same activated limiter")
 }
 
 func TestRLBackendHeadReturnsRetryError(t *testing.T) {
@@ -1029,7 +1086,7 @@ func TestRLBackendHeadReturnsRetryError(t *testing.T) {
 
 	arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
 	tassert.CheckFatal(t, err)
-	key := lom.Bck().HashUname(http.MethodHead)
+	key := rateKey(lom.Bck(), http.MethodHead)
 	mockTarget.ratelim.Store(key, arl)
 	defer mockTarget.ratelim.Delete(key)
 
@@ -1057,7 +1114,7 @@ func TestRLBackendGetObjReaderReturnsRetryError(t *testing.T) {
 
 	arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
 	tassert.CheckFatal(t, err)
-	key := lom.Bck().HashUname(http.MethodGet)
+	key := rateKey(lom.Bck(), http.MethodGet)
 	mockTarget.ratelim.Store(key, arl)
 	defer mockTarget.ratelim.Delete(key)
 
@@ -1174,7 +1231,7 @@ func TestRLBackendListObjects(t *testing.T) {
 			if test.enabled {
 				arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
 				tassert.CheckFatal(t, err)
-				key := bck.HashUname(apc.ActList)
+				key := rateKey(bck, apc.ActList)
 				mockTarget.ratelim.Store(key, arl)
 				t.Cleanup(func() { mockTarget.ratelim.Delete(key) })
 			}
@@ -1192,7 +1249,7 @@ func TestRLBackendListObjects(t *testing.T) {
 				if i == 0 {
 					tassert.Fatalf(t, backend.ctxs[i] == ctx, "call %d: backend received a different context", i+1)
 				} else {
-					// reactive retry: single attempt (see cmn.WithNoRetry)
+					// retry: single attempt (see cmn.WithNoRetry)
 					tassert.Fatalf(t, cmn.IsNoRetry(backend.ctxs[i]), "call %d: expected no-retry context", i+1)
 				}
 				tassert.Fatalf(t, backend.bcks[i] == bck, "call %d: backend received a different bucket", i+1)
@@ -1217,7 +1274,7 @@ func TestRLBackendListObjectsCanceled(t *testing.T) {
 	bck.Props.RateLimit.Backend.Enabled = true
 	arl, err := cos.NewAdaptRateLim(100, 1, time.Second)
 	tassert.CheckFatal(t, err)
-	key := bck.HashUname(apc.ActList)
+	key := rateKey(bck, apc.ActList)
 	mockTarget.ratelim.Store(key, arl)
 	defer mockTarget.ratelim.Delete(key)
 

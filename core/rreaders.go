@@ -37,7 +37,7 @@ func (*rreaders) Limit() int32 {
 
 // record remote 429/503 and return true
 func (s *rreaders) Throttle(bprops *cmn.Bprops, config *cmn.Config, code int, err error) bool {
-	if bprops.RateLimit.Backend.Enabled {
+	if bprops.RateLimit.Backend.On() {
 		return false
 	}
 	if code != http.StatusTooManyRequests && code != http.StatusServiceUnavailable && !cmn.IsErrTooManyRequests(err) {
@@ -54,7 +54,7 @@ func (s *rreaders) Throttle(bprops *cmn.Bprops, config *cmn.Config, code int, er
 
 func (s *rreaders) BackingOff(bprops *cmn.Bprops) bool {
 	until := s.backoffUntil.Load()
-	return until != 0 && !bprops.RateLimit.Backend.Enabled && mono.NanoTime() < until
+	return until != 0 && !bprops.RateLimit.Backend.On() && mono.NanoTime() < until
 }
 
 // reserve up to `want` extra readers within `limit`; zero means none

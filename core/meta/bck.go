@@ -357,7 +357,7 @@ func (b *Bck) NewFrontendRateLim(na int) (*cos.BurstRateLim, error) {
 
 func (b *Bck) NewBackendRateLim(nat int) *cos.AdaptRateLim {
 	conf := b.Props.RateLimit.Backend
-	if !conf.Enabled {
+	if !conf.On() {
 		return nil
 	}
 	if nat <= 0 {

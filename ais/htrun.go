@@ -3088,7 +3088,7 @@ func (h *htrun) _status(smap *smapX) (daeStatus string) {
 func (rl *ratelim) housekeep(now int64) time.Duration {
 	rl.Range(func(k, v any) bool {
 		if r := v.(cos.Rater); time.Duration(now-r.LastUsed()) >= hk.PruneRateLimiters>>1 {
-			rl.Delete(k)
+			rl.CompareAndDelete(k, v)
 		}
 		return true // keep going
 	})

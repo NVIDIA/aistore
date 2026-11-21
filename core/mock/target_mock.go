@@ -70,10 +70,6 @@ func (*TargetMock) HeadCold(context.Context, *core.LOM, *http.Request) (*cmn.Obj
 	return nil, 0, nil
 }
 
-func (*TargetMock) RateLimitBackend(bp core.Backend, _ *cos.AdaptRateLim) core.Backend {
-	return bp
-}
-
 func (*TargetMock) HeadObjT2T(*core.LOM, *meta.Snode, ...string) (*cmn.ObjectPropsV2, error) {
 	return nil, nil
 }

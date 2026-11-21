@@ -37,29 +37,39 @@ import (
 // - HeadBucket()
 // - StartMpt(), PutMptPart(), CompleteMpt(), AbortMpt()
 
-// retries:
-// - proactive: acquire (i.e., shape) before every call
-// - reactive:  on 429/503 only, and only where the call is safely repeatable;
+// modes:
+// - bucket-configured (enabled): acquire before every call
+// - on-demand: same, but only after the first 429/503 activates the limiter (one way)
+
+// retries (both modes):
+// - on 429/503 only, and only where the call is safely repeatable;
 //   PutObj requires a replayable (re-openable) body
-// - each reactive retry is a single attempt: the backend (SDK client) must not
+// - each retry is a single attempt: the backend (SDK client) must not
 //   retry on its own (see cmn.WithNoRetry)
 
 // stats:
-// - not counting proactive delay    - only (reactive) retries
+// - not counting shaping delay      - only retries
 // - not counting individual retries - only totals (see "increment" comment below)
 // - not counting list/delete retries - only get and put
 
 type (
+	backendRateKey struct {
+		uname     uint64
+		interval  cos.Duration
+		maxTokens int
+		retries   int
+	}
 	rlbackend struct {
 		core.Backend
-		t   *target
-		arl *cos.AdaptRateLim // optional owner-supplied limiter; nil selects the bucket/verb limiter
+		t *target
 	}
 )
 
 // note: not counting stats
 func (bp *rlbackend) HeadObj(ctx context.Context, lom *core.LOM, origReq *http.Request) (oa *cmn.ObjAttrs, ecode int, err error) {
-	// proactive
+	//
+	// pace the request when the limiter is active - here and elsewhere
+	//
 	arl := bp.acquire(lom.Bck(), http.MethodHead)
 	oa, ecode, err = bp.Backend.HeadObj(ctx, lom, origReq)
 	if err == nil || arl == nil || !cmn.IsErrTooManyRequests(err) {
@@ -97,7 +107,6 @@ func (bp *rlbackend) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.Ls
 }
 
 func (bp *rlbackend) GetObj(ctx context.Context, lom *core.LOM, owt cmn.OWT, origReq *http.Request) (int, error) {
-	// proactive
 	arl := bp.acquire(lom.Bck(), http.MethodGet)
 	ecode, err := bp.Backend.GetObj(ctx, lom, owt, origReq)
 	if err == nil || arl == nil || !cmn.IsErrTooManyRequests(err) {
@@ -122,7 +131,6 @@ func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, le
 		}
 	}
 
-	// proactive
 	arl := bp.acquire(lom.Bck(), http.MethodGet)
 	res = bp.Backend.GetObjReader(ctx, lom, offset, length, pin...)
 	if res.Err == nil || arl == nil || !cmn.IsErrTooManyRequests(res.Err) {
@@ -145,18 +153,18 @@ func (bp *rlbackend) GetObjReader(ctx context.Context, lom *core.LOM, offset, le
 }
 
 func (bp *rlbackend) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM, origReq *http.Request) (int, error) {
-	// proactive
 	arl := bp.acquire(lom.Bck(), http.MethodPut)
 	ecode, err := bp.Backend.PutObj(ctx, r, lom, origReq)
 	if err == nil || arl == nil || !cmn.IsErrTooManyRequests(err) {
 		return ecode, err
 	}
 
-	// reactive: the first attempt drained `r` - retry only when the source
+	// retry: the first attempt drained `r` - retry only when the source
 	// can be re-opened from scratch (LomHandle, FileHandle, ByteReader)
 	// see also: lom.Open() and friends
 	opener, ok := r.(cos.ReadOpenCloser)
 	if !ok {
+		arl.Activate()
 		return ecode, err
 	}
 
@@ -184,7 +192,6 @@ func (bp *rlbackend) PutObj(ctx context.Context, r io.ReadCloser, lom *core.LOM,
 
 // note: not counting stats
 func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) {
-	// proactive
 	arl := bp.acquire(lom.Bck(), http.MethodDelete)
 	ecode, err := bp.Backend.DeleteObj(ctx, lom)
 	if err == nil || arl == nil || !cmn.IsErrTooManyRequests(err) {
@@ -202,40 +209,45 @@ func (bp *rlbackend) DeleteObj(ctx context.Context, lom *core.LOM) (int, error) 
 // apply (compare with ais/prate_limit)
 //
 
-func (t *target) RateLimitBackend(bp core.Backend, arl *cos.AdaptRateLim) core.Backend {
-	return &rlbackend{Backend: bp, t: t, arl: arl}
+// mode changes retain the learned rate for the same budget
+func rateKey(bck *meta.Bck, verb string) backendRateKey {
+	conf := &bck.Props.RateLimit.Backend
+	return backendRateKey{uname: bck.HashUname(verb), interval: conf.Interval, maxTokens: conf.MaxTokens, retries: conf.NumRetries}
 }
 
 func (bp *rlbackend) acquire(bck *meta.Bck, verb string) (arl *cos.AdaptRateLim) {
-	// Pace requests with the owner's limiter, independent of bucket rate-limit configuration.
-	if bp.arl != nil {
-		bp.arl.RetryAcquire(time.Second)
-		return bp.arl
-	}
-	if !bck.Props.RateLimit.Backend.Enabled {
+	conf := &bck.Props.RateLimit.Backend
+	if !conf.On() {
 		return nil
 	}
 	var (
-		uhash = bck.HashUname(verb) // see also (*RateLimitConf)verbs
-		v, ok = bp.t.ratelim.Load(uhash)
+		key   = rateKey(bck, verb)
+		v, ok = bp.t.ratelim.Load(key)
 	)
 	if !ok {
 		smap := bp.t.owner.smap.get()
 		// concurrent workers on the same (bucket, verb)
-		v, _ = bp.t.ratelim.LoadOrStore(uhash, bck.NewBackendRateLim(smap.CountActiveTs()))
+		v, _ = bp.t.ratelim.LoadOrStore(key, bck.NewBackendRateLim(smap.CountActiveTs()))
 	}
 	arl = v.(*cos.AdaptRateLim)
+
+	// on-demand: not pacing until activated (see retry)
+	if !conf.Enabled && !arl.IsActive() {
+		arl.Touch()
+		return arl
+	}
 
 	// TODO: make acquisition context-aware so cancellation interrupts token waits
 	arl.RetryAcquire(time.Second)
 	return arl
 }
 
-// reactive: back off and repeat `cb` while the remote keeps responding 429/503
+// retry: back off and repeat `cb` while the remote keeps responding 429/503
 // - (ecode, err) on entry: the failed attempt that brought us here
 // - sleep grows from the previous wait by 2x/4x/8x based on error rate, capped at max(6s, token-derived interval)
 // - bounded by both `num_retries` and DfltRateMaxWait
 // - `cb` gets no-retry context: one attempt per SDK request
+// - activate the limiter (on-demand: one way, see above)
 func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, ecode int, err error,
 	cb func(context.Context) (int, error)) (total time.Duration, _ int, _ error) {
 	var (
@@ -243,6 +255,7 @@ func (*rlbackend) retry(ctx context.Context, arl *cos.AdaptRateLim, ecode int, e
 		sleep   time.Duration
 		nctx    = cmn.WithNoRetry(ctx)
 	)
+	arl.Activate()
 	for retries < arl.NumRetries() && total < cos.DfltRateMaxWait {
 		sleep = arl.OnErr(sleep)
 		total += sleep

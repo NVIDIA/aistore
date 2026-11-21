@@ -61,6 +61,20 @@ func TestJoinBackendOnDemand(t *testing.T) {
 		tassert.CheckError(t, rp.DoRequest())
 	})
 	tools.CreateBucket(t, proxyURL, bck, nil, true)
+	join := func(t *testing.T, version string, reject bool) {
+		rp.Header.Set(apc.HdrNodeVersion, version)
+		err := rp.DoRequest()
+		if reject {
+			herr := cmn.AsErrHTTP(err)
+			tassert.Fatalf(t, herr != nil && herr.Status == http.StatusConflict,
+				"expected incompatible join to return HTTP 409, got %v", err)
+		} else {
+			tassert.CheckFatal(t, err)
+		}
+		current := tools.GetClusterMap(t, proxyURL).GetNode(node.ID())
+		tassert.Fatalf(t, current != nil && current.EqNetID(node) && current.SameIncarnation(node),
+			"join changed the registered node: %v", current)
+	}
 	for _, tc := range []struct {
 		name     string
 		version  string
@@ -69,11 +83,11 @@ func TestJoinBackendOnDemand(t *testing.T) {
 		reject   bool
 	}{
 		{name: "5.2-without-on-demand", version: "5.2"},
-		{name: "5.2-with-staged-on-demand", version: "5.2", onDemand: true, reject: true},
-		{name: "5.2-with-enabled-on-demand", version: "5.2", onDemand: true, enabled: true, reject: true},
-		{name: "5.3-with-on-demand", version: "5.3", onDemand: true, enabled: true},
+		{name: "5.2-with-bucket-configured", version: "5.2", enabled: true},
+		{name: "5.2-with-on-demand", version: "5.2", onDemand: true, reject: true},
+		{name: "5.3-with-on-demand", version: "5.3", onDemand: true},
 		{name: "5.3-rc-with-on-demand", version: "5.3.rc1", onDemand: true},
-		{name: "current-version-with-on-demand", version: cmn.VersionAIStore, onDemand: true, enabled: true},
+		{name: "current-version-with-on-demand", version: cmn.VersionAIStore, onDemand: true},
 		{name: "5.2-after-clearing-on-demand", version: "5.2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -82,18 +96,34 @@ func TestJoinBackendOnDemand(t *testing.T) {
 					OnDemand: apc.Ptr(tc.onDemand)},
 			}})
 			tassert.CheckFatal(t, err)
-			rp.Header.Set(apc.HdrNodeVersion, tc.version)
-			err = rp.DoRequest()
-			if tc.reject {
-				herr := cmn.AsErrHTTP(err)
-				tassert.Fatalf(t, herr != nil && herr.Status == http.StatusConflict,
-					"expected incompatible join to return HTTP 409, got %v", err)
-			} else {
-				tassert.CheckFatal(t, err)
-			}
-			current := tools.GetClusterMap(t, proxyURL).GetNode(node.ID())
-			tassert.Fatalf(t, current != nil && current.EqNetID(node) && current.SameIncarnation(node),
-				"join changed the registered node: %v", current)
+			join(t, tc.version, tc.reject)
+		})
+	}
+
+	// cluster defaults (with no bucket on-demand left from the cases above)
+	config := tools.GetClusterConfig(t)
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{
+			"rate_limit.backend.enabled":   strconv.FormatBool(config.RateLimit.Backend.Enabled),
+			"rate_limit.backend.on_demand": strconv.FormatBool(config.RateLimit.Backend.OnDemand),
+		})
+	})
+	for _, tc := range []struct {
+		name     string
+		version  string
+		onDemand bool
+		reject   bool
+	}{
+		{name: "5.2-with-cluster-on-demand", version: "5.2", onDemand: true, reject: true},
+		{name: "current-version-with-cluster-on-demand", version: cmn.VersionAIStore, onDemand: true},
+		{name: "5.2-after-clearing-cluster-on-demand", version: "5.2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tools.SetClusterConfig(t, cos.StrKVs{
+				"rate_limit.backend.enabled":   "false",
+				"rate_limit.backend.on_demand": strconv.FormatBool(tc.onDemand),
+			})
+			join(t, tc.version, tc.reject)
 		})
 	}
 }
@@ -144,7 +174,7 @@ func TestJoinBackendOnDemandRefreshedBMD(t *testing.T) {
 				bmd, err := api.GetBMD(bp)
 				tassert.CheckFatal(t, err)
 				props, exists := bmd.Get(meta.CloneBck(&bck))
-				return exists && props.RateLimit.Backend.Enabled && props.RateLimit.Backend.OnDemand == tc.onDemand
+				return exists && props.RateLimit.Backend.Enabled != tc.onDemand && props.RateLimit.Backend.OnDemand == tc.onDemand
 			}, tools.WaitRetryOpts{Interval: 10 * time.Millisecond, MaxRetries: 100}))
 			close(observer.resume)
 			tassert.CheckFatal(t, <-disabled)
@@ -218,9 +248,10 @@ func (target *joinBMDTarget) join(bp api.BaseParams, result chan<- error) {
 	result <- err
 }
 
+// either on-demand or, as an unrelated BMD update, bucket-configured
 func updateJoinBMD(bp api.BaseParams, bck cmn.Bck, onDemand bool, result chan<- error) {
 	_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
-		Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{Enabled: apc.Ptr(true)},
+		Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{Enabled: apc.Ptr(!onDemand)},
 			OnDemand: apc.Ptr(onDemand)},
 	}})
 	result <- err

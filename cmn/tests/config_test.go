@@ -27,6 +27,22 @@ var (
 	invalidIssUrls = []string{"invalid-scheme"}
 )
 
+func TestRateLimitBackendModes(t *testing.T) {
+	for _, tc := range []struct {
+		enabled, onDemand, invalid bool
+	}{
+		{},
+		{enabled: true},
+		{onDemand: true},
+		{enabled: true, onDemand: true, invalid: true},
+	} {
+		var c cmn.RateLimitConf
+		c.Backend.Enabled, c.Backend.OnDemand = tc.enabled, tc.onDemand
+		err := c.Validate()
+		tassert.Fatalf(t, (err != nil) == tc.invalid, "enabled=%t on_demand=%t: %v", tc.enabled, tc.onDemand, err)
+	}
+}
+
 func TestAdaptiveOnDemandJSON(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

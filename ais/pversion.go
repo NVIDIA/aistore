@@ -170,6 +170,10 @@ func (c *clupost) checkJoinBackendOnDemand() error {
 	if cos.VersionAtLeast(c.nversStr, cmn.MinVerBackendOnDemand) {
 		return nil
 	}
+	if rl := cmn.GCO.Get().RateLimit; rl != nil && rl.Backend.OnDemand {
+		return fmt.Errorf("%s: cannot join %s (version %q) - cluster backend on-demand rate limiting requires version %s or later",
+			c.p, c.nsi.StringEx(), c.nversStr, cmn.MinVerBackendOnDemand)
+	}
 	if bck := c.bmd.GetBucketWithBackendOnDemand(); bck != nil {
 		return fmt.Errorf("%s: cannot join %s (version %q) - bucket %s has backend on-demand rate limiting that requires version %s or later",
 			c.p, c.nsi.StringEx(), c.nversStr, bck.Cname(""), cmn.MinVerBackendOnDemand)
