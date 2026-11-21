@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
@@ -373,7 +374,7 @@ type (
 		MaxSize       int64   `json:"maximum object size (bytes),omitempty"`
 		MaxPutBytes   int64   `json:"PUT upper bound,string,omitempty"`
 		Arch          *ppArch `json:"archive (shards),omitempty"`
-		NameGetter    string  `json:"name-getter"`
+		NameGetter    string  `json:"name-getter,omitempty"`
 		ReaderType    string  `json:"reader-type,omitempty"`
 		Cleanup       bool    `json:"cleanup"`
 	}
@@ -423,9 +424,13 @@ func printRunParams(p *params) {
 		minsize, maxsize = p.minSize, p.maxSize
 		readerType = p.readerType
 	}
+	bucket := p.bck.Cname("")
+	if p.bck.Name == "" && p.bck.Provider == apc.AIS {
+		bucket += "<random>"
+	}
 	b, err := jsoniter.MarshalIndent(ppEssential{
 		URL:           p.proxyURL,
-		Bucket:        p.bck.Cname(""),
+		Bucket:        bucket,
 		Duration:      cos.Ternary(p.duration.Val == time.Duration(math.MaxInt64), "-", p.duration.String()),
 		NumWorkers:    p.numWorkers,
 		IdleConns:     cargs.IdleConnsPerHost,
@@ -449,6 +454,10 @@ func printRunParams(p *params) {
 
 func ngLabel() string {
 	switch objnameGetter.(type) {
+	case nil:
+		// knowing which ng would be used requires listing the bucket
+		// for dry-run, it is unnecessary overhead, and so it is not selected
+		return ""
 	case *namegetter.Random:
 		return "random non-unique"
 	case *namegetter.PermShuffle:

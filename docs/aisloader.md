@@ -408,7 +408,7 @@ $ aisloader -config=get.yaml -list-out=ais://lists/run-1.txt
 
 * The destination bucket must already exist. An existing list is overwritten with a warning. Writing to the benchmark bucket, or an empty listing, also prints a warning.
 * With `-arch.list`, each file inside an archive is a separate entry (the archive name and the file's path, separated by a NUL byte), and archives themselves are not listed. The first GET of any file in an archive that is not yet in the cluster brings in the whole archive, so turn `-arch.list` off for cold-GET benchmarks.
-* `-list-out` is CLI-only and cannot be combined with `-filelist`, `-filelist-obj`, `-getloaderid`, or `-s3endpoint`.
+* `-list-out` is CLI-only and cannot be combined with `-dry-run`, `-filelist`, `-filelist-obj`, `-getloaderid`, or `-s3endpoint`.
 
 ### Splitting reads across loaders
 

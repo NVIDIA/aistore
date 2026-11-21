@@ -17,6 +17,9 @@ import (
 // validate options for '-list-out', which lists the bucket and exits
 // (benchmark run options, e.g. '-split-reads' and '-cleanup', do not apply)
 func (p *params) validateListOut() error {
+	if p.dryRun {
+		return errors.New("'-list-out' cannot be combined with '-dry-run'")
+	}
 	if isDirectS3() {
 		return errors.New("'-list-out' with direct S3 access is not supported")
 	}
@@ -60,10 +63,6 @@ func (p *params) checkListOut() error {
 }
 
 func (p *params) writeObjList(names []string) error {
-	if p.dryRun {
-		fmt.Printf("Found %s object name%s for '-list-out'\n", cos.FormatBigInt(len(names)), cos.Plural(len(names)))
-		return nil
-	}
 	if len(names) == 0 {
 		fmt.Fprintln(os.Stderr, "Warning: no objects listed; writing an empty list to", p.listOut)
 	}

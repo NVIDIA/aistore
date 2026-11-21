@@ -490,6 +490,11 @@ func TestValidateListOut(t *testing.T) {
 			wantErr: "'-list-out' with direct S3 access is not supported",
 		},
 		{
+			name:    "reject dry-run",
+			mutate:  func(p *params) { p.dryRun = true },
+			wantErr: "'-list-out' cannot be combined with '-dry-run'",
+		},
+		{
 			name:    "reject getloaderid",
 			mutate:  func(p *params) { p.getLoaderID = true },
 			wantErr: "'-list-out' cannot be combined with '-getloaderid'",
