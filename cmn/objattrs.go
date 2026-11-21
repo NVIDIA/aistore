@@ -493,6 +493,13 @@ func ToHeader(oah cos.OAH, hdr http.Header, cksum *cos.Cksum) {
 	if v := oah.Version(true); v != "" {
 		hdr.Set(apc.HdrObjVersion, v)
 	}
+	// custom metadata: one "key=value" header line per pair, no escaping
+	// (compare w/ list-objects: CustomMD2S)
+	// TODO: known (unlikely) limitations:
+	// - key cannot contain '=' - FromHeader splits at the first '='
+	// - values cannot contain CR/LF - net/http replaces CR/LF in header values
+	// - clients that join repeated header lines (e.g., python requests: ", ")
+	//   must not split on ',' - values can contain commas
 	for k, v := range oah.GetCustomMD() {
 		if isReservedCust(k) {
 			continue
@@ -549,7 +556,7 @@ func (oa *ObjAttrs) FromHeader(hdr http.Header) (cksum *cos.Cksum, _ error) {
 	}
 
 	// custom metadata: total size limited, reserved symbols prohibited
-	// (see CheckCustKV)
+	// (see CheckCustKV and the wire format in ToHeader)
 	if custom, ok := hdr[apc.HdrObjCustomMD]; ok {
 		kvs := make(cos.StrKVs, len(custom)) // (duplicate keys: last wins)
 		for _, kv := range custom {
