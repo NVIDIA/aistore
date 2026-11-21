@@ -268,6 +268,27 @@ func CustomProps2S(nvs ...string) string {
 	return sb.String()
 }
 
+// note the order: ETag and LastModified first, after the optional source
+// (see stdCustomProps);
+// the remaining values can contain spaces, e.g., "Content-Type:text/plain; charset=utf-8"
+func (be *LsoEnt) S3Props() (etag, modified string) {
+	s := be.Custom
+	if len(s) < 2 || s[0] != cusbeg || s[len(s)-1] != cusend {
+		return
+	}
+	s = s[1 : len(s)-1]
+	if after, ok := strings.CutPrefix(s, SourceObjMD+":"); ok {
+		_, s, _ = strings.Cut(after, " ")
+	}
+	if after, ok := strings.CutPrefix(s, ETag+":"); ok {
+		etag, s, _ = strings.Cut(after, " ")
+	}
+	if after, ok := strings.CutPrefix(s, LsoLastModified+":"); ok {
+		modified, _, _ = strings.Cut(after, " ")
+	}
+	return
+}
+
 func S2CustomMD(md cos.StrKVs, custom, version string) {
 	debug.Assert(len(md) == 0)
 	l := len(custom) - 1

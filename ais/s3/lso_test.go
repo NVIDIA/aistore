@@ -11,6 +11,7 @@ import (
 	"github.com/NVIDIA/aistore/ais/s3"
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -43,6 +44,21 @@ var _ = Describe("ListObjects", func() {
 			Entry("oversized explicit value is capped at the s3 max, not the bucket max",
 				"5000", int64(apc.MaxPageSizeAIS), apc.MaxPageSizeAWS, false),
 		)
+	})
+
+	It("reads listing attributes without parsing unrelated metadata", func() {
+		const modified = "2026-11-20T12:34:56Z"
+		for _, test := range []struct{ custom, etag, modified string }{
+			{cmn.CustomProps2S(cmn.ETag, "abc", cmn.LsoLastModified, modified, cos.HdrContentType, "text/plain; charset=utf-8"), "abc", modified},
+			{cmn.CustomMD2S(cos.StrKVs{cmn.SourceObjMD: apc.Azure, cmn.ETag: "abc", cmn.LsoLastModified: modified, "note": "a b ETag:other"}), "abc", modified},
+			{cmn.CustomProps2S(cmn.LsoLastModified, modified, "note", "a ETag:other"), "", modified},
+			{cmn.CustomProps2S(cmn.ETag, "abc"), "abc", "fallback"},
+		} {
+			resp := s3.NewListObjectResult("testbkt", 1)
+			resp.FromLsoResult(&cmn.LsoRes{Entries: cmn.LsoEntries{{Name: "obj", Custom: test.custom, Atime: "fallback"}}}, "")
+			Expect(resp.Contents[0].ETag).To(Equal(test.etag))
+			Expect(resp.Contents[0].LastModified).To(Equal(test.modified))
+		}
 	})
 
 	Describe("pagination", func() {

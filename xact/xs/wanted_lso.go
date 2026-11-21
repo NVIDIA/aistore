@@ -28,6 +28,7 @@ func wanted(msg *apc.LsoMsg) (flags cos.BitFlags) {
 func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 	var (
 		checkVchanged = wi.msg.IsFlagSet(apc.LsDiff)
+		s3Props       bool
 	)
 	for name, fl := range allLsoFlags {
 		if !wi.wanted.IsSet(fl) {
@@ -62,54 +63,12 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 			// TODO at the risk of significant slow-down
 
 		case apc.GetPropsCustom:
-			// en.Custom is set via one of the two alternative flows:
-			// - checkRemoteMD => HEAD(obj)
-			// - backend.List* api call
-			var md cos.StrKVs
-			if en.Custom == "" {
-				if md = lom.GetCustomMD(); len(md) > 0 {
+			s3Props = wi.msg.IsFlagSet(apc.LsIsS3)
+			if (!s3Props || checkVchanged) && en.Custom == "" {
+				if md := lom.GetCustomMD(); len(md) > 0 {
 					en.Custom = cmn.CustomMD2S(md)
 					checkVchanged = false
 				}
-			}
-
-			if !wi.msg.IsFlagSet(apc.LsIsS3) {
-				break
-			}
-
-			// NOTE:
-			// For S3 list-objects, AIS does NOT issue per-object mtime/stat syscalls.
-			// This is a deliberate scalability choice. List responses use best-effort
-			// metadata only. S3 clients requiring exact values can use HEAD(object) API.
-			// A future feature flag may relax this, but the default favors performance.
-
-			var (
-				mtimeStr string
-				mtime    time.Time
-				added    bool
-			)
-			if md == nil {
-				md = make(cos.StrKVs, 4)
-				if en.Custom != "" {
-					cmn.S2CustomMD(md, en.Custom, en.Version)
-				}
-			}
-			if _, ok := md[cmn.LsoLastModified]; !ok {
-				// best-effort; may fall back to atime
-				mtimeStr, mtime = lom.LastModifiedLso()
-				if mtimeStr != "" {
-					md[cmn.LsoLastModified] = mtimeStr
-					added = true
-				}
-			}
-			if _, ok := md[cmn.ETag]; !ok {
-				if s := lom.ETag(mtime, false /*allow syscall*/); s != "" {
-					md[cmn.ETag] = s
-					added = true
-				}
-			}
-			if added {
-				en.Custom = cmn.CustomMD2S(md)
 			}
 		default:
 			debug.Assert(false, name)
@@ -128,4 +87,31 @@ func (wi *walkInfo) setWanted(en *cmn.LsoEnt, lom *core.LOM) {
 			clear(wi.custom)
 		}
 	}
+	if s3Props {
+		setS3Props(en, lom)
+	}
+}
+
+// backend-returned attrs take precedence;
+// for S3 list-objects, use best-effort metadata (to avoid a stat per object),
+// clients that need the object's mtime can use HEAD(object).
+func setS3Props(en *cmn.LsoEnt, lom *core.LOM) {
+	var etag, modified string
+	if en.Custom == "" {
+		etag, _ = lom.GetCustomKey(cmn.ETag)
+		modified, _ = lom.GetCustomKey(cmn.LsoLastModified)
+	} else {
+		etag, modified = en.S3Props()
+	}
+	if en.Custom != "" && etag != "" && modified != "" {
+		return
+	}
+	var mtime time.Time
+	if modified == "" {
+		modified, mtime = lom.LastModifiedLso()
+	}
+	if etag == "" {
+		etag = lom.ETag(mtime, false /*allow syscall*/)
+	}
+	en.Custom = cmn.CustomProps2S(cmn.ETag, etag, cmn.LsoLastModified, modified)
 }

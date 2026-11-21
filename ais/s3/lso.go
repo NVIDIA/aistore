@@ -138,13 +138,10 @@ func (r *ListObjectResult) add(entry *cmn.LsoEnt) {
 func entryToS3(entry *cmn.LsoEnt) (oi *ObjInfo) {
 	oi = &ObjInfo{Key: entry.Name, Size: entry.Size, LastModified: entry.Atime}
 
-	if entry.Custom != "" {
-		md := make(cos.StrKVs, 4)
-		cmn.S2CustomMD(md, entry.Custom, "")
-		if v, ok := md[cmn.LsoLastModified]; ok {
-			oi.LastModified = v
-		}
-		oi.ETag = md[cmn.ETag]
+	etag, modified := entry.S3Props()
+	oi.ETag = etag
+	if modified != "" {
+		oi.LastModified = modified
 	}
 	return oi
 }
