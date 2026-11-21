@@ -1134,7 +1134,7 @@ type (
 	Adaptive struct {
 		RateLimitBase
 		NumRetries int `json:"num_retries"`
-		// Delay an enabled backend limiter's activation until the first 429/503; defaults to false.
+		// activate only upon the first 429/503 (reactive); mutually exclusive with Enabled (proactive)
 		OnDemand bool `json:"on_demand,omitempty"`
 	}
 	// AdaptiveToSet is the partial-update counterpart of Adaptive.
@@ -1143,7 +1143,8 @@ type (
 		// Automatic retries on throttled (429) or unavailable (503)
 		// responses before propagating the error. Range `[1, 10]`.
 		NumRetries *int `json:"num_retries,omitempty"` // +gen:optional
-		// Activate an enabled backend limiter only after the first 429/503.
+		// Activate the backend limiter only upon the first 429/503 (reactive mode).
+		// Mutually exclusive with `enabled` (proactive mode).
 		OnDemand *bool `json:"on_demand,omitempty"` // +gen:optional
 	}
 
@@ -3589,6 +3590,10 @@ const (
 
 func (c *RateLimitConf) Validate() error {
 	const tag = "rate limit"
+	// proactive vs reactive: explicitly enabled limiter takes precedence - never both
+	if c.Backend.Enabled && c.Backend.OnDemand {
+		return fmt.Errorf("%s: backend.enabled (proactive) and backend.on_demand (reactive) are mutually exclusive", tag)
+	}
 	{
 		c.Backend.NumRetries = cos.NonZero(c.Backend.NumRetries, dfltRateRetries)
 		c.Backend.Interval = cos.Duration(cos.NonZero(c.Backend.Interval.D(), dfltRateIval))

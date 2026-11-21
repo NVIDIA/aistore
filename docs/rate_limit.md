@@ -122,7 +122,7 @@ rate_limit.frontend.per_op_max_tokens
 | Parameter | Description |
 |-----------|-------------|
 | `enabled` | Enables/disables rate limiting for frontend or backend |
-| `on_demand` | (Backend only) Delays rate limiting until the first backend `429`/`503`. Can be set while disabled; takes effect only when `enabled=true`. Defaults to `false`. |
+| `on_demand` | (Backend only) Reactive mode: no pacing until the first backend `429`/`503`. Mutually exclusive with `enabled`. Defaults to `false`. |
 | `interval` | Time window for token replenishment (e.g., "1m", "10s") |
 | `max_tokens` | Maximum number of operations allowed in the interval |
 | `burst_size` | (Frontend only) Maximum burst allowed above steady rate |
@@ -143,9 +143,20 @@ Although frontend and backend differ in their specific mechanisms (bursty vs. sh
 
 ### Backend Activation Modes
 
-With `rate_limit.backend.enabled=true`, the default `on_demand=false` paces requests from the start. Setting `on_demand=true` allows requests without backend-limiter pacing until the first `429`/`503` for that bucket and operation on a target. That response activates the limiter: subsequent requests are paced, and rate-limit errors receive bounded retries using the configured token budget, interval, and retry count. With `enabled=false`, neither mode applies.
+The backend limiter runs in one of two mutually exclusive modes:
 
-Here's a simplified snippet of proactive-mode logic (`on_demand=false`) with (4) inline comments:
+| `enabled` | `on_demand` | Mode |
+|-----------|-------------|------|
+| `false` | `false` | Off |
+| `true` | `false` | **Proactive**: paces requests from the start |
+| `false` | `true` | **Reactive**: no pacing until the first `429`/`503` for a given bucket and operation on a target; that response activates the limiter |
+| `true` | `true` | Rejected |
+
+- Once active, both modes pace requests and retry rate-limit errors using the bucket's `max_tokens`, `interval`, and `num_retries`.
+- An explicitly enabled (proactive) limiter takes precedence: setting both `enabled` and `on_demand` to `true` fails, in cluster configuration and bucket properties alike.
+- The check applies to the resulting (merged) configuration: for instance, setting `on_demand=true` on a bucket that already has `enabled=true` fails as well.
+
+Here's a simplified snippet of proactive-mode logic (`enabled=true`) with (4) inline comments:
 
 ```go
 func (bp *rlbackend) GetObj() (int, error) {

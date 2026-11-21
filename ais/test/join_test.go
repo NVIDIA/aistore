@@ -69,11 +69,11 @@ func TestJoinBackendOnDemand(t *testing.T) {
 		reject   bool
 	}{
 		{name: "5.2-without-on-demand", version: "5.2"},
-		{name: "5.2-with-staged-on-demand", version: "5.2", onDemand: true, reject: true},
-		{name: "5.2-with-enabled-on-demand", version: "5.2", onDemand: true, enabled: true, reject: true},
-		{name: "5.3-with-on-demand", version: "5.3", onDemand: true, enabled: true},
+		{name: "5.2-with-proactive", version: "5.2", enabled: true},
+		{name: "5.2-with-on-demand", version: "5.2", onDemand: true, reject: true},
+		{name: "5.3-with-on-demand", version: "5.3", onDemand: true},
 		{name: "5.3-rc-with-on-demand", version: "5.3.rc1", onDemand: true},
-		{name: "current-version-with-on-demand", version: cmn.VersionAIStore, onDemand: true, enabled: true},
+		{name: "current-version-with-on-demand", version: cmn.VersionAIStore, onDemand: true},
 		{name: "5.2-after-clearing-on-demand", version: "5.2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -144,7 +144,7 @@ func TestJoinBackendOnDemandRefreshedBMD(t *testing.T) {
 				bmd, err := api.GetBMD(bp)
 				tassert.CheckFatal(t, err)
 				props, exists := bmd.Get(meta.CloneBck(&bck))
-				return exists && props.RateLimit.Backend.Enabled && props.RateLimit.Backend.OnDemand == tc.onDemand
+				return exists && props.RateLimit.Backend.Enabled != tc.onDemand && props.RateLimit.Backend.OnDemand == tc.onDemand
 			}, tools.WaitRetryOpts{Interval: 10 * time.Millisecond, MaxRetries: 100}))
 			close(observer.resume)
 			tassert.CheckFatal(t, <-disabled)
@@ -218,9 +218,10 @@ func (target *joinBMDTarget) join(bp api.BaseParams, result chan<- error) {
 	result <- err
 }
 
+// either reactive (on-demand) or, as an unrelated BMD update, proactive
 func updateJoinBMD(bp api.BaseParams, bck cmn.Bck, onDemand bool, result chan<- error) {
 	_, err := api.SetBucketProps(bp, bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
-		Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{Enabled: apc.Ptr(true)},
+		Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{Enabled: apc.Ptr(!onDemand)},
 			OnDemand: apc.Ptr(onDemand)},
 	}})
 	result <- err
