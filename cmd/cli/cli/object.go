@@ -413,7 +413,7 @@ func propVal(op *cmn.ObjectPropsV2, name string, bck cmn.Bck, objName string) st
 		return teb.FmtEC(op.EC.Generation, op.EC.DataSlices, op.EC.ParitySlices, op.EC.IsECCopy)
 	case apc.GetPropsCustom:
 		if custom := op.GetCustomMD(); len(custom) != 0 {
-			return cmn.CustomMD2S(custom)
+			return teb.FmtCustomMD(custom)
 		}
 		return teb.NotSetVal
 	case apc.GetPropsLocation:

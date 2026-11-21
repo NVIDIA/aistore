@@ -278,11 +278,51 @@ func FmtBool(t bool) string {
 	return "no"
 }
 
+// list-objects: decode for display (see cmn.CustomMD2S)
 func fmtObjCustom(custom string) string {
-	if custom != "" {
+	if custom == "" {
+		return NotSetVal
+	}
+	md := make(cos.StrKVs, 8)
+	cmn.S2CustomMD(md, custom, "")
+	if len(md) == 0 {
 		return custom
 	}
-	return NotSetVal
+	return FmtCustomMD(md)
+}
+
+// display only: standard keys first (compare with cmn.CustomMD2S), the rest sorted;
+// values as is - no percent-encoding
+func FmtCustomMD(md cos.StrKVs) string {
+	std := [...]string{cmn.SourceObjMD, cmn.ETag, cmn.LsoLastModified, cos.HdrLastModified, cmn.CRC32CObjMD, cmn.MD5ObjMD, cmn.VersionObjMD}
+	keys := make([]string, 0, len(md))
+	for k := range md {
+		if k != cmn.OrigFntl && !slices.Contains(std[:], k) {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+
+	var sb strings.Builder
+	sb.WriteByte('[')
+	add := func(k, v string) {
+		if sb.Len() > 1 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString(k)
+		sb.WriteByte(':')
+		sb.WriteString(v)
+	}
+	for _, k := range std {
+		if v, ok := md[k]; ok {
+			add(k, v)
+		}
+	}
+	for _, k := range keys {
+		add(k, md[k])
+	}
+	sb.WriteByte(']')
+	return sb.String()
 }
 
 // FmtCopies formats an int to a string, where 0 becomes "-"

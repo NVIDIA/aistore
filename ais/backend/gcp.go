@@ -259,7 +259,7 @@ func (gsbp *gsbp) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMs
 			if wantCustom {
 				etag, _ := h.EncodeETag(attrs.Etag)
 				custom := []string{cmn.ETag, etag, cmn.LsoLastModified, fmtLsoTime(attrs.Updated)}
-				// S3 listings omit Content-Type, whose spaces the metadata parser treats as field separators.
+				// S3 listings only use ETag and LastModified.
 				if !msg.IsFlagSet(apc.LsIsS3) {
 					custom = append(custom, cos.HdrContentType, attrs.ContentType)
 				}

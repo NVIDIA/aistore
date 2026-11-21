@@ -6,6 +6,8 @@
 package cmn
 
 import (
+	"net/http"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -194,151 +196,173 @@ var (
 	stdCustomProps = [...]string{SourceObjMD, ETag, LsoLastModified, cos.HdrLastModified, CRC32CObjMD, MD5ObjMD, VersionObjMD}
 )
 
-// [NOTE]
-// - usage: LOM custom metadata => LsoEnt custom property
-// - reserved keys always excepted (see isReservedCust)
-func CustomMD2S(md cos.StrKVs) string {
-	var (
-		sb   cos.SB
-		l    = len(md)
-		prev bool
-	)
-	sb.Init(256)
+// a leading colon marks an escaped pair (metadata keys cannot be empty).
+// marked pairs use RFC 3986-style percent-encoding (section 2.1).
+// e.g. [ETag:abc :note:a%20b]. unmarked pairs always retain literal percent signs.
+var (
+	customKeyEsc = strings.NewReplacer("%", "%25", " ", "%20", ":", "%3A")
+	customValEsc = strings.NewReplacer("%", "%25", " ", "%20")
+)
 
-	sb.WriteUint8(cusbeg)
-	for _, k := range stdCustomProps {
-		v, ok := md[k]
-		if !ok {
-			continue
-		}
-		if prev {
-			sb.WriteUint8(cusdlm)
-		}
-		sb.WriteString(k)
-		sb.WriteUint8(cusepa)
-		sb.WriteString(v)
-		prev = true
-		l--
+func writeCustom(sb *cos.SB, k, v string) {
+	if sb.Len() > 1 {
+		sb.WriteUint8(cusdlm)
 	}
-	if l > 0 {
-		// add remaining (non-standard) attr-s in an arbitrary sorting order
+	if strings.IndexByte(v, cusdlm) >= 0 || strings.IndexByte(k, cusdlm) >= 0 || strings.IndexByte(k, cusepa) >= 0 {
+		sb.WriteUint8(cusepa)
+		k = customKeyEsc.Replace(k)
+		v = customValEsc.Replace(v)
+	}
+	sb.WriteString(k)
+	sb.WriteUint8(cusepa)
+	sb.WriteString(v)
+}
+
+// reserved keys are excluded; standard keys come first (see S3Props).
+func CustomMD2S(md cos.StrKVs) string {
+	var sb cos.SB
+	sb.Init(256)
+	sb.WriteUint8(cusbeg)
+	left := len(md)
+	for _, k := range stdCustomProps {
+		if v, ok := md[k]; ok {
+			writeCustom(&sb, k, v)
+			left--
+		}
+	}
+	if left > 0 {
 		for k, v := range md {
-			if isReservedCust(k) {
-				continue
+			if !isReservedCust(k) && !slices.Contains(stdCustomProps[:], k) {
+				writeCustom(&sb, k, v)
 			}
-			if slices.Contains(stdCustomProps[:], k) {
-				continue
-			}
-			if prev {
-				sb.WriteUint8(cusdlm)
-			}
-			sb.WriteString(k)
-			sb.WriteUint8(cusepa)
-			sb.WriteString(v)
-			prev = true
 		}
 	}
 	sb.WriteUint8(cusend)
 	return sb.String()
 }
 
-// (compare w/ CustomMD2S above)
 func CustomProps2S(nvs ...string) string {
 	var (
-		sb cos.SB
-		l  int
+		sb   cos.SB
+		size int
 	)
 	for _, s := range nvs {
-		l += len(s) + 2
+		size += len(s) + 1
 	}
-	sb.Init(l + 2)
-
-	np := len(nvs)
+	sb.Init(size + 2)
 	sb.WriteUint8(cusbeg)
-	for i := 0; i < np; i += 2 {
-		sb.WriteString(nvs[i])
-		sb.WriteUint8(cusepa)
-		sb.WriteString(nvs[i+1])
-		if i < np-2 {
-			sb.WriteUint8(cusdlm)
-		}
+	for i := 0; i < len(nvs); i += 2 {
+		writeCustom(&sb, nvs[i], nvs[i+1])
 	}
 	sb.WriteUint8(cusend)
-
 	return sb.String()
+}
+
+func _customBody(s string) string {
+	if len(s) >= 2 && s[0] == cusbeg && s[len(s)-1] == cusend {
+		return s[1 : len(s)-1]
+	}
+	return ""
 }
 
 // note the order: ETag and LastModified first, after the optional source
 // (see stdCustomProps);
 // the remaining values can contain spaces, e.g., "Content-Type:text/plain; charset=utf-8"
 func (be *LsoEnt) S3Props() (etag, modified string) {
-	s := be.Custom
-	if len(s) < 2 || s[0] != cusbeg || s[len(s)-1] != cusend {
+	s := _customBody(be.Custom)
+	_, s = cutS3Prop(s, SourceObjMD+":")
+	etag, s = cutS3Prop(s, ETag+":")
+	modified, _ = cutS3Prop(s, LsoLastModified+":")
+	return
+}
+
+func cutS3Prop(s, prefix string) (value, rest string) {
+	body, escaped := strings.CutPrefix(s, ":")
+	tail, ok := strings.CutPrefix(body, prefix)
+	if !ok {
+		return "", s
+	}
+	value, rest, _ = strings.Cut(tail, " ")
+	if escaped {
+		value, _ = url.PathUnescape(value)
+	}
+	return
+}
+
+// old writers emitted unquoted spaces. keep them until the next key:value.
+func cutLegacyValue(key, s string) (value, rest string) {
+	if key == cos.HdrLastModified && len(s) >= len(http.TimeFormat) {
+		// the time of day in an HTTP date also contains colons
+		date := s[:len(http.TimeFormat)]
+		if tail := s[len(date):]; strings.HasSuffix(date, " GMT") && (tail == "" || tail[0] == cusdlm) {
+			return date, strings.TrimPrefix(tail, " ")
+		}
+	}
+	i := strings.IndexByte(s, cusdlm)
+	for i >= 0 {
+		tail := s[i+1:]
+		word, _, more := strings.Cut(tail, " ")
+		if strings.IndexByte(word, cusepa) >= 0 {
+			return s[:i], tail
+		}
+		if !more {
+			break
+		}
+		i += len(word) + 1
+	}
+	return s, ""
+}
+
+// cut one pair; an empty key ends the scan
+func _cutCustomPair(s string) (key, value, rest string) {
+	body, escaped := strings.CutPrefix(s, ":")
+	key, tail, ok := strings.Cut(body, ":")
+	if !ok || key == "" {
+		return "", "", ""
+	}
+	if !escaped {
+		value, rest = cutLegacyValue(key, tail)
 		return
 	}
-	s = s[1 : len(s)-1]
-	if after, ok := strings.CutPrefix(s, SourceObjMD+":"); ok {
-		_, s, _ = strings.Cut(after, " ")
+	value, rest, _ = strings.Cut(tail, " ")
+	var err error
+	if key, err = url.PathUnescape(key); err != nil {
+		return "", "", ""
 	}
-	if after, ok := strings.CutPrefix(s, ETag+":"); ok {
-		etag, s, _ = strings.Cut(after, " ")
-	}
-	if after, ok := strings.CutPrefix(s, LsoLastModified+":"); ok {
-		modified, _, _ = strings.Cut(after, " ")
+	if value, err = url.PathUnescape(value); err != nil {
+		return "", "", ""
 	}
 	return
 }
 
 func S2CustomMD(md cos.StrKVs, custom, version string) {
 	debug.Assert(len(md) == 0)
-	l := len(custom) - 1
-	if l < 2 {
-		return
+	for s := _customBody(custom); s != ""; {
+		k, v, rest := _cutCustomPair(s)
+		if k == "" {
+			break
+		}
+		s = rest
+		// a legacy value can contain what looks like a second copy of a key
+		if _, exists := md[k]; !exists {
+			md[k] = v
+		}
 	}
-	for i := 1; i < l; {
-		j := strings.IndexByte(custom[i:], cusepa)
-		if j < 0 {
-			debug.Assert(false, custom)
-			return
-		}
-		name := custom[i : i+j]
-		i += j
-		k := strings.IndexByte(custom[i:], cusdlm)
-		if k < 0 {
-			k = strings.IndexByte(custom[i:], cusend)
-		}
-		if k < 0 {
-			debug.Assert(false, custom)
-			return
-		}
-
-		md[name] = custom[i+1 : i+k]
-		i += k + 1
-	}
-	if md[VersionObjMD] == "" && version != "" {
+	if len(md) != 0 && md[VersionObjMD] == "" && version != "" {
 		md[VersionObjMD] = version
 	}
 }
 
-func S2CustomVal(custom, name string) (v string) {
-	i := strings.Index(custom, name)
-	if i < 0 {
-		return
+func S2CustomVal(custom, name string) string {
+	for s := _customBody(custom); s != ""; {
+		k, v, rest := _cutCustomPair(s)
+		if k == "" {
+			break
+		}
+		s = rest
+		if k == name {
+			return v
+		}
 	}
-	j := strings.IndexByte(custom[i:], cusepa)
-	if j < 0 {
-		debug.Assert(false, custom)
-		return
-	}
-
-	i += j + 1
-	k := strings.IndexByte(custom[i:], cusdlm)
-	if k < 0 {
-		k = strings.IndexByte(custom[i:], cusend)
-	}
-	if k < 0 {
-		debug.Assert(false, custom)
-		return
-	}
-	return custom[i : i+k]
+	return ""
 }

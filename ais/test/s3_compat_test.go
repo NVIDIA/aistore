@@ -1314,7 +1314,7 @@ func testS3ContentTypeRemote(t *testing.T, provider, absentContentType string) {
 			// The native listing must preserve the full Content-Type, including the charset.
 			lst, err := api.ListObjects(baseParams, bck, &apc.LsoMsg{Prefix: objName, Props: apc.GetPropsCustom}, api.ListArgs{})
 			tassert.CheckFatal(t, err)
-			tassert.Fatalf(t, len(lst.Entries) == 1 && strings.Contains(lst.Entries[0].Custom, cos.HdrContentType+":"+contentType),
+			tassert.Fatalf(t, len(lst.Entries) == 1 && cmn.S2CustomVal(lst.Entries[0].Custom, cos.HdrContentType) == contentType,
 				"expected native listing for %q to include Content-Type %q", objName, contentType)
 		}
 	}
