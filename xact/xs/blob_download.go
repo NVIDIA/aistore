@@ -1131,8 +1131,9 @@ loop:
 		}
 	}
 
-	// failed work-item has already been returned via doneCh
-	if err != nil {
+	// do not override the root cause, if exists
+	// (failed work-item has already been returned via doneCh)
+	if err != nil && w.parent.rctx.Err() == nil {
 		w.parent.AddErr(err, ecode)
 	}
 }
