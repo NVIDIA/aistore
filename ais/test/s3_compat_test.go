@@ -1297,11 +1297,26 @@ func testS3ContentTypeRemote(t *testing.T, provider, absentContentType string) {
 		tassert.Errorf(t, out.ContentType != nil && *out.ContentType == contentType,
 			"S3 GET Content-Type: expected %q, got %v", contentType, out.ContentType)
 	}
-	checkS3HEAD := func(t *testing.T, objName, contentType string) {
+	checkS3Metadata := func(t *testing.T, objName, contentType string) {
 		out, err := s3Client.HeadObject(t.Context(), &s3.HeadObjectInput{Bucket: aws.String(bck.Name), Key: aws.String(objName)})
 		tassert.CheckFatal(t, err)
 		tassert.Errorf(t, out.ContentType != nil && *out.ContentType == contentType,
 			"S3 HEAD Content-Type: expected %q, got %v", contentType, out.ContentType)
+		if provider == apc.GCP && contentType == absentContentType {
+			// S3 must return listing metadata even when the detected Content-Type contains a space.
+			page, err := s3Client.ListObjectsV2(t.Context(), &s3.ListObjectsV2Input{Bucket: aws.String(bck.Name), Prefix: aws.String(objName)})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(page.Contents) == 1, "expected one S3 entry for %q, got %d", objName, len(page.Contents))
+			obj := page.Contents[0]
+			tassert.Errorf(t, aws.ToString(obj.Key) == objName && aws.ToString(obj.ETag) != "" && !aws.ToTime(obj.LastModified).IsZero(),
+				"incomplete S3 listing for %q: %+v", objName, obj)
+
+			// The native listing must preserve the full Content-Type, including the charset.
+			lst, err := api.ListObjects(baseParams, bck, &apc.LsoMsg{Prefix: objName, Props: apc.GetPropsCustom}, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, len(lst.Entries) == 1 && strings.Contains(lst.Entries[0].Custom, cos.HdrContentType+":"+contentType),
+				"expected native listing for %q to include Content-Type %q", objName, contentType)
+		}
 	}
 
 	const payload = "content-type round trip"
@@ -1340,7 +1355,7 @@ func testS3ContentTypeRemote(t *testing.T, provider, absentContentType string) {
 			t.Cleanup(func() { _ = api.DeleteObject(baseParams, bck, objName) })
 
 			t.Run("Warm", func(t *testing.T) {
-				checkS3HEAD(t, objName, test.expected)
+				checkS3Metadata(t, objName, test.expected)
 				checkNativeHEAD(t, objName, test.expected, false /*latest*/, true /*present*/)
 				checkNativeHEAD(t, objName, test.expected, true /*latest*/, true /*present*/)
 				checkNativeGET(t, objName, test.expected)
@@ -1351,7 +1366,7 @@ func testS3ContentTypeRemote(t *testing.T, provider, absentContentType string) {
 				// Native HEAD only emits Content-Type for an in-cluster object.
 				checkNativeHEAD(t, objName, "", false /*latest*/, false /*present*/)
 				checkNativeHEAD(t, objName, "", true /*latest*/, false /*present*/)
-				checkS3HEAD(t, objName, test.expected) // remote HEAD does not cache the object
+				checkS3Metadata(t, objName, test.expected) // remote HEAD does not cache the object
 			})
 
 			t.Run("ColdNativeGET", func(t *testing.T) {
