@@ -12,6 +12,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -55,7 +56,7 @@ type nbiCtx struct {
 	bck       *meta.Bck      // source bucket
 	prevToken string         // responded with prev. nextPage() call
 	hdr       nbiChunkHdr    // current chunk header
-	entries   cmn.LsoEntries // decoded from the current chunk
+	entries   cmn.LsoEntries // current chunk payload (empty when only hdr is loaded)
 	buf       []byte         // reusable buffer: chunk meta, msgpack
 	cache     struct {
 		hdr      nbiChunkHdr
@@ -93,11 +94,9 @@ func (nbi *nbiCtx) init(invName string) error {
 	debug.AssertFunc(func() bool { return nbi.cksum.H.Size() == cos.SizeofI32 })
 
 	nbi.buf, nbi.slab = core.T.PageMM().AllocSize(cmn.MsgpLsoBufSize)
-	nbi.nidx = 0
 
 	// readahead first chunk
-	nbi.chunkNum = 1
-	if err := nbi.readChunk(); err != nil {
+	if err := nbi.readChunk(1, ""); err != nil {
 		nbi.cleanup()
 		return err
 	}
@@ -114,6 +113,23 @@ func (nbi *nbiCtx) init(invName string) error {
 	nbi.cache.entries = make(cmn.LsoEntries, 0, nbi.hdr.entryCount+hroom)
 
 	return nil
+}
+
+// set atime to inventory creation time - to specifically satisfy S3 clients
+// that require LastModified in every listed object (e.g., `aws s3 ls`)
+// - s3.entryToS3 uses atime as LastModified unless S3Props() has the recorded one
+// - override atime recorded in the inventory (formatted at creation time, not as RFC3339)
+// - note: modifies entries in place (possibly shared with nbi.entries and nbi.cache)
+func (nbi *nbiCtx) fillAtime(msg *apc.LsoMsg, entries cmn.LsoEntries) {
+	if !msg.IsFlagSet(apc.LsIsS3) || len(entries) == 0 {
+		return
+	}
+	atime := nbi.ufest.Created().UTC().Format(time.RFC3339)
+	for _, en := range entries {
+		if !en.IsAnyFlagSet(apc.EntryIsDir) {
+			en.Atime = atime
+		}
+	}
 }
 
 func (nbi *nbiCtx) _load(lom *core.LOM) error {
@@ -189,52 +205,68 @@ func (nbi *nbiCtx) cacheIt() {
 	nbi.cache.chunkNum = nbi.chunkNum
 }
 
-func (nbi *nbiCtx) readChunk() error {
-	_, err := nbi.readChunkAfter("")
-	return err
+// install the header and drop all entries from the previous chunk
+func (nbi *nbiCtx) setHdr(num int, hdr nbiChunkHdr) {
+	nbi.chunkNum, nbi.hdr, nbi.nidx = num, hdr, 0
+	clear(nbi.entries)
+	nbi.entries = nbi.entries[:0]
 }
 
-// read chunk header and decode entries only if hdr.last > token
-// - returns false otherwise (nbi.hdr updated, nbi.entries stale)
-func (nbi *nbiCtx) readChunkAfter(token string) (bool, error) {
-	// cache
-	if nbi.chunkNum == nbi.cache.chunkNum {
-		clear(nbi.entries)
-		cnt := len(nbi.cache.entries)
-		if cap(nbi.entries) < cnt {
-			nbi.entries = make(cmn.LsoEntries, cnt)
-		} else {
-			nbi.entries = nbi.entries[:cnt]
-		}
-		copy(nbi.entries, nbi.cache.entries)
-		nbi.hdr = nbi.cache.hdr
-		return true, nil
-	}
-
-	chunk, err := nbi.ufest.GetChunk(nbi.chunkNum)
+func (nbi *nbiCtx) readChunk(num int, token string) error {
+	var hdr nbiChunkHdr
+	fh, err := nbi.openChunk(num, &hdr)
 	if err != nil {
-		return false, nbi.emit(err)
+		return err
 	}
+	defer _closeChunk(fh)
+	nbi.setHdr(num, hdr)
+	if hdr.last <= token { // skip decoding payload if the chunk ends at or before `token`
+		return nil
+	}
+	return nbi.readPayload(fh)
+}
 
+func _closeChunk(fh *os.File) {
+	if fh != nil {
+		cos.Close(fh)
+	}
+}
+
+// read the header and leave the file positioned at the payload (nil file on cache hit)
+func (nbi *nbiCtx) openChunk(num int, hdr *nbiChunkHdr) (*os.File, error) {
+	if num == nbi.cache.chunkNum {
+		*hdr = nbi.cache.hdr
+		return nil, nil
+	}
+	chunk, err := nbi.ufest.GetChunk(num)
+	if err != nil {
+		return nil, nbi.emit(err)
+	}
 	fh, err := os.Open(chunk.Path())
 	if err != nil {
-		return false, nbi.emit(err)
+		return nil, nbi.emit(err)
 	}
-	defer cos.Close(fh)
+	if err := nbi.readHdr(fh, num, hdr); err != nil {
+		cos.Close(fh)
+		return nil, err
+	}
+	return fh, nil
+}
 
+func (nbi *nbiCtx) readHdr(fh *os.File, num int, hdr *nbiChunkHdr) error {
 	// 1. read chunk header length
 	var frame [nbiFrameSize]byte
 	if _, err := io.ReadFull(fh, frame[:]); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		return false, nbi.emit(err)
+		return nbi.emit(err)
 	}
 
 	// 2. read chunk header
 	hdrLen := binary.BigEndian.Uint32(frame[:])
 	if hdrLen == 0 || hdrLen > nbiMaxHdrLen {
-		return false, nbi.emit(fmt.Errorf("invalid chunk header length %d", hdrLen))
+		return nbi.emit(fmt.Errorf("invalid chunk header length %d", hdrLen))
 	}
 
 	hdrBuf := nbi.buf[:hdrLen] // note: using the same buffer for hdr and msgp payload
@@ -242,7 +274,7 @@ func (nbi *nbiCtx) readChunkAfter(token string) (bool, error) {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
-		return false, nbi.emit(err)
+		return nbi.emit(err)
 	}
 
 	// 2.1. checksum
@@ -253,31 +285,33 @@ func (nbi *nbiCtx) readChunkAfter(token string) (bool, error) {
 	exp := binary.BigEndian.Uint32(frame[cos.SizeofI32:])
 	got := binary.BigEndian.Uint32(crc)
 	if got != exp {
-		return false, nbi.emit(fmt.Errorf("invalid chunk [%d, %q] header hash: expected %08x, got %08x",
-			nbi.chunkNum, chunk.Path(), exp, got))
+		return nbi.emit(fmt.Errorf("invalid chunk [%d, %q] header hash: expected %08x, got %08x",
+			num, fh.Name(), exp, got))
 	}
 
-	unpacker := cos.NewUnpacker(hdrBuf)
-	if err := nbi.hdr.Unpack(unpacker); err != nil {
-		return false, nbi.emit(err)
+	if err := hdr.Unpack(cos.NewUnpacker(hdrBuf)); err != nil {
+		return nbi.emit(err)
 	}
-	if nbi.hdr.last <= token {
-		return false, nil
+	return nil
+}
+
+// nil fh: copy entries from the cache (see openChunk)
+func (nbi *nbiCtx) readPayload(fh *os.File) error {
+	if fh == nil {
+		debug.Assert(nbi.chunkNum == nbi.cache.chunkNum)
+		nbi.entries = append(nbi.entries, nbi.cache.entries...)
+		return nil
 	}
-
-	nbi.nidx = 0
-
 	// 3. read chunk payload: msgp entries (note: hdrBuf consumed before msgp reuses the buffer)
 	mr := msgp.NewReaderBuf(fh, nbi.buf)
-
 	if cnt := int(nbi.hdr.entryCount); cap(nbi.entries) < cnt {
 		nbi.entries = make(cmn.LsoEntries, 0, cnt)
-	} else {
-		clear(nbi.entries)
-		nbi.entries = nbi.entries[:0]
 	}
 	if err := nbi.entries.DecodeMsg(mr); err != nil {
-		return false, err
+		// discard partial entries so a retry reloads the payload
+		clear(nbi.entries)
+		nbi.entries = nbi.entries[:0]
+		return nbi.emit(err)
 	}
 
 	// TODO: remove eventually
@@ -286,7 +320,7 @@ func (nbi *nbiCtx) readChunkAfter(token string) (bool, error) {
 	debug.AssertFunc(func() bool { return nbi.hdr.first == nbi.entries[0].Name })
 	debug.AssertFunc(func() bool { return nbi.hdr.last == nbi.entries[len(nbi.entries)-1].Name })
 
-	return true, nil
+	return nil
 }
 
 func (nbi *nbiCtx) skip() { nbi.nidx = len(nbi.entries) } // in re: prefix
@@ -337,31 +371,17 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	token := max(msg.ContinuationToken, msg.StartAfter)
 	switch token {
 	case "":
-		debug.Assert(nbi.chunkNum == 1 && nbi.nidx == 0)
+		if nbi.chunkNum != 1 || len(nbi.entries) == 0 {
+			if err := nbi.readChunk(1, ""); err != nil {
+				return err
+			}
+		}
+		nbi.nidx = 0
 	case prev:
 		// do nothing
 	default:
-		// resync nbi iterator
-		nbi.nidx = 0
-		if token < nbi.hdr.first {
-			if err := nbi.rewind(token); err != nil {
-				return err
-			}
-		} else if nbi.chunkNum > nbi.ufest.Count() {
-			if token >= nbi.hdr.last {
-				// we are done
-				return nil
-			}
-			if err := nbi.rewind(token); err != nil {
-				return err
-			}
-		}
 		if err := nbi.seekAfter(token); err != nil {
 			return err
-		}
-		if nbi.chunkNum > nbi.ufest.Count() {
-			// no more chunks - we are done
-			return nil
 		}
 	}
 
@@ -373,18 +393,16 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 	for len(lst.Entries) < pageSize {
 		// next chunk
 		if nbi.nidx >= len(nbi.entries) {
+			if nbi.chunkNum == nbi.ufest.Count() {
+				return nil
+			}
 			// clone entries from the current (soon previous)  chunk
 			for i, e := range lst.Entries {
 				cp := *e
 				lst.Entries[i] = &cp
 			}
 			nbi.cacheIt()
-			nbi.chunkNum++
-			if nbi.chunkNum > nbi.ufest.Count() {
-				// no more chunks - we are done
-				return nil
-			}
-			if err := nbi.readChunk(); err != nil {
+			if err := nbi.readChunk(nbi.chunkNum+1, ""); err != nil {
 				return err
 			}
 		}
@@ -450,7 +468,7 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 		debug.Assert(lst.ContinuationToken != "")
 
 		// eof
-		if nbi.nidx >= len(nbi.entries) && nbi.chunkNum > nbi.ufest.Count() {
+		if nbi.nidx >= len(nbi.entries) && nbi.chunkNum == nbi.ufest.Count() {
 			lst.ContinuationToken = ""
 		} else if msg.Prefix != "" {
 			// out of prefix-defined range
@@ -469,60 +487,54 @@ func (nbi *nbiCtx) nextPage(msg *apc.LsoMsg, lst *cmn.LsoRes) error {
 // cont. token helpers
 //
 
-func (nbi *nbiCtx) seekAfter(token string) error {
-	debug.Assert(token != "")
-	debug.Assert(nbi.nidx == 0) // otherwise we better search from nidx onwards
-
-	// fast path: search current chunk
-	if nbi.nidx < len(nbi.entries) && len(nbi.entries) > 0 && token < nbi.hdr.last {
-		i := sort.Search(len(nbi.entries), func(i int) bool {
-			return nbi.entries[i].Name > token
-		})
-		if i < len(nbi.entries) {
-			nbi.nidx = i
-			debug.Func(func() { debug.Assert(nbi.entries[i].Name > token, "seekAfter: ", token, " -> ", nbi.entries[i].Name) })
-			return nil
-		}
-	}
-
-	// token is >= current chunk's last item: move forward reading only chunk headers
-	// until the first chunk that has a name > token, and decode that chunk
-	nbi.cacheIt()
-	for {
-		nbi.chunkNum++
-		if nbi.chunkNum > nbi.ufest.Count() {
-			// nbi.entries may be stale (nextPage returns or rewinds)
-			return nil
-		}
-		decoded, err := nbi.readChunkAfter(token)
+// walk left (<---) by header, retaining the current chunk when the token falls in a gap
+func (nbi *nbiCtx) rewind(token string) error {
+	debug.Assert(nbi.chunkNum > 1)
+	for num := nbi.chunkNum - 1; num > 0; num-- {
+		var hdr nbiChunkHdr
+		fh, err := nbi.openChunk(num, &hdr)
 		if err != nil {
 			return err
 		}
-		if !decoded {
-			continue
+		if hdr.last > token {
+			nbi.setHdr(num, hdr)
+			if num > 1 && token < hdr.first {
+				_closeChunk(fh)
+				continue
+			}
+			err = nbi.readPayload(fh)
 		}
-		i := sort.Search(len(nbi.entries), func(i int) bool { return nbi.entries[i].Name > token })
-		debug.Func(func() { debug.Assert(i < len(nbi.entries), "seekAfter: ", token, " vs last ", nbi.hdr.last) })
-		nbi.nidx = i
-		return nil
+		_closeChunk(fh)
+		return err
 	}
+	return nil
 }
 
-func (nbi *nbiCtx) rewind(token string) error {
-	debug.Func(func() { debug.Assert(nbi.chunkNum <= nbi.ufest.Count()+1, nbi.chunkNum, " vs ", nbi.ufest.Count()) })
-	nbi.chunkNum = min(nbi.chunkNum, nbi.ufest.Count())
-	for nbi.chunkNum > 1 {
-		nbi.chunkNum--
-		if err := nbi.readChunk(); err != nil {
+func (nbi *nbiCtx) seekAfter(token string) error {
+	debug.Assert(token != "")
+	if nbi.chunkNum > 1 && token < nbi.hdr.first {
+		if err := nbi.rewind(token); err != nil {
 			return err
 		}
-		if token >= nbi.hdr.first {
-			nbi.nidx = 0
+	}
+	for token >= nbi.hdr.last {
+		if nbi.chunkNum == nbi.ufest.Count() {
+			nbi.skip()
 			return nil
 		}
+		if len(nbi.entries) > 0 {
+			nbi.cacheIt()
+		}
+		if err := nbi.readChunk(nbi.chunkNum+1, token); err != nil {
+			return err
+		}
 	}
-	nbi.nidx = 0
-	// reached all the way to the left boundary with continuation token
-	// pointing even more to the left (which is legal)
+	if len(nbi.entries) == 0 {
+		if err := nbi.readChunk(nbi.chunkNum, ""); err != nil {
+			return err
+		}
+	}
+	nbi.nidx = sort.Search(len(nbi.entries), func(i int) bool { return nbi.entries[i].Name > token })
+	debug.Assert(nbi.nidx < len(nbi.entries))
 	return nil
 }

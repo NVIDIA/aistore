@@ -473,7 +473,7 @@ Note that S3-compatible clients may request NBI-backed listing via `Ais-Bucket-I
 
 NBI-backed listing supports the `ListObjectsV2` parameters `prefix`, `start-after`, `delimiter` (`/` only), `max-keys`, and `continuation-token`. For `start-after` in a non-recursive listing, see [Start after](/docs/nbi.md#start-after).
 
-By default, an inventory stores only the name, size, and cached status, so the response has no `LastModified` and `ETag` is empty. To include them, create the inventory with `ais nbi create --all`.
+By default, an inventory stores only the name, size, and cached status, so `ETag` is empty and `LastModified` is the time the inventory was created. To include the actual values, create the inventory with `ais nbi create --all`.
 
 ---
 

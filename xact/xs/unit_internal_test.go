@@ -174,7 +174,12 @@ func TestNBICachedChunkRewind(t *testing.T) {
 	for i, entries := range chunks {
 		tassert.CheckFatal(t, w.writeChunk(i+1, entries))
 	}
-	nbi := &nbiCtx{bck: bck, ufest: ufest, buf: make([]byte, cmn.MsgpLsoBufSize), cksum: cos.NewCksumHash(cos.ChecksumCRC32C), chunkNum: 1, nat: 1}
+	newCtx := func() *nbiCtx {
+		t.Helper()
+		nbi := &nbiCtx{bck: bck, ufest: ufest, buf: make([]byte, cmn.MsgpLsoBufSize), cksum: cos.NewCksumHash(cos.ChecksumCRC32C), nat: 1}
+		tassert.CheckFatal(t, nbi.readChunk(1, ""))
+		return nbi
+	}
 	checkNames := func(entries, expected cmn.LsoEntries) {
 		t.Helper()
 		tassert.Fatalf(t, len(entries) == len(expected), "expected %d entries, got %d", len(expected), len(entries))
@@ -183,15 +188,14 @@ func TestNBICachedChunkRewind(t *testing.T) {
 		}
 	}
 
-	// A shorter next chunk must not overwrite objects referenced by the cache.
-	tassert.CheckFatal(t, nbi.readChunk())
+	// short chunk must not overwrite objects referenced by the cache
+	nbi := newCtx()
 	nbi.cacheIt()
-	nbi.chunkNum = 2
-	tassert.CheckFatal(t, nbi.readChunk())
+	tassert.CheckFatal(t, nbi.readChunk(2, ""))
 	checkNames(nbi.cache.entries, chunks[0])
 
-	// Restore the cached chunk, then traverse it and both subsequent chunks.
-	tassert.CheckFatal(t, nbi.rewind("b"))
+	// restore the cached chunk, then traverse it and subsequent chunks
+	tassert.CheckFatal(t, nbi.seekAfter("b"))
 	checkNames(nbi.entries, chunks[0])
 	msg := &apc.LsoMsg{ContinuationToken: "b", PageSize: 1}
 	lst := &cmn.LsoRes{}
@@ -203,7 +207,7 @@ func TestNBICachedChunkRewind(t *testing.T) {
 	tassert.Fatalf(t, lst.ContinuationToken == "l", "expected token l, got %q", lst.ContinuationToken)
 	checkNames(nbi.cache.entries, chunks[1])
 
-	// A proxy-selected marker can rewind into the shorter cached chunk again.
+	// proxy-selected marker can rewind into the shorter cached chunk again
 	msg.ContinuationToken = "h"
 	tassert.CheckFatal(t, nbi.nextPage(msg, lst))
 	expected = append(cmn.LsoEntries(nil), chunks[1][2:]...)
@@ -211,18 +215,73 @@ func TestNBICachedChunkRewind(t *testing.T) {
 	checkNames(lst.Entries, expected)
 	tassert.Fatalf(t, lst.ContinuationToken == "", "expected exhausted inventory, got token %q", lst.ContinuationToken)
 
-	// A marker equal to an earlier page token must not match a stale iterator position.
+	// marker equal to an earlier page token must not match a stale iterator position
 	msg.ContinuationToken = "l"
 	tassert.CheckFatal(t, nbi.nextPage(msg, lst))
 	checkNames(lst.Entries, chunks[2][3:])
 
-	// A rewind after a header skip past the end must not use stale entries.
-	nbi = &nbiCtx{bck: bck, ufest: ufest, buf: make([]byte, cmn.MsgpLsoBufSize), cksum: cos.NewCksumHash(cos.ChecksumCRC32C), chunkNum: 1, nat: 1}
-	tassert.CheckFatal(t, nbi.readChunk())
+	// rewind after a header skip past the end must not use stale entries
+	nbi = newCtx()
 	tassert.CheckFatal(t, nbi.nextPage(&apc.LsoMsg{StartAfter: "o"}, lst))
 	checkNames(lst.Entries, nil)
 	tassert.CheckFatal(t, nbi.nextPage(&apc.LsoMsg{ContinuationToken: "h"}, lst))
 	expected = append(cmn.LsoEntries(nil), chunks[1][2:]...)
 	expected = append(expected, chunks[2]...)
 	checkNames(lst.Entries, expected)
+
+	// retry the same seek after: a) open error and b) partial decode
+	nbi = newCtx()
+	lastChunk, err := ufest.GetChunk(3)
+	tassert.CheckFatal(t, err)
+	path := lastChunk.Path()
+	data, err := os.ReadFile(path)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, os.Remove(path))
+
+	msg.ContinuationToken = "l"
+	err = nbi.nextPage(msg, lst)
+	tassert.Fatalf(t, cos.IsNotExist(err), "expected missing chunk, got %v", err)
+	tassert.Fatalf(t, nbi.chunkNum == 2 && nbi.hdr.last == "i" && len(nbi.entries) == 0, "expected only chunk 2 header")
+
+	tassert.CheckFatal(t, os.WriteFile(path, data[:len(data)-1], cos.PermRWR))
+	err = nbi.nextPage(msg, lst)
+	tassert.Fatalf(t, err != nil, "expected truncated chunk payload")
+	tassert.Fatalf(t, nbi.chunkNum == 3 && nbi.hdr.last == "o" && len(nbi.entries) == 0, "expected only chunk 3 header")
+
+	tassert.CheckFatal(t, os.WriteFile(path, data, cos.PermRWR))
+	tassert.CheckFatal(t, nbi.nextPage(msg, lst))
+	checkNames(lst.Entries, chunks[2][3:])
+
+	// final page exactly filled: names after "e" == minPageSize (effective page size for PageSize=1)
+	remaining := len(chunks[0][5:]) + len(chunks[1]) + len(chunks[2])
+	tassert.Fatalf(t, remaining == minPageSize, "test setup: %d names remain vs page size %d", remaining, minPageSize)
+	msg = &apc.LsoMsg{ContinuationToken: "e", PageSize: 1}
+	tassert.CheckFatal(t, nbi.nextPage(msg, lst))
+	tassert.Fatalf(t, len(lst.Entries) == minPageSize && lst.ContinuationToken == "", "expected full final page, got %d entries, token %q",
+		len(lst.Entries), lst.ContinuationToken)
+
+	// rewind past an unreadable payload using its intact header
+	mid, err := ufest.GetChunk(2)
+	tassert.CheckFatal(t, err)
+	midData, err := os.ReadFile(mid.Path())
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, os.Truncate(mid.Path(), int64(len(midData)-1)))
+	nbi = newCtx()
+	tassert.CheckFatal(t, nbi.readChunk(3, ""))
+	first := nbi.entries[0]
+	for _, token := range []string{"i-", "i"} {
+		tassert.CheckFatal(t, nbi.seekAfter(token))
+		tassert.Fatalf(t, nbi.chunkNum == 3 && nbi.nidx == 0 && nbi.entries[0] == first,
+			"token %q: expected to retain the loaded chunk", token)
+	}
+	tassert.CheckFatal(t, nbi.seekAfter("0"))
+	checkNames(nbi.entries[nbi.nidx:], chunks[0])
+
+	// the gap after chunk 1 selects chunk 2 and must read its payload
+	tassert.CheckFatal(t, nbi.readChunk(3, ""))
+	err = nbi.seekAfter("f-")
+	tassert.Fatalf(t, err != nil, "expected truncated chunk payload")
+	tassert.CheckFatal(t, os.WriteFile(mid.Path(), midData, cos.PermRWR))
+	tassert.CheckFatal(t, nbi.seekAfter("f-"))
+	checkNames(nbi.entries[nbi.nidx:], chunks[1])
 }

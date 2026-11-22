@@ -557,6 +557,7 @@ func (r *LsoXact) doPageNBI() *LsoRsp {
 	if err != nil {
 		return &LsoRsp{Lst: lst, Status: http.StatusInternalServerError, Err: err}
 	}
+	r.nbi.fillAtime(r.msg, lst.Entries)
 	r.page = lst.Entries
 	return &LsoRsp{Lst: lst, Status: http.StatusOK}
 }

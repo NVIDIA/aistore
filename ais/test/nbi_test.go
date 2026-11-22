@@ -1315,6 +1315,8 @@ func _lsoNbiS3All(t *testing.T, s3Client *s3.Client, bck cmn.Bck, prefix, after 
 		for _, o := range out.Contents {
 			key := aws.ToString(o.Key)
 			tassert.Fatalf(t, key > lastK, "contents not ascending: %q after %q", key, lastK)
+			// inventory w/out atime: expecting inventory creation time
+			tassert.Fatalf(t, o.LastModified != nil && !o.LastModified.IsZero(), "%q: missing LastModified", key)
 			names, lastK = append(names, key), key
 		}
 		for _, cp := range out.CommonPrefixes {
