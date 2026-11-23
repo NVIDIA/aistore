@@ -205,12 +205,16 @@ class TestRequestClient(unittest.TestCase):  # pylint: disable=unused-variable,t
 
     def test_request_content_error_response(self):
         """An error response raises before any body read."""
+        raw = Mock(spec=io.BytesIO, wraps=io.BytesIO())
+        response = Response()
+        response.status_code, response.raw = 404, raw
+        self.mock_session.request.return_value = response
         self.mock_response_handler.handle_response.side_effect = ErrObjNotFound(
             404, "not found", "url", Mock()
         )
         with self.assertRaises(ErrObjNotFound):
             self.default_request_client.request_content("get", "objects/bck/obj")
-        self.mock_response.iter_content.assert_not_called()
+        raw.read.assert_not_called()
 
     def test_request_https_data(self):
         method = "request_method"
