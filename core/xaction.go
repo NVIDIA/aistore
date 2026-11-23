@@ -6,6 +6,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -54,12 +55,12 @@ func (rs RunState) String() string {
 	}
 }
 
-// wire: one byte (e.g., T2T status reply)
+// wire format: run-state byte followed by optional fields
 func (rs RunState) Bytes() []byte { return []byte{byte(rs)} }
 
 func ParseRunState(b []byte) (RunState, error) {
-	if len(b) != 1 {
-		return 0, fmt.Errorf("invalid run state: expecting one byte, got %d", len(b))
+	if len(b) == 0 {
+		return 0, errors.New("invalid run state: empty reply")
 	}
 	rs := RunState(b[0])
 	if rs < RunStateRunning || rs > RunStateAborted {

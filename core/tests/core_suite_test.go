@@ -1,9 +1,9 @@
-// Package core_test provides tests for cluster package
+// Package tests_test provides tests for the core package
 /*
  * Copyright (c) 2018-2025, NVIDIA CORPORATION. All rights reserved.
  *
  */
-package core_test
+package tests_test
 
 import (
 	"os"

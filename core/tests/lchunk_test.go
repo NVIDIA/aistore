@@ -1,8 +1,8 @@
-// Package core_test provides tests for chunk manifest functionality
+// Package tests_test provides tests for chunk manifest functionality
 /*
  * Copyright (c) 2025-2026, NVIDIA CORPORATION. All rights reserved.
  */
-package core_test
+package tests_test
 
 import (
 	"bytes"

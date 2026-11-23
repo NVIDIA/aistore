@@ -1,8 +1,8 @@
-// Package core_test provides tests for cluster package
+// Package tests_test provides tests for the core package
 /*
  * Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
  */
-package core_test
+package tests_test
 
 import (
 	"archive/tar"
@@ -233,11 +233,11 @@ func siRead(archlom *core.LOM, archpath string) (fast bool) { //nolint:unparam /
 
 func siPrimeCache(archlom *core.LOM, archpath string) { //nolint:unparam // pass it for possible future ext-s
 	GinkgoHelper()
-	before := core.SidxStats()
+	before := core.SidxStatsTestOnly()
 	if siRead(archlom, archpath) {
 		return
 	}
-	if core.SidxStats().Deny > before.Deny {
+	if core.SidxStatsTestOnly().Deny > before.Deny {
 		Skip("cache admission denied under high memory load")
 	}
 	Fail("expected the shard index to be loaded")
@@ -1295,13 +1295,13 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 		})
 
 		It("serves hits from memory", func() {
-			before := core.SidxStats()
+			before := core.SidxStatsTestOnly()
 			siPrimeCache(archlom, archpath)
 			siRmIdx(archlom)
 			Expect(siRead(archlom, archpath)).To(BeTrue(), "expected a cache hit")
 			Expect(archlom.HasShardIdx()).To(BeTrue())
 
-			after := core.SidxStats()
+			after := core.SidxStatsTestOnly()
 			Expect(after.Miss - before.Miss).To(BeEquivalentTo(1))
 			Expect(after.Load - before.Load).To(BeEquivalentTo(1))
 			Expect(after.Fail - before.Fail).To(BeZero())
@@ -1309,7 +1309,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 
 		It("handles concurrent cold reads", func() {
 			const n = 16
-			before := core.SidxStats()
+			before := core.SidxStatsTestOnly()
 			var wg sync.WaitGroup
 			fast := make([]bool, n)
 			for i := range n {
@@ -1319,7 +1319,7 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 				})
 			}
 			wg.Wait()
-			after := core.SidxStats()
+			after := core.SidxStatsTestOnly()
 			if after.Deny > before.Deny {
 				Skip("cache admission denied under high memory load")
 			}
@@ -1332,10 +1332,10 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 		})
 
 		It("is not populated by SaveShardIndex", func() {
-			before := core.SidxStats()
+			before := core.SidxStatsTestOnly()
 			siRmIdx(archlom)
 			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
-			after := core.SidxStats()
+			after := core.SidxStatsTestOnly()
 			if after.Deny > before.Deny {
 				Skip("cache admission denied under high memory load")
 			}
@@ -1354,31 +1354,31 @@ var _ = Describe("SaveShardIndex / LoadShardIndex", func() {
 		It("evicts idle entries", func() {
 			siPrimeCache(archlom, archpath)
 			siRmIdx(archlom)
-			before := core.SidxStats()
-			core.SidxEvictIdle(0)
-			Expect(core.SidxStats().Evict).To(BeNumerically(">", before.Evict))
+			before := core.SidxStatsTestOnly()
+			core.SidxEvictIdleTestOnly(0)
+			Expect(core.SidxStatsTestOnly().Evict).To(BeNumerically(">", before.Evict))
 			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
 		})
 
 		It("keeps entries not yet idle", func() {
 			siPrimeCache(archlom, archpath)
 			siRmIdx(archlom)
-			core.SidxEvictIdle(time.Hour)
+			core.SidxEvictIdleTestOnly(time.Hour)
 			Expect(siRead(archlom, archpath)).To(BeTrue(), "expected a cache hit")
 		})
 
 		It("clears all under critical pressure", func() {
 			siPrimeCache(archlom, archpath)
 			siRmIdx(archlom)
-			before := core.SidxStats()
-			core.SidxClearAll()
-			Expect(core.SidxStats().Clear - before.Clear).To(BeEquivalentTo(1))
+			before := core.SidxStatsTestOnly()
+			core.SidxClearAllTestOnly()
+			Expect(core.SidxStatsTestOnly().Clear - before.Clear).To(BeEquivalentTo(1))
 			Expect(siRead(archlom, archpath)).To(BeFalse(), "expected scan fallback")
 		})
 
 		It("counts loaded bytes toward the next memory sample", func() {
 			siPrimeCache(archlom, archpath)
-			Expect(core.SidxNbytes()).To(BeNumerically(">", 0))
+			Expect(core.SidxNbytesTestOnly()).To(BeNumerically(">", 0))
 		})
 
 		It("detects stale cached index", func() {
