@@ -6,7 +6,9 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,6 +28,45 @@ const (
 	QuiTimeout                       // timeout
 	Quiescent                        // idle => quiescent
 )
+
+// xaction run state (see xact.Base.RunState, xact.DemandBase.RunState)
+type RunState uint8
+
+const (
+	RunStateRunning  = RunState(iota + 1) // including stopping and finishing (e.g., quiescing)
+	RunStateIdle                          // demand-driven, between requests
+	RunStateFinished                      // EndTime is set
+	RunStateAborted
+)
+
+func (rs RunState) String() string {
+	switch rs {
+	case RunStateRunning:
+		return "running"
+	case RunStateIdle:
+		return "idle"
+	case RunStateFinished:
+		return "finished"
+	case RunStateAborted:
+		return "aborted"
+	default:
+		return "invalid-run-state-" + strconv.Itoa(int(rs))
+	}
+}
+
+// wire: one byte (e.g., T2T status reply)
+func (rs RunState) Bytes() []byte { return []byte{byte(rs)} }
+
+func ParseRunState(b []byte) (RunState, error) {
+	if len(b) != 1 {
+		return 0, fmt.Errorf("invalid run state: expecting one byte, got %d", len(b))
+	}
+	rs := RunState(b[0])
+	if rs < RunStateRunning || rs > RunStateAborted {
+		return 0, fmt.Errorf("invalid run state: %s", rs)
+	}
+	return rs, nil
+}
 
 type (
 	QuiCB func(elapsed time.Duration) QuiRes // see enum below
@@ -51,6 +92,7 @@ type (
 		IsDone() bool
 		IsRunning() bool
 		IsIdle() bool
+		RunState() RunState
 		Quiesce(time.Duration, QuiCB) QuiRes
 
 		// abrt

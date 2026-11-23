@@ -608,12 +608,7 @@ func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 		defer wi.unpin()
 		wi.startup.refc.Inc()
 	case xact.OpcodeAbortXact:
-		var err error
-		if len(body) > 0 {
-			errCause := string(body)
-			err = r.NewErrRecvAbortXact(sid, errCause)
-		}
-		r.Abort(err)
+		xact.RecvAbortXact(r, sid, string(body))
 	case xact.OpcodeAbortWI:
 		debug.Assert(wid != xact.NoneWID)
 		var errCause string
@@ -624,6 +619,7 @@ func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 		r.abortedWIDs.Store(wid, err)
 		r.lastAbrtWID.Store(mono.NanoTime())
 	default:
+		debug.Assert(false, "unexpected opcode: ", opcode)
 		return fmt.Errorf("%s: unknown ctrl opcode %q", r.Name(), opcode)
 	}
 	return nil
@@ -750,7 +746,7 @@ func (r *XactMoss) asm(req *apc.MossReq, w http.ResponseWriter, basewi *basewi) 
 // (phase 3)
 func (r *XactMoss) Send(req *apc.MossReq, smap *meta.Smap, dt *meta.Snode /*DT*/, wid string) error {
 	// announce oneself
-	if err := r.SendCtrl(dt, wid, xact.OpcodeStartedWI, nil /*body*/); err != nil {
+	if _, err := r.SendCtrl(dt, wid, xact.OpcodeStartedWI, nil /*body*/); err != nil {
 		return err
 	}
 

@@ -693,7 +693,8 @@ func (p *lrpages) recv(hdr *transport.ObjHdr, reader io.Reader, err error) error
 		return err
 	}
 
-	if hdr.SID == p.dt && hdr.Opcode == transport.OpcStarted && hdr.IsHeaderOnly() {
+	if hdr.SID == p.dt && hdr.Opcode == transport.OpcStarted {
+		debug.Assert(hdr.IsHeaderOnly())
 		p.startCh.Close()
 		return nil
 	}

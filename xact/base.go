@@ -129,6 +129,19 @@ func (xctn *Base) IsRunning() (yes bool) {
 // * this MAY change in the future
 func (xctn *Base) IsIdle() bool { return !xctn.IsRunning() }
 
+// return current run state in order of precedence: aborted, finished, running
+// (see DemandBase.RunState for idle)
+func (xctn *Base) RunState() core.RunState {
+	switch {
+	case xctn.IsAborted():
+		return core.RunStateAborted
+	case !xctn.EndTime().IsZero(): // not IsDone: tco and archive call Stop before Quiesce
+		return core.RunStateFinished
+	default:
+		return core.RunStateRunning
+	}
+}
+
 func (*Base) FromTo() (*meta.Bck, *meta.Bck) { return nil, nil }
 
 //

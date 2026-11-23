@@ -297,7 +297,8 @@ func (t *target) GetFromNeighbor(params *core.GfnParams) (*http.Response, error)
 // send a signed intra-control POST to a peer; body is optional
 // (e.g., T2T control - see xact/t2tctrl.go)
 // compare with the method below that does only signing
-func (t *target) IntraCtrlPost(dst *meta.Snode, path string, body []byte) error {
+// return response body (e.g., T2T status)
+func (t *target) IntraCtrlPost(dst *meta.Snode, path string, body []byte) ([]byte, error) {
 	cargs := allocCargs()
 	{
 		cargs.si = dst
@@ -315,11 +316,11 @@ func (t *target) IntraCtrlPost(dst *meta.Snode, path string, body []byte) error 
 	}
 
 	res := t.call(cargs, t.owner.smap.get())
-	err := res.err
+	b, err := res.bytes, res.err
 
 	freeCR(res)
 	freeCargs(cargs)
-	return err
+	return b, err
 }
 
 // Stamp an already-constructed request to a known intra-cluster peer with

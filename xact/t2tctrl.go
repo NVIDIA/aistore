@@ -57,6 +57,19 @@ func RecvAbortXact(xctn core.Xact, tid, errCause string) {
 
 func IsErrRecvAbortXact(err error) bool { return errors.Is(err, errRecvAbortXact) }
 
+// query peer's run state (OpcodeStatus)
+func (xctn *Base) QueryRunState(tsi *meta.Snode) (core.RunState, error) {
+	b, err := xctn.SendCtrl(tsi, "", OpcodeStatus, nil)
+	if err != nil {
+		return 0, err
+	}
+	rs, err := core.ParseRunState(b)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %s: %w", xctn.Name(), tsi.StringEx(), err)
+	}
+	return rs, nil
+}
+
 // return true if other targets get the same abort without T2T (peer, proxy xact-stop, or cluster-wide event)
 // TODO: a shared cause found locally (e.g., missing source bucket) is not marked
 func (xctn *Base) SkipAbortBcast(err error) bool {
@@ -78,7 +91,8 @@ func (xctn *Base) NewErrRecvAbortWI(tid, wid, errCause string) error {
 
 func IsErrRecvAbortWI(err error) bool { return errors.Is(err, errRecvAbortWI) }
 
-func (xctn *Base) SendCtrl(tsi *meta.Snode, wid, opcode string, body []byte) error {
+// return response body, if any
+func (xctn *Base) SendCtrl(tsi *meta.Snode, wid, opcode string, body []byte) ([]byte, error) {
 	path := apc.URLPathXactions.Join(T2TCtrl, xctn.Kind(), xctn.ID(), cos.Left(wid, NoneWID), opcode)
 	return core.T.IntraCtrlPost(tsi, path, body)
 }
@@ -110,7 +124,7 @@ func (xctn *Base) BcastCtrl(smap *meta.Smap, wid, opcode string, err error) {
 		wg.Add(1)
 		go func(si *meta.Snode) {
 			defer wg.Done()
-			if err := xctn.SendCtrl(si, wid, opcode, cause); err != nil {
+			if _, err := xctn.SendCtrl(si, wid, opcode, cause); err != nil {
 				nlog.Warningln(xctn.Name(), opcode, si.StringEx(), err)
 			}
 		}(tsi)

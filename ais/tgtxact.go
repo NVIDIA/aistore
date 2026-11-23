@@ -397,7 +397,7 @@ func (t *target) continueTCO(w http.ResponseWriter, r *http.Request) {
 }
 
 // client: target running the same xaction ID
-// TODO: transition transport.Opc* enum to this out-of-band path
+// TODO: transition transport.OpcDone to this out-of-band path
 func (t *target) xactCtrl(w http.ResponseWriter, r *http.Request, kind, xid, wid, opcode string) {
 	xctn, err := xreg.GetXact(xid)
 	if err != nil || xctn == nil {
@@ -418,16 +418,18 @@ func (t *target) xactCtrl(w http.ResponseWriter, r *http.Request, kind, xid, wid
 	}
 	sid := r.Header.Get(apc.HdrSenderID)
 	switch {
+	case opcode == xact.OpcodeStatus: // all kinds (x-moss included)
+		w.Header().Set(cos.HdrContentType, cos.ContentBinary)
+		if _, err := w.Write(xctn.RunState().Bytes()); err != nil {
+			nlog.Warningln(t.String(), xctn.Name(), opcode, err)
+		}
+		return
 	case kind == apc.ActGetBatch:
 		xmoss, ok := xctn.(*xs.XactMoss)
 		debug.Assert(ok)
 		err = xmoss.RecvCtrl(wid, sid, opcode, body)
 	case opcode == xact.OpcodeAbortXact:
 		xact.RecvAbortXact(xctn, sid, string(body))
-	case opcode == xact.OpcodeStatus:
-		if xctn.IsAborted() || !xctn.EndTime().IsZero() {
-			err = fmt.Errorf("%s: not running", xctn.Name())
-		}
 	default:
 		err = fmt.Errorf("%s: unsupported T2T control [%q, %q]", xctn.Name(), wid, opcode)
 	}

@@ -59,7 +59,18 @@ func (r *DemandBase) IsIdle() bool {
 	return last != 0 && mono.Since(last) >= max(cmn.Rom.MaxKeepalive()+time.Second, 4*time.Second)
 }
 
+// NOTE: override `Base.RunState`
+func (r *DemandBase) RunState() core.RunState {
+	rs := r.Base.RunState()
+	if rs == core.RunStateRunning && r.IsIdle() {
+		rs = core.RunStateIdle
+	}
+	return rs
+}
+
 func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duration, hkcb ...hk.HKCB) {
+	// cross-check DemandBase vs xact.Table (and see xreg renew for the opposite direction)
+	debug.Assert(IdlesBeforeFinishing(kind), kind, " embeds DemandBase but is not marked Idles (see xact.Table)")
 	r.hkName = kind + "/" + uuid
 	if idleDur > 0 {
 		debug.Assert(idleDur >= IdleDefault || kind == apc.ActList, "Warning: ", idleDur, " is mostly expected >= ", IdleDefault, "(default)")

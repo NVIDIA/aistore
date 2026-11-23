@@ -98,4 +98,4 @@ func (*TargetMock) ECRestoreReq(*core.CT, *meta.Snode, string) error {
 	return nil
 }
 
-func (*TargetMock) IntraCtrlPost(*meta.Snode, string, []byte) error { return nil }
+func (*TargetMock) IntraCtrlPost(*meta.Snode, string, []byte) ([]byte, error) { return nil, nil }

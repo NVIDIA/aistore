@@ -35,15 +35,15 @@ const (
 // ObjHdr.Opcode enums: 3 groups
 //
 
-// group 1: application-level opcodes (sentinels)
+// TODO -- FIXME: remove - replace with out-of-band T2T control (xact/t2tctrl.go)
 const (
 	OpcDone = iota + 27182
-	OpcStarted
 )
 
-// group 2: transport/bundle (data mover's) opcodes
+// group 2: in-band opcodes - must remain ordered with the data on the same stream
 const (
-	OpcReconnect = iota + 46351
+	OpcReconnect = iota + 46351 // transport/bundle: shared data mover
+	OpcStarted                  // xact/xs/lrit: designated target started (precedes the first page)
 )
 
 // group 3: transport's internal range of 16 `Obj.Hdr.Opcode` values
@@ -54,7 +54,8 @@ const (
 
 func ReservedOpcode(opc int) bool { return opc >= opcFin }
 
-// control-plane opcodes start at`OpcDone`
+// control-plane opcodes start at `OpcDone` (group 1)
+// TODO: start at `OpcReconnect` (group 2) once group 1 is removed
 func (hdr *ObjHdr) IsControl() bool { return hdr.Opcode >= OpcDone }
 
 // object-header decode failures (sentinels: use errors.Is)

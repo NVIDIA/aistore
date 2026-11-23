@@ -155,6 +155,6 @@ type (
 		// Send a stamped/signed intra-control POST to the destination node.
 		// The default way for subsystems below `ais` to issue one-shot control-plane
 		// requests; see related: SetIntraHdrs (EC shared streams).
-		IntraCtrlPost(dst *meta.Snode, path string, body []byte) error
+		IntraCtrlPost(dst *meta.Snode, path string, body []byte) ([]byte, error)
 	}
 )

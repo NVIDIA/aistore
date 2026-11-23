@@ -20,8 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
-
-	"golang.org/x/sync/errgroup"
 )
 
 const apairDeleted int64 = -1
@@ -148,14 +146,22 @@ func (s *sentinel) _qcb(tot, ival, progressTimeout time.Duration, ecnt int) core
 // poll the targets that did not send 'done' (T2T status)
 func (s *sentinel) poll(progressTimeout time.Duration) error {
 	var (
-		g    errgroup.Group
+		errs = cos.NewErrs()
 		ecnt atomic.Int64
+		wg   = cos.NewClusterWaitGroup(sys.NumCPU(), len(s.pend.p))
 	)
-	g.SetLimit(max(128, sys.NumCPU()))
 	for _, tid := range s.pend.p {
-		g.Go(func() error { return s.status(tid, progressTimeout, &ecnt) })
+		wg.Add(1)
+		go func() {
+			if err := s.status(tid, progressTimeout, &ecnt); err != nil {
+				errs.Add(err)
+			}
+			wg.Done()
+		}()
 	}
-	return g.Wait()
+	wg.Wait()
+	_, err := errs.JoinErr()
+	return err
 }
 
 func (s *sentinel) status(tid string, progressTimeout time.Duration, ecnt *atomic.Int64) error {
@@ -163,7 +169,8 @@ func (s *sentinel) status(tid string, progressTimeout time.Duration, ecnt *atomi
 		tsi   = s.smap.GetTarget(tid)
 		apair = s.pend.m[tid]
 	)
-	if err := s.base.SendCtrl(tsi, "", xact.OpcodeStatus, nil); err != nil {
+	rs, err := s.base.QueryRunState(tsi)
+	if err != nil {
 		cmn.SparseWarn(cos.ModXs, ecnt.Inc(), s.r.Name(), xact.OpcodeStatus, tsi.StringEx(), err)
 		last := apair.last.Load()
 		if last == apairDeleted {
@@ -175,10 +182,17 @@ func (s *sentinel) status(tid string, progressTimeout time.Duration, ecnt *atomi
 		}
 		return nil
 	}
-	apair.alive()
 
 	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(s.r.Name(), "recv 'status' from:", meta.Tname(tid), "pending:", s.pend.n.Load())
+		nlog.Infoln(s.r.Name(), "recv 'status' from:", meta.Tname(tid), rs, "pending:", s.pend.n.Load())
+	}
+	switch rs {
+	case core.RunStateFinished:
+		s.done(tid, "finished") // its 'done' is late or lost
+	case core.RunStateAborted:
+		xact.RecvAbortXact(s.r, tid, "aborted (status)") // (Quiesce returns QuiAborted)
+	default: // running or idle
+		apair.alive()
 	}
 	return nil
 }
@@ -208,20 +222,24 @@ func (s *sentinel) pending() {
 //
 
 func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
-	if s.r.IsAborted() || !s.r.EndTime().IsZero() { // not IsDone (tco and archive call Stop before Quiesce)
+	if rs := s.r.RunState(); rs == core.RunStateFinished || rs == core.RunStateAborted {
 		return
 	}
-	apair := s.pend.m[hdr.SID]
+	s.done(hdr.SID, "recv 'done'")
+}
+
+// mark peer done (idempotent)
+func (s *sentinel) done(tid, tag string) {
+	apair := s.pend.m[tid]
 	if apair == nil { // unlikely
-		debug.Assert(false, "missing apair ", hdr.SID)
+		debug.Assert(false, "missing apair ", tid)
 		return
 	}
 	if prev := apair.last.Swap(apairDeleted); prev != apairDeleted {
 		s.pend.n.Dec()
 	}
-
 	if cmn.Rom.V(4, cos.ModXs) {
-		nlog.InfoDepth(1, s.r.Name(), "recv 'done' from:", meta.Tname(hdr.SID), s.pend.n.Load())
+		nlog.InfoDepth(2, s.r.Name(), tag, "from:", meta.Tname(tid), s.pend.n.Load())
 	}
 }
 

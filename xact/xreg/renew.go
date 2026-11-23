@@ -162,6 +162,13 @@ func (r *registry) _renewLocked(entry Renewable, flt *Flt) (rns RenewRes, aborte
 	if err = entry.Start(); err != nil {
 		return RenewRes{Err: err}, false
 	}
+	// cross-check xact.Table vs DemandBase (and see DemandBase.Init for the opposite direction)
+	debug.Func(func() {
+		if xctn := entry.Get(); xctn != nil && xact.IdlesBeforeFinishing(xctn.Kind()) {
+			_, ok := xctn.(xact.Demand)
+			debug.Assert(ok, xctn.Kind(), " is marked Idles (see xact.Table) but does not embed DemandBase")
+		}
+	})
 
 	// add to registry
 	e := &r.entries
