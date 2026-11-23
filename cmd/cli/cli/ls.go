@@ -287,6 +287,9 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 		if flagIsSet(c, listNotCachedFlag) {
 			return fmt.Errorf(errFmtExclusive, qflprn(diffFlag), qflprn(listNotCachedFlag))
 		}
+		if flagIsSet(c, nonRecursFlag) {
+			return fmt.Errorf(errFmtExclusive, qflprn(diffFlag), qflprn(nonRecursFlag))
+		}
 		msg.SetFlag(apc.LsDiff)
 	}
 

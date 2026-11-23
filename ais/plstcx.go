@@ -180,6 +180,10 @@ func validateLsoDiff(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
 	if lsmsg.IsFlagSet(apc.LsCached) {
 		return errors.New(a + " when apc.LsCached (CLI '--cached') is set")
 	}
+	// the local (lpi) walk is always recursive: nested in-cluster objects would be reported as remotely deleted
+	if lsmsg.IsFlagSet(apc.LsNoRecursion) {
+		return errors.New(a + " when apc.LsNoRecursion (CLI '--non-recursive') is set")
+	}
 	return nil
 }
 

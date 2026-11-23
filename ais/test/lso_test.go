@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"path"
+	"reflect"
 	"slices"
 	"sort"
 	"strconv"
@@ -2749,12 +2750,18 @@ func TestLsoDiffDirSiblings(t *testing.T) {
 		baseParams = tools.BaseAPIParams(proxyURL)
 		remoteBP   = tools.BaseAPIParams(tools.RemoteCluster.URL)
 		remoteBck  = cmn.Bck{Name: trand.String(10), Provider: apc.AIS}
-		bck        = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.Alias}}
-		removed    = []string{"p/d-1", "p/d.json", "p/e"} // sorted
-		objs       = slices.Clone(removed)
+		bck        = cmn.Bck{Name: remoteBck.Name, Provider: apc.AIS, Ns: cmn.Ns{UUID: tools.RemoteCluster.UUID}}
+		smap       = tools.GetClusterMap(t, proxyURL)
+		middle     = "p/d/000."
 	)
 	tools.CreateBucket(t, proxyURL, bck, nil, true /*cleanup*/)
 
+	// page size one: the owner of the deletion has no remote entry on page two
+	if smap.CountActiveTs() > 1 {
+		middle = tools.GenerateObjectNameForTarget("p/d/001", middle, bck, smap, false)
+	}
+	removed := []string{"p/d-1", "p/d.json", middle, "p/e"}
+	objs := slices.Clone(removed)
 	for i := range 10 {
 		objs = append(objs, fmt.Sprintf("p/d/%03d", i))
 	}
@@ -2767,17 +2774,25 @@ func TestLsoDiffDirSiblings(t *testing.T) {
 		tassert.CheckFatal(t, api.DeleteObject(remoteBP, remoteBck, nm))
 	}
 
+	slices.Sort(objs)
 	for _, pageSize := range []int64{1, 3} {
 		var (
-			got []string
-			msg = &apc.LsoMsg{Prefix: "p/", PageSize: pageSize}
+			names, got []string
+			msg        = &apc.LsoMsg{Prefix: "p/", PageSize: pageSize}
 		)
 		msg.AddProps(apc.GetPropsName, apc.GetPropsSize, apc.GetPropsCustom)
 		msg.SetFlag(apc.LsDiff)
 		for {
+			req := msg.Clone()
 			lst, err := api.ListObjectsPage(baseParams, bck, msg, api.ListArgs{})
 			tassert.CheckFatal(t, err)
+			if req.ContinuationToken != "" {
+				replay, err := api.ListObjectsPage(baseParams, bck, req, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, reflect.DeepEqual(replay, lst), "page-size %d: replay differs after %d entries", pageSize, len(names))
+			}
 			for _, en := range lst.Entries {
+				names = append(names, en.Name)
 				if en.IsAnyFlagSet(apc.EntryVerRemoved) {
 					got = append(got, en.Name)
 				}
@@ -2785,9 +2800,8 @@ func TestLsoDiffDirSiblings(t *testing.T) {
 			if lst.ContinuationToken == "" {
 				break
 			}
-			msg.ContinuationToken = lst.ContinuationToken
 		}
-		sort.Strings(got)
+		tassert.Fatalf(t, slices.Equal(names, objs), "page-size %d: listed %q, expected %q", pageSize, names, objs)
 		tassert.Fatalf(t, slices.Equal(got, removed),
 			"page-size %d: version-removed %v, expected %v", pageSize, got, removed)
 	}

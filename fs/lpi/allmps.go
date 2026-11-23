@@ -69,39 +69,26 @@ func (lpis *Lpis) Init(bck *cmn.Bck, prefix string, smap *meta.Smap) {
 	}
 }
 
-// check out-of-order
-func (lpis *Lpis) ooo(lastPage cmn.LsoEntries, prevLast, tag string) bool {
+// first and last are the remote page bounds before filtering by target
+func (lpis *Lpis) Do(page *cmn.LsoRes, first, last, tag string) {
 	var (
-		first = lastPage[0].Name
-		num   = len(lastPage) // num entries
-	)
-	if prevLast != "" && first <= prevLast {
-		lpis.disabled = true
-		nlog.Warningln(tag, "auto-disabling: remote page not monotonic: prev-last=", prevLast, "first-current=", first)
-		return true
-	}
-	lpis.prevRemoteLast = lastPage[num-1].Name
-	return false
-}
-
-func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string, last bool) {
-	var (
-		lastName string
-		num      = len(lastPage) // num entries
+		prevLast = lpis.prevRemoteLast
 		wg       = &sync.WaitGroup{}
 	)
 	debug.AssertFunc(func() bool { return lpis.Enabled() })
-	if num == 0 && !last {
-		return // no names of this target in the remote page
+	if first != "" {
+		if prevLast != "" && first <= prevLast {
+			lpis.disabled = true
+			nlog.Warningln(tag, "auto-disabling: remote page not monotonic: prev-last=", prevLast, "first-current=", first)
+			return
+		}
+		lpis.prevRemoteLast = last
+	} else if page.ContinuationToken != "" {
+		return // empty remote page, no upper bound
 	}
 
-	prevLast := lpis.prevRemoteLast
-	if num > 0 && lpis.ooo(lastPage, prevLast, tag) {
-		return
-	}
-
-	if !last {
-		lastName = lastPage[num-1].Name
+	if page.ContinuationToken == "" {
+		last = AllPages // drain remaining local names
 	}
 	// 1. all mountpaths: next page
 	for _, milpi := range lpis.a {
@@ -109,13 +96,13 @@ func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string, l
 		go func(bck *cmn.Bck, lastName, tag string) {
 			milpi.run(bck, lastName, tag)
 			wg.Done()
-		}(lpis.bck, lastName, tag)
+		}(lpis.bck, last, tag)
 	}
 	wg.Wait()
 
 	// 2. last page as a (mem-pooled) map
 	lastPageMap := allocPage()
-	for _, en := range lastPage {
+	for _, en := range page.Entries {
 		lastPageMap[en.Name] = 0
 	}
 
@@ -131,7 +118,7 @@ func (lpis *Lpis) Do(lastPage cmn.LsoEntries, outPage *cmn.LsoRes, tag string, l
 			}
 			en := &cmn.LsoEnt{Name: lname, Size: size}
 			en.SetFlag(apc.EntryVerRemoved | apc.EntryIsCached)
-			outPage.Entries = append(outPage.Entries, en)
+			page.Entries = append(page.Entries, en)
 		}
 	}
 	freePage(lastPageMap)

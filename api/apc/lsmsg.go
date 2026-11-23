@@ -83,6 +83,7 @@ const (
 	//   and if it does,
 	// - checking whether it differs from its in-cluster copy.
 	// see related `cmn.LsoEnt` flags: `EntryVerChanged` and `EntryVerRemoved`, respectively.
+	// cannot be combined with `LsNoRecursion`, `LsCached`, `LsNotCached`, or `StartAfter`.
 	LsDiff
 
 	// do not return virtual subdirectories - do not include them as `cmn.LsoEnt` entries

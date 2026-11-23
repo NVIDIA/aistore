@@ -85,7 +85,6 @@ type (
 			wor          bool             // wantOnlyRemote
 			dontPopulate bool             // when listing remote obj-s: don't include local MD (in re: LsDonAddRemote)
 			this         bool             // r.msg.SID == core.T.SID(): true when this target does remote paging
-			last         bool             // last remote page
 			remote       bool             // list remote
 			ctlVerbose   bool             // this target prints static request details in CtlMsg
 		}
@@ -511,10 +510,6 @@ func (r *LsoXact) doPageR() *LsoRsp {
 			assertContProgress, r.nextToken, r.token)
 	}
 	page := &cmn.LsoRes{UUID: r.msg.UUID, Entries: r.page, ContinuationToken: r.nextToken}
-
-	if r.msg.IsFlagSet(apc.LsDiff) && r.lpis.Enabled() {
-		r.lpis.Do(r.page, page, r.Name(), r.walk.last)
-	}
 	return &LsoRsp{Lst: page, Status: http.StatusOK}
 }
 
@@ -610,8 +605,7 @@ func (r *LsoXact) nextPageR() (err error) {
 		case rsp := <-r.remtCh:
 			debug.Assert(rsp != nil && rsp.Err == nil)
 			page = rsp.Lst
-			err = npg.filterAddLmeta(page)
-			r.walk.last = page.ContinuationToken == ""
+			err = r.populatePageR(npg, page)
 		case <-r.ChanAbort():
 			err = r.AbortErr()
 		case <-time.After(timeout.D()): // proxy gives up
@@ -632,7 +626,7 @@ ex:
 		r.walk.done = true
 		r.resetIdle()
 	}
-	r.page = page.Entries
+	r.page = page.Entries // cache the complete response, including remotely deleted names
 	r.nextToken = page.ContinuationToken
 
 	return err
@@ -651,7 +645,6 @@ func (r *LsoXact) thisPageR(npg *npgCtx) (page *cmn.LsoRes, err error) {
 	if err != nil {
 		goto rerr
 	}
-	r.walk.last = page.ContinuationToken == ""
 
 	if r.walk.wor {
 		return page, nil
@@ -666,7 +659,7 @@ func (r *LsoXact) thisPageR(npg *npgCtx) (page *cmn.LsoRes, err error) {
 	}
 	// populate
 	if !r.walk.dontPopulate {
-		if err = npg.filterAddLmeta(page); err != nil {
+		if err = r.populatePageR(npg, page); err != nil {
 			goto rerr
 		}
 	}
@@ -679,6 +672,23 @@ rerr:
 	}
 	r.Abort(err)
 	return page, err
+}
+
+func (r *LsoXact) populatePageR(npg *npgCtx, page *cmn.LsoRes) error {
+	if !r.msg.IsFlagSet(apc.LsDiff) || !r.lpis.Enabled() {
+		return npg.filterAddLmeta(page)
+	}
+
+	// take the remote bounds before filterAddLmeta compacts the page in place
+	var first, last string
+	if n := len(page.Entries); n > 0 {
+		first, last = page.Entries[0].Name, page.Entries[n-1].Name
+	}
+	if err := npg.filterAddLmeta(page); err != nil {
+		return err
+	}
+	r.lpis.Do(page, first, last, r.Name())
+	return nil
 }
 
 func (r *LsoXact) bcast(page *cmn.LsoRes) (err error) {
