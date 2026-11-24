@@ -827,8 +827,7 @@ func (r *XactMoss) _sendreg(tsi *meta.Snode, lom *core.LOM, wid, nameInArch stri
 	}
 
 	if err != nil {
-		mopaque.missing = true
-		mopaque.emsg = err.Error()
+		mopaque.setErr(err)
 		nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
 		oah = &cmn.ObjAttrs{}
 	} else {
@@ -876,7 +875,7 @@ func (r *XactMoss) anySent(hdr *transport.ObjHdr, _ io.ReadCloser, arg any, err 
 	ctx.lom.Unlock(false)
 	r.smm.Free(ctx.opaque)
 
-	// count send: gated by ctx.ok (see mossOpaque.missing)
+	// failed entries must not contribute to transfer counters
 	if err == nil && ctx.ok {
 		debug.AssertFunc(func() bool { return hdr.ObjAttrs.Size >= 0 }, hdr.ObjName, " size: ", hdr.ObjAttrs.Size)
 		// generic (xaction-level) counters do not contain file and range stats -
@@ -900,16 +899,14 @@ func (r *XactMoss) _sendarch(tsi *meta.Snode, lom *core.LOM, wid, nameInArch str
 
 	lh, err := lom.NewHandle(false /*loaded*/)
 	if err != nil {
-		mopaque.missing = true
-		mopaque.emsg = err.Error()
+		mopaque.setErr(err)
 		nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
 	} else {
 		// Note: This will use the shard index fast path if available.
 		csl, err := lom.NewArchpathReader(lh, in.ArchPath, "" /*mime*/)
 		if err != nil {
 			nameInArch = apc.MossMissingDir + cos.PathSeparator + nameInArch
-			mopaque.missing = true
-			mopaque.emsg = err.Error()
+			mopaque.setErr(err)
 			cos.Close(lh)
 			lh = nil
 		} else {
@@ -1045,8 +1042,6 @@ func (r *XactMoss) _recvObj(hdr *transport.ObjHdr, reader io.Reader) error {
 		return err
 	}
 
-	// count receive: gated by `added` (dropped duplicates and out-of-bounds
-	// do not count) and by mopaque.ok() (see mossOpaque.missing)
 	if added && mopaque.ok() {
 		debug.AssertFunc(func() bool { return hdr.ObjAttrs.Size >= 0 }, hdr.ObjName, " size: ", hdr.ObjAttrs.Size)
 		r.InObjsAdd(1, hdr.ObjAttrs.Size)
@@ -2056,9 +2051,12 @@ func (wi *basewi) flushRx() error {
 			debug.Assert(entry.mopaque == nil)
 			return nil
 		}
-		if entry.mopaque.missing {
+		if !entry.mopaque.ok() {
 			if !wi.req.ContinueOnErr {
-				return cos.NewErrNotFound(nil, entry.mopaque.emsg)
+				if entry.mopaque.status == mossNotFound {
+					return cos.NewErrNotFound(nil, entry.mopaque.emsg)
+				}
+				return errors.New(entry.mopaque.emsg)
 			}
 			wi.soft++
 			if limit := wi.config.GetBatch.MaxSoftErrs; wi.soft > limit {
@@ -2069,7 +2067,7 @@ func (wi *basewi) flushRx() error {
 		wi.recv.mtx.Unlock() //--------------
 
 		switch {
-		case entry.mopaque.missing:
+		case !entry.mopaque.ok():
 			debug.AssertFunc(func() bool { return strings.HasPrefix(entry.nameInArch, apc.MossMissingDir+"/") }, entry.nameInArch)
 			err = wi.aw.Write(entry.nameInArch, cos.SimpleOAH{Size: 0}, nopROC{})
 		case entry.sgl == nil:
@@ -2225,25 +2223,34 @@ func (nopROC) Close() error                      { return nil }
 // mossOpaque (not to confuse with apc.MossIn/Out Opaque)
 /////////////////
 
+const (
+	mossOK uint8 = iota
+	mossNotFound
+	mossFailed
+)
+
 type mossOpaque struct {
 	wid   string
 	oname string
 	emsg  string
 	index int32
 
-	// missing marks a header-only entry that could not be retrieved (404, etc.).
-	//
-	// Determines whether this entry contributes to retrieved object and byte counters (OutObjs/InObjs):
-	//   - content, size > 0    - payload transmitted; counted
-	//   - content, size == 0   - header-only on the wire (zero-size object or archived file); NOT missing; counted
-	//   - missing              - header-only on the wire, `__404__/` prefixed,
-	//                            mossOpaque.emsg set, soft error; NOT counted
-	missing bool
+	// retrieval outcome, independent of payload size
+	status uint8
 }
 
 func (o *mossOpaque) ok() bool {
 	debug.AssertFunc(func() bool { return o != nil })
-	return o != nil && !o.missing
+	return o != nil && o.status == mossOK
+}
+
+func (o *mossOpaque) setErr(err error) {
+	debug.Assert(err != nil)
+	o.status = mossFailed
+	if cmn.IsErrObjNought(err) {
+		o.status = mossNotFound
+	}
+	o.emsg = err.Error()
 }
 
 // interface guard
@@ -2257,7 +2264,7 @@ func (o *mossOpaque) Pack(packer *cos.BytePack) {
 	packer.WriteString(o.oname)
 	packer.WriteString(o.emsg)
 	packer.WriteInt32(o.index)
-	packer.WriteBool(o.missing)
+	packer.WriteUint8(o.status)
 }
 
 func (o *mossOpaque) PackedSize() int {
@@ -2277,7 +2284,7 @@ func (o *mossOpaque) Unpack(unpacker *cos.ByteUnpack) (err error) {
 	if o.index, err = unpacker.ReadInt32(); err != nil {
 		return err
 	}
-	o.missing, err = unpacker.ReadBool()
+	o.status, err = unpacker.ReadByte()
 	return err
 }
 

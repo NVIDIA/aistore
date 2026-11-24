@@ -7,6 +7,7 @@ package integration_test
 import (
 	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -1656,7 +1657,7 @@ func TestMossMissingNoContinueOnErr(t *testing.T) {
 	owner, err := smap.HrwObjName2T(meta.CloneBck(&bck), present)
 	tassert.CheckFatal(t, err)
 	for j := 0; ; j++ {
-		missing = fmt.Sprintf("missing-%d", j)
+		missing = fmt.Sprintf("missing-%d.tgz", j)
 		peer, err := smap.HrwObjName2T(meta.CloneBck(&bck), missing)
 		tassert.CheckFatal(t, err)
 		if peer.ID() != owner.ID() {
@@ -1689,5 +1690,33 @@ func TestMossMissingNoContinueOnErr(t *testing.T) {
 		// failure must omit the missing entry, including its placeholder
 		hdr, err = tr.Next()
 		tassert.Errorf(t, err != nil, "expected stream to end before missing entry, got %v", hdr)
+	})
+	t.Run("archive", func(t *testing.T) {
+		req := &apc.MossReq{
+			In:         []apc.MossIn{{ObjName: present}, {ObjName: missing, ArchPath: "file.txt"}},
+			Colocation: apc.ColocOne,
+		}
+		_, err = api.GetBatch(bp, bck, req, io.Discard)
+		tassert.Errorf(t, cmn.IsErrHTTPNotFound(err), "expected missing peer archive to return 404, got %v", err)
+
+		var buf bytes.Buffer
+		aw := archive.NewWriter(archive.ExtTgz, &buf, nil, &archive.Opts{TarFormat: tar.FormatUnknown})
+		tassert.CheckFatal(t, aw.Write("other.txt", cos.SimpleOAH{Size: 0}, bytes.NewReader(nil)))
+		tassert.CheckFatal(t, aw.Fini())
+		_, err = api.PutObject(&api.PutArgs{
+			BaseParams: bp, Bck: bck, ObjName: missing, Reader: readers.NewBytes(buf.Bytes()), Size: uint64(buf.Len()),
+		})
+		tassert.CheckFatal(t, err)
+		_, err = api.GetBatch(bp, bck, req, io.Discard)
+		tassert.Errorf(t, cmn.IsErrHTTPNotFound(err), "expected missing peer archive member to return 404, got %v", err)
+
+		_, err = api.PutObject(&api.PutArgs{
+			BaseParams: bp, Bck: bck, ObjName: missing, Reader: _mossBody(cos.KiB, 1), Size: cos.KiB,
+		})
+		tassert.CheckFatal(t, err)
+		_, err = api.GetBatch(bp, bck, req, io.Discard)
+		tassert.Fatalf(t, err != nil, "expected corrupt peer archive to fail")
+		tassert.Errorf(t, !cmn.IsErrHTTPNotFound(err), "corrupt peer archive reported as missing: %v", err)
+		tassert.Errorf(t, strings.Contains(err.Error(), gzip.ErrHeader.Error()), "unexpected archive error: %v", err)
 	})
 }
