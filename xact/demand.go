@@ -68,16 +68,20 @@ func (r *DemandBase) RunState() core.RunState {
 	return rs
 }
 
+// not making use of the first-time 0 (zero) duration HK callback
+// (caller may use Reset() if need be)
 func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duration, hkcb ...hk.HKCB) {
 	// cross-check DemandBase vs xact.Table (and see xreg renew for the opposite direction)
 	debug.Assert(IdlesBeforeFinishing(kind), kind, " embeds DemandBase but is not marked Idles (see xact.Table)")
+
 	r.hkName = kind + "/" + uuid
 	if idleDur > 0 {
-		debug.Assert(idleDur >= IdleDefault || kind == apc.ActList, "Warning: ", idleDur, " is mostly expected >= ", IdleDefault, "(default)")
-		r.idle.d.Store(int64(idleDur))
+		debug.Assert(idleDur >= IdleDefault || kind == apc.ActList,
+			"Warning: ", idleDur, " is mostly expected >= ", IdleDefault, "(default)")
 	} else {
-		r.idle.d.Store(int64(IdleDefault))
+		idleDur = IdleDefault
 	}
+	r.idle.d.Store(int64(idleDur))
 	if len(hkcb) == 0 {
 		r.ticks = &cos.StopCh{}
 		r.ticks.Init()
@@ -90,7 +94,7 @@ func (r *DemandBase) Init(uuid, kind string, bck *meta.Bck, idleDur time.Duratio
 
 	r.idle.last.Store(mono.NanoTime())
 
-	hk.Reg(r.hkName+hk.NameSuffix, r.hkcb, 0 /*time.Duration*/)
+	hk.Reg(r.hkName+hk.NameSuffix, r.hkcb, idleDur)
 	r.unregged.Store(false)
 }
 
