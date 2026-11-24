@@ -2268,15 +2268,21 @@ func TestCopyBucketSimple(t *testing.T) {
 }
 
 func TestCopyBucketSlowPeer(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 3})
-	const numObjs = 5000
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2})
+	const (
+		progressTimeout = time.Minute
+		perObj          = 4 * time.Second
+	)
 	var (
-		bckFrom  = cmn.Bck{Name: "cp-slow-from" + cos.GenTie(), Provider: apc.AIS}
-		bckTo    = cmn.Bck{Name: "cp-slow-to" + cos.GenTie(), Provider: apc.AIS}
-		proxyURL = tools.RandomProxyURL(t)
-		bp       = tools.BaseAPIParams(proxyURL)
-		smap     = tools.GetClusterMap(t, proxyURL)
-		names    = cos.NewStrSet()
+		bckFrom   = cmn.Bck{Name: "cp-slow-from" + cos.GenTie(), Provider: apc.AIS}
+		bckTo     = cmn.Bck{Name: "cp-slow-to" + cos.GenTie(), Provider: apc.AIS}
+		proxyURL  = tools.RandomProxyURL(t)
+		bp        = tools.BaseAPIParams(proxyURL)
+		smap      = tools.GetClusterMap(t, proxyURL)
+		names     = cos.NewStrSet()
+		maxTokens = 2 * max(smap.CountActiveTs(), smap.CountActivePs())
+		perTarget = cos.DivRound(maxTokens, smap.CountActiveTs())
+		numObjs   = perTarget + 1 + int(progressTimeout/perObj) + 5
 	)
 	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 	p, err := api.HeadBucket(bp, bckFrom, false /*don't add*/)
@@ -2292,7 +2298,6 @@ func TestCopyBucketSlowPeer(t *testing.T) {
 		names.Add(name)
 	}
 
-	const progressTimeout = time.Minute
 	config := tools.GetClusterConfig(t)
 	t.Cleanup(func() {
 		tools.SetClusterConfig(t, cos.StrKVs{
@@ -2305,20 +2310,27 @@ func TestCopyBucketSlowPeer(t *testing.T) {
 		"timeout.max_host_busy":  progressTimeout.String(),
 	})
 
+	tlog.Logfln("%s: %d frontend tokens for each %v on each target", bckFrom.Cname(""), perTarget,
+		time.Duration(perTarget)*perObj)
+	_, err = api.SetBucketProps(bp, bckFrom, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+		Frontend: &cmn.BurstyToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+			Enabled:   apc.Ptr(true),
+			MaxTokens: apc.Ptr(maxTokens),
+			Interval:  apc.Ptr(cos.Duration(time.Duration(perTarget) * perObj)),
+		}, Size: apc.Ptr(1)},
+	}})
+	tassert.CheckFatal(t, err)
+
 	started := time.Now()
 	xid, err := api.CopyBucket(bp, bckFrom, bckTo, &apc.TCBMsg{})
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
 
-	stop, stopped := make(chan struct{}), make(chan struct{})
-	go slowNode(t, tsi, stop, stopped)
 	status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: 5 * time.Minute})
-	close(stop)
-	<-stopped
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !status.IsAborted(), "%s aborted: %s", xid, status.ErrMsg)
 	elapsed := time.Since(started)
-	tassert.Errorf(t, elapsed > progressTimeout, "%s took %v, not longer than the progress timeout %v (increase numObjs)",
+	tassert.Errorf(t, elapsed > progressTimeout, "%s took %v, not longer than the progress timeout %v (rate limit not applied?)",
 		xid, elapsed, progressTimeout)
 
 	list, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
@@ -2326,28 +2338,6 @@ func TestCopyBucketSlowPeer(t *testing.T) {
 	tassert.Errorf(t, len(list.Entries) == len(names), "expected %d to be copied, got %d", len(names), len(list.Entries))
 	for _, e := range list.Entries {
 		tassert.Errorf(t, names.Contains(e.Name), "unexpected %q in %s", e.Name, bckTo.Cname(""))
-	}
-}
-
-// pause the node for most of the time (SIGSTOP)
-func slowNode(t *testing.T, node *meta.Snode, stop <-chan struct{}, stopped chan<- struct{}) {
-	defer close(stopped)
-	for {
-		resume, err := tools.PauseNode(node)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		time.Sleep(3 * time.Second)
-		if err := resume(); err != nil {
-			t.Error(err)
-			return
-		}
-		select {
-		case <-stop:
-			return
-		case <-time.After(25 * time.Millisecond):
-		}
 	}
 }
 
