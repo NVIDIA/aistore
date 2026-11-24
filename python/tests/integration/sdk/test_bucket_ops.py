@@ -693,8 +693,10 @@ class TestBucketOps(ParallelTestBase):
                 info.size = len(data)
                 tar.addfile(info, io.BytesIO(data))
 
-        # Upload the tar object
         arch_bck.object(archive_name).get_writer().put_content(buf.getvalue())
+        arch_bck.object(archive_name + "-1.tar").get_writer().put_content(
+            buf.getvalue()
+        )
 
         # List without parent
         children_only = arch_bck.list_archive(archive_name, include_archive_obj=False)
@@ -704,7 +706,19 @@ class TestBucketOps(ParallelTestBase):
 
         # List with parent
         with_parent = arch_bck.list_archive(archive_name, include_archive_obj=True)
-        self.assertEqual(len(with_parent), len(content_map) + 1)
+        self.assertSetEqual({e.name for e in with_parent}, names_only | {archive_name})
+
+        in_arch = arch_bck.list_all_objects(
+            prefix=archive_name, flags=[ListObjectFlag.IN_ARCH_ONLY]
+        )
+        self.assertSetEqual(
+            {e.name for e in in_arch},
+            {
+                a + "/" + k
+                for a in (archive_name, archive_name + "-1.tar")
+                for k in content_map
+            },
+        )
 
     def test_copy_dry_run(self):
         src_bck = self._create_bucket(prefix="src-copy-dry")

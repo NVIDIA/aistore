@@ -55,21 +55,9 @@ func TestListChunkedArchives(t *testing.T) {
 			tools.CreateBucket(t, proxyURL, bck, &cmn.BpropsToSet{
 				Chunks: &cmn.ChunksConfToSet{ObjSizeLimit: apc.Ptr(cos.SizeIEC(0))},
 			}, true /*cleanup*/)
-			const fileSize = 8 * cos.KiB
-			names := []string{"a.txt", "nested/b.txt", "z.txt"}
+			names := []string{"a.txt", "nested/b.txt", "./z.txt"}
 			objName := "archive" + test.ext
-			reader, err := readers.New(&readers.Arg{
-				Type: readers.File, Path: t.TempDir(), Name: objName,
-				Arch: &readers.Arch{Mime: test.ext, Names: names, Num: len(names), MinSize: fileSize},
-			})
-			tassert.CheckFatal(t, err)
-			t.Cleanup(func() { reader.Close() })
-			size, err := reader.Seek(0, io.SeekEnd)
-			tassert.CheckFatal(t, err)
-			reader.Reset()
-			errCh := make(chan error, 1)
-			tools.Put(proxyURL, bck, objName, reader, uint64(size), test.numChunks, errCh)
-			tassert.SelectErr(t, errCh, "put archive", true)
+			putListArch(t, proxyURL, bck, objName, test.ext, names, test.numChunks)
 
 			props, err := api.HeadObjectV2(bp, bck, objName, apc.GetPropsChunked, api.HeadArgs{})
 			tassert.CheckFatal(t, err)
@@ -85,10 +73,121 @@ func TestListChunkedArchives(t *testing.T) {
 				"expected parent archive %s, got %+v", objName, lst.Entries[0])
 			for i, name := range names {
 				entry := lst.Entries[i+1]
-				tassert.Errorf(t, entry.Name == path.Join(objName, name) && entry.Size == fileSize && entry.IsAnyFlagSet(apc.EntryInArch),
-					"expected archived file %s (%d bytes), got %+v", name, fileSize, entry)
+				tassert.Errorf(t, entry.Name == path.Join(objName, name) && entry.Size == listArchFileSize && entry.IsAnyFlagSet(apc.EntryInArch),
+					"expected archived file %s (%d bytes), got %+v", name, listArchFileSize, entry)
 			}
+
+			// an archive and an object that sort between an archive and its files on the same target
+			smap, err := api.GetClusterMap(bp)
+			tassert.CheckFatal(t, err)
+			sibling := tools.GenerateObjectNameForTargetExt(objName, objName+"-", test.ext, bck, smap, true /*same target*/)
+			putListArch(t, proxyURL, bck, sibling, test.ext, names, test.numChunks)
+			archs := []string{objName, sibling}
+			other := tools.GenerateObjectNameForTargetExt(objName, objName+".", ".txt", bck, smap, true /*same target*/)
+			tassert.CheckFatal(t, tools.PutObjRR(bp, bck, other, cos.KiB, cos.ChecksumNone))
+			inArch := make([]string, 0, len(archs)*len(names))
+			for _, arch := range archs {
+				for _, name := range names {
+					inArch = append(inArch, path.Join(arch, name))
+				}
+			}
+			slices.Sort(inArch)
+			all := slices.Concat(archs, []string{other}, inArch)
+			slices.Sort(all)
+
+			lst, err = api.ListObjects(bp, bck, &apc.LsoMsg{Flags: apc.LsInArchOnly, PageSize: 1}, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			checkLsoNames(t, lst.Entries, inArch, true /*in-arch only*/)
+
+			lst, err = api.ListObjects(bp, bck, &apc.LsoMsg{Flags: apc.LsArchDir, PageSize: 1}, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			checkLsoNames(t, lst.Entries, all, false)
+
+			for _, token := range []string{objName, path.Join(objName, names[0]), path.Join(sibling, names[len(names)-1])} {
+				lst, err = api.ListObjectsPage(bp, bck, &apc.LsoMsg{Flags: apc.LsInArchOnly, ContinuationToken: token}, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+				checkLsoNames(t, lst.Entries, namesAfter(inArch, token), true)
+
+				lst, err = api.ListObjectsPage(bp, bck, &apc.LsoMsg{Flags: apc.LsArchDir, ContinuationToken: token}, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+				checkLsoNames(t, lst.Entries, namesAfter(all, token), false)
+
+				lst, err = api.ListObjects(bp, bck, &apc.LsoMsg{Flags: apc.LsInArchOnly, StartAfter: token}, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+				checkLsoNames(t, lst.Entries, namesAfter(inArch, token), true)
+
+				lst, err = api.ListObjects(bp, bck, &apc.LsoMsg{Flags: apc.LsArchDir, StartAfter: token}, api.ListArgs{})
+				tassert.CheckFatal(t, err)
+				checkLsoNames(t, lst.Entries, namesAfter(all, token), false)
+			}
+
+			putListArch(t, proxyURL, bck, path.Join("dir", objName), test.ext, names, test.numChunks)
+			lst, err = api.ListObjects(bp, bck, &apc.LsoMsg{Flags: apc.LsInArchOnly | apc.LsNoRecursion}, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			checkLsoNames(t, lst.Entries, inArch, true)
+
+			lst, err = api.ListObjects(bp, bck, &apc.LsoMsg{Flags: apc.LsArchDir | apc.LsNoRecursion, PageSize: 1}, api.ListArgs{})
+			tassert.CheckFatal(t, err)
+			checkLsoNames(t, lst.Entries, append(all, "dir/"), false)
 		})
+	}
+}
+
+func TestListInArchOnlyRemote(t *testing.T) {
+	bck := cliBck
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: bck})
+	var (
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+		prefix   = "in-arch-only-" + trand.String(8) + "/"
+		names    = []string{"a.txt", "b.txt"}
+		cached   = prefix + "cached" + archive.ExtTar
+		evicted  = prefix + "evicted" + archive.ExtTar
+		plain    = prefix + "plain.txt"
+	)
+	for _, arch := range []string{cached, evicted} {
+		putListArch(t, proxyURL, bck, arch, archive.ExtTar, names, 0)
+		t.Cleanup(func() { api.DeleteObject(bp, bck, arch) })
+	}
+	tassert.CheckFatal(t, tools.PutObjRR(bp, bck, plain, cos.KiB, cos.ChecksumNone))
+	t.Cleanup(func() { api.DeleteObject(bp, bck, plain) })
+	tassert.CheckFatal(t, api.EvictObject(bp, bck, evicted))
+
+	lst, err := api.ListObjects(bp, bck, &apc.LsoMsg{Prefix: prefix, Flags: apc.LsInArchOnly}, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	checkLsoNames(t, lst.Entries, []string{path.Join(cached, names[0]), path.Join(cached, names[1])}, true)
+}
+
+const listArchFileSize = 8 * cos.KiB
+
+func putListArch(t *testing.T, proxyURL string, bck cmn.Bck, objName, ext string, names []string, numChunks int) {
+	reader, err := readers.New(&readers.Arg{
+		Type: readers.File, Path: t.TempDir(), Name: path.Base(objName),
+		Arch: &readers.Arch{Mime: ext, Names: names, Num: len(names), MinSize: listArchFileSize},
+	})
+	tassert.CheckFatal(t, err)
+	t.Cleanup(func() { reader.Close() })
+	size, err := reader.Seek(0, io.SeekEnd)
+	tassert.CheckFatal(t, err)
+	reader.Reset()
+	errCh := make(chan error, 1)
+	tools.Put(proxyURL, bck, objName, reader, uint64(size), numChunks, errCh)
+	tassert.SelectErr(t, errCh, "put archive", true)
+}
+
+func namesAfter(names []string, token string) []string {
+	i, found := slices.BinarySearch(names, token)
+	if found {
+		i++
+	}
+	return names[i:]
+}
+
+func checkLsoNames(t *testing.T, entries cmn.LsoEntries, exp []string, inArch bool) {
+	tassert.Fatalf(t, len(entries) == len(exp), "expected %d entries, got %d", len(exp), len(entries))
+	for i, name := range exp {
+		tassert.Errorf(t, entries[i].Name == name, "entry %d: expected %s, got %+v", i, name, entries[i])
+		tassert.Errorf(t, !inArch || entries[i].IsAnyFlagSet(apc.EntryInArch), "expected archived file, got %+v", entries[i])
 	}
 }
 
@@ -507,17 +606,11 @@ func (a *archLarge) arch(t *testing.T, archName string, objNames []string, appen
 	return xact.ArgsMsg{ID: xid, Kind: apc.ActArchive}
 }
 
-func (a *archLarge) countInArch(t *testing.T, archName string) (n int) {
-	lsmsg := &apc.LsoMsg{Prefix: archName}
-	lsmsg.SetFlag(apc.LsArchDir)
+func (a *archLarge) countInArch(t *testing.T, archName string) int {
+	lsmsg := &apc.LsoMsg{Prefix: archName, Flags: apc.LsInArchOnly}
 	lst, err := api.ListObjects(tools.BaseAPIParams(), a.bckTo, lsmsg, api.ListArgs{})
 	tassert.CheckFatal(t, err)
-	for _, en := range lst.Entries {
-		if en.IsAnyFlagSet(apc.EntryInArch) {
-			n++
-		}
-	}
-	return n
+	return len(lst.Entries)
 }
 
 func TestArchLargeLast(t *testing.T) {

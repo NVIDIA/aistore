@@ -194,6 +194,9 @@ class TestPytorchPlugin(unittest.TestCase):
         create_archive(shard1_archive_path, shard1_content_dict)
         shard1_obj = self.bck.object(obj_name=shard1_archive_name)
         shard1_obj.get_writer().put_file(shard1_archive_path)
+        self.bck.object(obj_name=shard1_archive_name + "-1.tar").get_writer().put_file(
+            shard1_archive_path
+        )
 
         shard2_content_dict = {
             "file1.cls": b"1",
@@ -221,8 +224,7 @@ class TestPytorchPlugin(unittest.TestCase):
             zip(shard1_content_dict.values(), shard2_content_dict.values())
         )
 
-        for i, content in enumerate(dataset):
-            self.assertEqual(content, combined_content[i])
+        self.assertEqual(list(dataset), combined_content)
 
     def test_shard_reader(self):
         self.local_test_files.mkdir()

@@ -80,6 +80,7 @@ type (
 			stopCh       *cos.StopCh      // to abort bucket walk
 			wi           *walkInfo        // walking context and state
 			lastDir      string           // last seen directory name (for dedup - heap output is sorted, so duplicates are adjacent)
+			arch         cmn.LsoEntries   // in-archive entries not yet sent, sorted (see sendArch)
 			wg           sync.WaitGroup   // wait until this walk finishes
 			done         bool             // done walking (indication)
 			wor          bool             // wantOnlyRemote
@@ -822,6 +823,7 @@ func (r *LsoXact) shiftLastPage(token string) {
 // (compare w/ nextPageA() via lrit)
 func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 	r.walk.wi = newWalkInfo(msg, r.LomAdd)
+	includeDirs := msg.IsFlagSet(apc.LsNoRecursion) && !msg.IsFlagSet(apc.LsInArchOnly)
 	opts := &fs.WalkBckOpts{
 		ValidateCb: r.validateCb,
 		WalkOpts: fs.WalkOpts{
@@ -829,17 +831,20 @@ func (r *LsoXact) doWalk(msg *apc.LsoMsg) {
 			Callback:    r.cb,
 			Prefix:      msg.Prefix,
 			Sorted:      true,
-			IncludeDirs: msg.IsFlagSet(apc.LsNoRecursion), // include directories in heap for non-recursive listing
+			IncludeDirs: includeDirs, // include directories in heap for non-recursive listing
 		},
 	}
 	opts.WalkOpts.Bck.Copy(r.Bck().Bucket())
-	if err := fs.WalkBck(opts); err != nil {
-		if err != filepath.SkipDir && err != errLsoStopped {
-			r.AddErr(err, 0)
-			// remember failed-walk error
-			r.walk.err = err
-		}
+	err := fs.WalkBck(opts)
+	if err == nil || err == filepath.SkipDir {
+		err = r.sendArch("") // the remaining in-archive entries
 	}
+	if err != nil && err != filepath.SkipDir && err != errLsoStopped {
+		r.AddErr(err, 0)
+		// remember failed-walk error
+		r.walk.err = err
+	}
+	r.walk.arch = nil
 	close(r.walk.pageCh)
 	r.walk.wg.Done()
 }
@@ -893,52 +898,64 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 		}
 		r.walk.lastDir = dirName
 
-		entry := &cmn.LsoEnt{Name: dirName, Flags: apc.EntryIsDir}
-		select {
-		case r.walk.pageCh <- entry:
-		case <-r.walk.stopCh.Listen():
-			return errLsoStopped
+		if err := r.sendArch(dirName); err != nil {
+			return err
 		}
-		return nil
+		return r.send(&cmn.LsoEnt{Name: dirName, Flags: apc.EntryIsDir})
 	}
 
 	// Handle file entries
+	msg := r.walk.wi.lsmsg()
+
+	// TODO: a page waits for PageSize+1 files or the end of the walk
+
+	if msg.IsFlagSet(apc.LsInArchOnly) {
+		if r.walk.stopCh.Stopped() || r.IsAborted() {
+			return errLsoStopped
+		}
+	}
+
 	lom := core.AllocLOM("")
 	defer core.FreeLOM(lom)
 	entry, err := r.walk.wi._cb(lom, fqn)
 	if err != nil || entry == nil {
-		return err
-	}
-	msg := r.walk.wi.lsmsg()
-	if entry.Name <= msg.StartAfter {
-		return nil
-	}
-
-	select {
-	case r.walk.pageCh <- entry:
-		/* do nothing */
-	case <-r.walk.stopCh.Listen():
-		return errLsoStopped
-	}
-
-	if !msg.IsFlagSet(apc.LsArchDir) {
-		return nil
-	}
-
-	// ls arch
-	// looking only at the file extension - not reading ("detecting") file magic (TODO: add lsmsg flag)
-	archList, err := r.lsArch(lom)
-	if err != nil {
-		if archive.IsErrUnknownFileExt(err) {
-			// skip and keep going
-			err = nil
+		if err == nil && len(r.walk.arch) > 0 {
+			err = r.sendArch(lom.ObjName) // not listed but the walk passes this name
 		}
 		return err
 	}
-	entry.Flags |= apc.EntryIsArchive // the parent archive
+	after := msg.StartAfter
+	if entry.Name <= after && (!msg.IsFlagSet(apc.LsArchDir) || !archAfter(entry.Name, after)) {
+		return nil
+	}
 
-	// TODO: the members "x.tar/a" go out before the siblings that sort below '/' ("x.tar-1", "x.tar.gz"),
-	// and the next page then skips those siblings (compare w/ fs.WalkSorted)
+	if err := r.sendArch(entry.Name); err != nil {
+		return err
+	}
+
+	var archList []*archive.Entry
+	if msg.IsFlagSet(apc.LsArchDir) {
+		// by file extension only, no file magic (TODO: add lsmsg flag)
+		archList, err = r.lsArch(lom)
+		switch {
+		case err == nil:
+			entry.Flags |= apc.EntryIsArchive
+		case archive.IsErrUnknownFileExt(err):
+			// skip and keep going
+		default:
+			return err
+		}
+	}
+
+	if !msg.IsFlagSet(apc.LsInArchOnly) && entry.Name > after {
+		if err := r.send(entry); err != nil {
+			return err
+		}
+	}
+
+	// "a.tar/f" sorts after "a.tar.gz", hold the members until the walk passes them (see sendArch)
+	// TODO: holds all members of a large archive
+	n := len(r.walk.arch)
 	for _, archEntry := range archList {
 		e := &cmn.LsoEnt{
 			Name: path.Join(entry.Name, archEntry.Name),
@@ -947,12 +964,41 @@ func (r *LsoXact) cb(fqn string, de fs.DirEntry) error {
 			// inherit parent's flags except apc.EntryIsArchive
 			Flags: (entry.Flags &^ apc.EntryIsArchive) | apc.EntryInArch,
 		}
-		select {
-		case r.walk.pageCh <- e:
-			/* do nothing */
-		case <-r.walk.stopCh.Listen():
-			return errLsoStopped
+		if e.Name <= after {
+			continue
 		}
+		r.walk.arch = append(r.walk.arch, e)
+	}
+	if len(r.walk.arch) > n {
+		cmn.SortLsoLex(r.walk.arch)
+	}
+	return nil
+}
+
+func (r *LsoXact) send(entry *cmn.LsoEnt) error {
+	select {
+	case r.walk.pageCh <- entry:
+		return nil
+	case <-r.walk.stopCh.Listen():
+		return errLsoStopped
+	}
+}
+
+func (r *LsoXact) sendArch(name string) error {
+	var n int
+	for _, e := range r.walk.arch {
+		if name != "" && e.Name >= name {
+			break
+		}
+		if err := r.send(e); err != nil {
+			return err
+		}
+		n++
+	}
+	if n > 0 {
+		l := copy(r.walk.arch, r.walk.arch[n:])
+		clear(r.walk.arch[l:])
+		r.walk.arch = r.walk.arch[:l]
 	}
 	return nil
 }

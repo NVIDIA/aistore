@@ -394,6 +394,7 @@ That is why several options that make sense for a live list request do **not** m
 | `LsMissing`                         | Not supported during creation.                                                                           |
 | `LsDeleted`                         | Not supported during creation.                                                                           |
 | `--archive` / `LsArchDir`           | Inventory creation does not expand archive contents.                                                     |
+| `LsInArchOnly`                      | Inventory creation does not expand archive contents.                                                     |
 | `LsBckPresent`                      | Not applicable. Inventory creation operates on a concrete remote bucket request.                         |
 | `LsDontHeadRemote`                  | Inventory creation requires normal remote-bucket validation.                                             |
 | `LsDontAddRemote`                   | The bucket must participate in normal AIS metadata flow.                                                 |
@@ -411,6 +412,7 @@ That is why several options that make sense for a live list request do **not** m
 | `LsMissing`                    | Not supported. Inventory listing is not a missing-copy inspection mode.                                               |
 | `LsDeleted`                    | Not supported. Inventory snapshots do not currently track objects marked for deletion.                                |
 | `--archive` / `LsArchDir`      | NBI lists stored object entries, not archive contents.                                                                |
+| `LsInArchOnly`                 | NBI lists stored object entries, not archive contents.                                                                |
 | `lsWantOnlyRemoteProps`        | NBI is not a pass-through remote-property listing path.                                                               |
 | `--diff` (`LsDiff`)            | NBI does not perform remote-versus-cluster diff during listing.                                                       |
 

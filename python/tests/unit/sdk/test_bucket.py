@@ -990,12 +990,14 @@ class TestBucket(unittest.TestCase):
         entry_archive = BucketEntry(n=archive_obj_name)
         entry_1 = BucketEntry(n=f"{archive_obj_name}/file1.txt")
         entry_2 = BucketEntry(n=f"{archive_obj_name}/file2.txt")
+        entry_sibling = BucketEntry(n=f"{archive_obj_name}-1.tar")
+        entry_sibling_file = BucketEntry(n=f"{archive_obj_name}-1.tar/file1.txt")
 
         list_1 = BucketList(
             UUID=list_1_id,
             ContinuationToken=list_1_cont,
             Flags=0,
-            Entries=[entry_archive],
+            Entries=[entry_archive, entry_sibling, entry_sibling_file],
         )
         list_2 = BucketList(
             UUID="456", ContinuationToken="", Flags=0, Entries=[entry_1, entry_2]

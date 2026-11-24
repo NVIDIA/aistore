@@ -354,7 +354,8 @@ func (t *target) blist(qbck *cmn.QueryBcks, config *cmn.Config) (bcks cmn.Bcks, 
 // returns `cmn.LsoRes` containing object names and (requested) props
 // control/scope - via `apc.LsoMsg`
 func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg, phase string) bool /*ok*/ {
-	// Direct target reads can bypass proxy validation when proxy mediation is disabled.
+	// Direct target reads can bypass proxy normalization and validation when proxy mediation is disabled.
+	lsmsg.NormalizeArch()
 	if lsmsg.IsFlagSet(apc.LsDiff) {
 		if err := validateLsoDiff(bck, lsmsg); err != nil {
 			t.writeErr(w, r, err)
@@ -373,7 +374,11 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 	}
 
 	if lsmsg.IsFlagSet(apc.LsNBI) {
-		if ok := t._resolveInvName(w, r, bck, lsmsg); !ok {
+		if err := lsmsg.ValidateNBI(); err != nil {
+			t.writeErr(w, r, err)
+			return false
+		}
+		if ok := t._resolveInvName(w, r, bck); !ok {
 			return false
 		}
 	}
@@ -468,9 +473,7 @@ func (t *target) listObjects(w http.ResponseWriter, r *http.Request, bck *meta.B
 
 // resolve NBI (native bucket inventory) name: locate-and-set when not provided,
 // validate when provided
-func (t *target) _resolveInvName(w http.ResponseWriter, r *http.Request, bck *meta.Bck, lsmsg *apc.LsoMsg) bool /*ok*/ {
-	debug.Func(func() { debug.AssertNoErr(lsmsg.ValidateNBI()) }) // checked by proxy
-
+func (t *target) _resolveInvName(w http.ResponseWriter, r *http.Request, bck *meta.Bck) bool /*ok*/ {
 	if invName := r.Header.Get(apc.HdrInvName); invName == "" {
 		// must exist and be single
 		nbis, err := fs.CollectNBI(bck.Bucket())

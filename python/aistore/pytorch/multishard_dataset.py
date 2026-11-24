@@ -58,9 +58,10 @@ class AISMultiShardStream(IterableDataset):
                 prefix=path, props="name", flags=[ListObjectFlag.ARCH_DIR]
             )
 
+            inside = path + "/"
             for obj in objects_iter:
-                if obj.name != path:
-                    obj_name = obj.name.replace(f"{path}/", "", 1)
+                if obj.name.startswith(inside):
+                    obj_name = obj.name[len(inside) :]
                     yield (
                         bucket.object(path)
                         .get_reader(

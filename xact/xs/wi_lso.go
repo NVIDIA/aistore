@@ -11,6 +11,7 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/archive"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
@@ -84,7 +85,20 @@ func (wi *walkInfo) match(objName string) bool {
 	if wi.msg.Prefix != "" && !cmn.ObjHasPrefix(objName, wi.msg.Prefix) {
 		return false
 	}
-	return wi.msg.ContinuationToken == "" || !cmn.TokenGreaterEQ(wi.msg.ContinuationToken, objName)
+	token := wi.msg.ContinuationToken
+	if token == "" || !cmn.TokenGreaterEQ(token, objName) {
+		return true
+	}
+	return wi.msg.IsFlagSet(apc.LsArchDir) && archAfter(objName, token)
+}
+
+// whether files of archive `archName` sort after `token` (token >= archName)
+func archAfter(archName, token string) bool {
+	l := len(archName)
+	if len(token) <= l {
+		return token == archName
+	}
+	return token[:l] == archName && token[l] <= '/'
 }
 
 // new entry to be added to the listed page (note: slow path)
@@ -157,6 +171,11 @@ func (wi *walkInfo) _cb(lom *core.LOM, fqn string) (*cmn.LsoEnt, error) {
 	}
 	if !wi.match(lom.ObjName) {
 		return nil, nil
+	}
+	if wi.msg.IsFlagSet(apc.LsInArchOnly) {
+		if _, err := archive.Mime("", fqn); err != nil {
+			return nil, nil
+		}
 	}
 	if err := lom.PostInit(); err != nil {
 		return nil, err

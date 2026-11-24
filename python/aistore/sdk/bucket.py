@@ -583,6 +583,8 @@ class Bucket(AISSource):
             continuation_token (str, optional): Marks the object to start reading the next page
             flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include
                 as flags in the request.
+                `ListObjectFlag.IN_ARCH_ONLY` requires AIStore v5.3 or later and cannot be combined
+                with `inventory_name` or `ListObjectFlag.NBI`.
             target (str, optional): Only list objects on this specific target node.
             inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
                 Lists objects from the named inventory snapshot instead of querying the remote
@@ -665,7 +667,8 @@ class Bucket(AISSource):
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
                 Defaults to "0" - return maximum number objects
             flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include as flags in the
-             request
+             request. `ListObjectFlag.IN_ARCH_ONLY` requires AIStore v5.3 or later and cannot be
+             combined with `inventory_name` or `ListObjectFlag.NBI`.
             target (str, optional): Only list objects on this specific target node
             inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
                 See `list_objects` for details.
@@ -728,7 +731,8 @@ class Bucket(AISSource):
                 NOTE: If "page_size" is greater than a backend maximum, the backend maximum objects are returned.
                 Defaults to "0" - return maximum number objects
             flags (List[ListObjectFlag], optional): Optional list of ListObjectFlag enums to include as flags in the
-             request
+             request. `ListObjectFlag.IN_ARCH_ONLY` requires AIStore v5.3 or later and cannot be
+             combined with `inventory_name` or `ListObjectFlag.NBI`.
             target (str, optional): Only list objects on this specific target node
             inventory_name (str, optional): Name of a native bucket inventory (NBI) to list from.
                 See `list_objects` for details.
@@ -889,9 +893,13 @@ class Bucket(AISSource):
             flags=[ListObjectFlag.ARCH_DIR],
         )
 
-        if include_archive_obj:
-            return entries
-        return [e for e in entries if e.name != archive_obj_name]
+        inside = archive_obj_name + "/"
+        return [
+            e
+            for e in entries
+            if e.name.startswith(inside)
+            or (include_archive_obj and e.name == archive_obj_name)
+        ]
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     def transform(

@@ -64,7 +64,7 @@ func (m *LsoMsg) ValidateNBI() error {
 	const epref = "invalid list via native bucket inventory"
 
 	// flags that do not make sense for inventory listing
-	const badFlags = LsNotCached | LsMissing | LsDeleted | LsArchDir |
+	const badFlags = LsNotCached | LsMissing | LsDeleted | LsArchDir | LsInArchOnly |
 		lsWantOnlyRemoteProps | LsDiff
 
 	if m.Flags&badFlags != 0 {
@@ -100,7 +100,7 @@ func (m *CreateNBIMsg) SetValidate() error {
 		return errors.New(epref + ": start_after is not supported")
 	}
 	// flags that don't make sense for inventory generation
-	const badFlags = LsCached | LsNotCached | LsMissing | LsDeleted | LsArchDir |
+	const badFlags = LsCached | LsNotCached | LsMissing | LsDeleted | LsArchDir | LsInArchOnly |
 		LsBckPresent | LsDontHeadRemote | LsDontAddRemote |
 		lsWantOnlyRemoteProps | LsNoRecursion | LsDiff | LsIsS3
 	if m.Flags&badFlags != 0 {

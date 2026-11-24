@@ -50,11 +50,15 @@ func WaitForCondition(condition func() bool, opts WaitRetryOpts) error {
 // GenerateObjectNameForTarget returns a name that HRW maps to either the same or
 // a different target than baseName, as requested by wantSameTarget.
 func GenerateObjectNameForTarget(baseName, newNamePrefix string, bck cmn.Bck, smap *meta.Smap, wantSameTarget bool) string {
+	return GenerateObjectNameForTargetExt(baseName, newNamePrefix, "", bck, smap, wantSameTarget)
+}
+
+func GenerateObjectNameForTargetExt(baseName, newNamePrefix, ext string, bck cmn.Bck, smap *meta.Smap, wantSameTarget bool) string {
 	smap.InitDigests() // HRW requires it
 	cbck := meta.CloneBck(&bck)
 	base, err := smap.HrwObjName2T(cbck, baseName)
 	cos.AssertNoErr(err)
-	return genObjName(newNamePrefix, cbck, smap, func(owner *meta.Snode) bool { return (owner.ID() == base.ID()) == wantSameTarget })
+	return genObjName(newNamePrefix, ext, cbck, smap, func(owner *meta.Snode) bool { return (owner.ID() == base.ID()) == wantSameTarget })
 }
 
 // GenerateObjectNameOnTarget returns a name that HRW maps to tsi.
@@ -64,19 +68,20 @@ func GenerateObjectNameOnTarget(newNamePrefix string, bck cmn.Bck, smap *meta.Sm
 		cos.AssertMsg(false, tsi.StringEx()+" is not an active target in "+smap.StringEx())
 	}
 	smap.InitDigests() // HRW requires it
-	return genObjName(newNamePrefix, meta.CloneBck(&bck), smap, func(owner *meta.Snode) bool { return owner.ID() == tsi.ID() })
+	return genObjName(newNamePrefix, "", meta.CloneBck(&bck), smap, func(owner *meta.Snode) bool { return owner.ID() == tsi.ID() })
 }
 
-// try newNamePrefix, newNamePrefix0, newNamePrefix1, and so on until HRW maps the name to a matching target
-func genObjName(newNamePrefix string, cbck *meta.Bck, smap *meta.Smap, match func(*meta.Snode) bool) string {
-	newName := newNamePrefix
+// try newNamePrefix+suffix, newNamePrefix0+suffix, newNamePrefix1+suffix, and so on
+// until HRW maps the name to a matching target
+func genObjName(newNamePrefix, suffix string, cbck *meta.Bck, smap *meta.Smap, match func(*meta.Snode) bool) string {
+	newName := newNamePrefix + suffix
 	for i := 0; ; i++ {
 		si, err := smap.HrwObjName2T(cbck, newName)
 		cos.AssertNoErr(err)
 		if match(si) {
 			return newName
 		}
-		newName = newNamePrefix + strconv.Itoa(i)
+		newName = newNamePrefix + strconv.Itoa(i) + suffix
 	}
 }
 

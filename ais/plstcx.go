@@ -115,9 +115,7 @@ func (c *lsoCtx) lso() {
 	// default props & flags => user-provided message
 	lsmsg.NormalizeNameSizeDflt()
 
-	if lsmsg.IsFlagSet(apc.LsArchDir) {
-		lsmsg.SetFlag(apc.LsCached)
-	}
+	lsmsg.NormalizeArch()
 
 	psi, err := c.owner()
 	if err != nil {
@@ -176,6 +174,9 @@ func validateLsoDiff(bck *meta.Bck, lsmsg *apc.LsoMsg) error {
 	}
 	if lsmsg.IsFlagSet(apc.LsNotCached) {
 		return errors.New(a + " when apc.LsNotCached (CLI '--not-cached') is set")
+	}
+	if lsmsg.IsFlagSet(apc.LsArchDir) || lsmsg.IsFlagSet(apc.LsInArchOnly) {
+		return errors.New(a + " when apc.LsArchDir (CLI '--archive') or apc.LsInArchOnly is set")
 	}
 	if lsmsg.IsFlagSet(apc.LsCached) {
 		return errors.New(a + " when apc.LsCached (CLI '--cached') is set")

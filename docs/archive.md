@@ -32,7 +32,14 @@ AIStore can natively **read**, **write**, **append**¹, and **list** archives. O
   - [Python SDK](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/obj/object.py) - ditto
   - [Python SDK/Archive](https://github.com/NVIDIA/aistore/blob/main/python/aistore/sdk/archive_config.py) - see archive-related config
 - [**get-batch**](/docs/get_batch.md) - efficient multi-object/multi-file retrieval
-- **list-objects** - "opens" archives and includes contained pathnames in results. Listing supports both monolithic and chunked archives.
+- **list-objects** - "opens" archives and includes contained pathnames in results.
+  Listing supports both monolithic and chunked archives.
+  To list only the files in archives, use `apc.LsInArchOnly` (Python: `ListObjectFlag.IN_ARCH_ONLY`).
+  Limits:
+  - For a remote bucket, only the archives that are in the cluster are opened.
+  - With `apc.LsNoRecursion`, only the archives at the top level of the prefix are opened.
+  - The prefix selects archives by name, not the files inside them.
+  - [Native bucket inventory](/docs/nbi.md) does not support it.
 - **[aisloader](/docs/aisloader.md)** - benchmarking with archive workloads
 - Concurrent multi-object transactions for bulk archive generation from [selected](/docs/batch.md) objects
 

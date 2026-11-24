@@ -98,6 +98,9 @@ const (
 	// each target delivers an approximate share of the requested page size,
 	// subject to local chunking, minimum bounds, and slight overfetch
 	LsNBI
+
+	// list only the files in archives: no archives, no other objects, no virtual directories
+	LsInArchOnly
 )
 
 // max page sizes
@@ -285,6 +288,15 @@ func (lsmsg *LsoMsg) AddProps(propNames ...string) {
 	}
 }
 
+func (lsmsg *LsoMsg) NormalizeArch() {
+	if lsmsg.IsFlagSet(LsInArchOnly) {
+		lsmsg.SetFlag(LsArchDir)
+	}
+	if lsmsg.IsFlagSet(LsArchDir) {
+		lsmsg.SetFlag(LsCached)
+	}
+}
+
 // default props & flags => user-provided message
 func (lsmsg *LsoMsg) NormalizeNameSizeDflt() {
 	switch lsmsg.Props {
@@ -370,6 +382,9 @@ func (lsmsg *LsoMsg) appendFlags(sb *cos.SB) {
 	}
 	if lsmsg.IsFlagSet(LsIsS3) {
 		flags = append(flags, "s3")
+	}
+	if lsmsg.IsFlagSet(LsInArchOnly) {
+		flags = append(flags, "in-arch-only")
 	}
 
 	if len(flags) > 0 {

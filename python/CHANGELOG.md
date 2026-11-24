@@ -24,9 +24,13 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
   entries) to run the job only on the selected targets, each fetching the objects
   it owns. Requires AIStore v5.3 or later; an older cluster accepts the call but
   ignores `targets` and runs the job on all targets.
+- `ListObjectFlag.IN_ARCH_ONLY` to list only the files in archives. Requires
+  AIStore v5.3 or later; an older cluster ignores the flag.
 
 ### Fixed
 
+- Fixed `Bucket.list_archive()` and `AISMultiShardStream` to skip objects that
+  only share the archive name as a prefix (such as `a.tar.gz` or `a.tar-1.tar/f`).
 - Fixed SDK exception pickling to preserve error types, messages, and attributes
   when errors pass between processes.
 ### Deprecated

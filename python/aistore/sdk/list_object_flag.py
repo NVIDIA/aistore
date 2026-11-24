@@ -78,6 +78,10 @@ class ListObjectFlag(Enum):
     # PageSize (if non-zero) is best-effort and approximate.
     NBI = 15
 
+    # List only the files in archives: no archives, no other objects, no virtual directories.
+    # Implies ARCH_DIR. Cannot be combined with NBI.
+    IN_ARCH_ONLY = 16
+
     @staticmethod
     def join_flags(flags: List[ListObjectFlag]) -> int:
         """
