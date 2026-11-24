@@ -42,6 +42,7 @@ func rgetstats(bp core.Backend, vlabs map[string]string, size, started int64) {
 // TODO:
 // - support RateLimitConf.Verbs, here and elsewhere
 // - `nat` with no respect to num-workers, ditto
+// - acquire: return on abort
 
 type tcrate struct {
 	src *cos.BurstRateLim
@@ -52,7 +53,7 @@ func (rate *tcrate) init(src, dst *meta.Bck, nat int) {
 	var err error
 	rate.src, err = src.NewFrontendRateLim(nat)
 	if err == nil {
-		if dst.Props != nil { // destination may not exist
+		if dst != nil && dst.Props != nil { // destination may not exist
 			rate.dst, err = dst.NewFrontendRateLim(nat)
 			if err != nil {
 				rate.src = nil

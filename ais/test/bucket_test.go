@@ -2275,15 +2275,14 @@ func TestCopyBucketSlowPeer(t *testing.T) {
 		perObj   = 2 * time.Second
 	)
 	var (
-		bckFrom   = cmn.Bck{Name: "cp-slow-from" + cos.GenTie(), Provider: apc.AIS}
-		bckTo     = cmn.Bck{Name: "cp-slow-to" + cos.GenTie(), Provider: apc.AIS}
-		proxyURL  = tools.RandomProxyURL(t)
-		bp        = tools.BaseAPIParams(proxyURL)
-		smap      = tools.GetClusterMap(t, proxyURL)
-		names     = cos.NewStrSet()
-		maxTokens = 2 * max(smap.CountActiveTs(), smap.CountActivePs())
-		perTarget = cos.DivRound(maxTokens, smap.CountActiveTs())
-		numObjs   = perTarget + int(qival/perObj) + 1
+		bckFrom       = cmn.Bck{Name: "cp-slow-from" + cos.GenTie(), Provider: apc.AIS}
+		bckTo         = cmn.Bck{Name: "cp-slow-to" + cos.GenTie(), Provider: apc.AIS}
+		proxyURL      = tools.RandomProxyURL(t)
+		bp            = tools.BaseAPIParams(proxyURL)
+		smap          = tools.GetClusterMap(t, proxyURL)
+		names         = cos.NewStrSet()
+		perTarget, rl = frontendRateLim(smap, perObj)
+		numObjs       = perTarget + int(qival/perObj) + 1
 	)
 	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 	p, err := api.HeadBucket(bp, bckFrom, false /*don't add*/)
@@ -2313,13 +2312,7 @@ func TestCopyBucketSlowPeer(t *testing.T) {
 
 	tlog.Logfln("%s: %d frontend tokens for each %v on each target", bckFrom.Cname(""), perTarget,
 		time.Duration(perTarget)*perObj)
-	_, err = api.SetBucketProps(bp, bckFrom, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
-		Frontend: &cmn.BurstyToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
-			Enabled:   apc.Ptr(true),
-			MaxTokens: apc.Ptr(maxTokens),
-			Interval:  apc.Ptr(cos.Duration(time.Duration(perTarget) * perObj)),
-		}, Size: apc.Ptr(1)},
-	}})
+	_, err = api.SetBucketProps(bp, bckFrom, &cmn.BpropsToSet{RateLimit: rl})
 	tassert.CheckFatal(t, err)
 
 	started := time.Now()

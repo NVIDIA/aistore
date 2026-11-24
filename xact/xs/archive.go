@@ -104,6 +104,7 @@ type (
 		}
 		// coordinate finish, abort, progress (compare w/ tcb.go, tcobjs.go)
 		sntl sentinel
+		rate tcrate
 		streamingX
 	}
 )
@@ -155,6 +156,8 @@ func (p *archFactory) Start() (err error) {
 	r.DemandBase.Init(p.UUID(), p.kind, p.Bck /*from*/, xact.IdleDefault)
 
 	nat := r.smap.CountActiveTs()
+	r.rate.init(p.Bck, nil /*source only*/, nat)
+
 	if nat > 1 {
 		dmxtra := bundle.Extra{
 			RecvAck:  nil, // no ACKs
@@ -787,6 +790,8 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 			return
 		}
 	}
+
+	wi.r.rate.acquire()
 
 	if coldGet {
 		// cold

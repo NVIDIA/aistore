@@ -946,6 +946,19 @@ func setBucketChunksAndWait(bp api.BaseParams, bck cmn.Bck, chunks *cmn.ChunksCo
 	})
 }
 
+func frontendRateLim(smap *meta.Smap, perObj time.Duration) (perTarget int, rl *cmn.RateLimitConfToSet) {
+	maxTokens := 2 * max(smap.CountActiveTs(), smap.CountActivePs()) // burst size (1) <= 50% on each node
+	perTarget = cos.DivRound(maxTokens, smap.CountActiveTs())
+	rl = &cmn.RateLimitConfToSet{
+		Frontend: &cmn.BurstyToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+			Enabled:   apc.Ptr(true),
+			MaxTokens: apc.Ptr(maxTokens),
+			Interval:  apc.Ptr(cos.Duration(time.Duration(perTarget) * perObj)),
+		}, Size: apc.Ptr(1)},
+	}
+	return perTarget, rl
+}
+
 // NOTE: set env.TestRunProviderEC to include erasure-coded-bucket test cases
 func runProviderTests(t *testing.T, f func(*testing.T, *meta.Bck)) {
 	tests := []struct {
