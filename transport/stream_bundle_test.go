@@ -6,9 +6,11 @@ package transport_test
 
 import (
 	"bytes"
+	"context"
 	cryptorand "crypto/rand"
 	"errors"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
@@ -21,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
-	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
@@ -117,10 +118,6 @@ func TestBundle(t *testing.T) {
 		tests = append(tests, testsLong...)
 	}
 
-	tMock := mock.NewTarget(nil)
-	tMock.SO = &sowner{}
-	core.T = tMock
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testBundle(t, test.nvs)
@@ -136,10 +133,7 @@ func TestBundleReopenFailure(t *testing.T) {
 		cmplCh = make(chan error, 2)
 	)
 
-	tMock := mock.NewTarget(nil)
-	tMock.SO = &sowner{}
-	core.T = tMock
-	lsnode := tMock.Snode()
+	lsnode := core.T.Snode()
 
 	smap.Tmap = make(meta.NodeMap, 5)
 	smap.Tmap[lsnode.ID()] = lsnode
@@ -213,8 +207,117 @@ func TestBundleReopenFailure(t *testing.T) {
 		t.Fatal("timed out waiting for subsequent send completion")
 	}
 
-	sb.Close(true /*gracefully*/)
+	tassert.CheckFatal(t, sb.Close(true /*gracefully*/))
 	closed = true
+}
+
+func TestGracefulCloseError(t *testing.T) {
+	const trname = "close-error"
+	for _, tc := range []string{"bundle", "data", "ack", "both"} {
+		t.Run(tc, func(t *testing.T) {
+			var data, ack atomic.Int64
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if n, _ := io.Copy(io.Discard, r.Body); n == 0 {
+					return
+				}
+				if r.URL.Path == transport.ObjURLPath("ack."+trname) {
+					ack.Inc()
+					if tc == "ack" || tc == "both" {
+						w.WriteHeader(http.StatusConflict)
+					}
+				} else if data.Inc() == 1 && tc != "ack" {
+					w.WriteHeader(http.StatusConflict)
+				}
+			}))
+			defer ts.Close()
+			smap := &meta.Smap{Tmap: meta.NodeMap{core.T.SID(): core.T.Snode()}}
+			addTarget(smap, ts, 0)
+
+			check := func(err error) {
+				t.Helper()
+				herr := cmn.AsErrHTTP(err)
+				tassert.Fatalf(t, herr != nil && herr.Status == http.StatusConflict, "close error: %v", err)
+			}
+			if tc == "bundle" {
+				extra := &transport.Extra{Config: cmn.GCO.Get(), Smap: smap, SbundleMult: 2}
+				sb := bundle.New(transport.NewIntraDataClient(), bundle.Args{Trname: trname, Extra: extra})
+				check(sb.Close(true))
+				check(sb.Close(true)) // already terminated, retain the first stream's error
+			} else {
+				extra := bundle.Extra{
+					Config: cmn.GCO.Get(), Smap: smap, XactConf: cmn.XactConf{SbundleMult: 2},
+					RecvAck: receive10G,
+				}
+				dm := bundle.NewDM(trname, receive10G, cmn.OwtPut, extra)
+				tassert.CheckFatal(t, dm.RegRecv())
+				defer dm.UnregRecv()
+				dm.Open()
+				err := dm.Close(nil)
+				check(err)
+				if tc == "both" {
+					joined, ok := err.(interface{ Unwrap() []error })
+					tassert.Fatalf(t, ok && len(joined.Unwrap()) == 2, "expecting data and ACK errors, got: %v", err)
+				}
+				tassert.Fatalf(t, ack.Load() == 1, "closed %d ACK streams", ack.Load())
+			}
+			tassert.Fatalf(t, data.Load() == 2, "closed %d data streams", data.Load())
+		})
+	}
+}
+
+func TestGracefulCloseNoReply(t *testing.T) {
+	const sendFile = 500 * time.Millisecond
+	config := cmn.GCO.BeginUpdate()
+	prev := config.Timeout.SendFile
+	config.Timeout.SendFile = cos.Duration(sendFile)
+	cmn.GCO.CommitUpdate(config)
+	t.Cleanup(func() {
+		config := cmn.GCO.BeginUpdate()
+		config.Timeout.SendFile = prev
+		cmn.GCO.CommitUpdate(config)
+	})
+
+	for _, compression := range []string{apc.CompressNever, apc.CompressAlways} {
+		t.Run(compression, func(t *testing.T) {
+			var (
+				received atomic.Int64
+				both     atomic.Int64 // mono time: both FINs received
+				release  = make(chan struct{})
+			)
+			ts := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				if n, _ := io.Copy(io.Discard, r.Body); n != 0 {
+					if received.Inc() == 2 {
+						both.Store(mono.NanoTime())
+					}
+					select {
+					case <-release:
+					case <-time.After(6 * sendFile):
+						t.Error("close still waiting for reply")
+					}
+				}
+			}))
+			defer ts.Close()
+			defer close(release)
+
+			smap := &meta.Smap{Tmap: meta.NodeMap{core.T.SID(): core.T.Snode()}}
+			addTarget(smap, ts, 0)
+			extra := bundle.Extra{Config: config, Smap: smap, XactConf: cmn.XactConf{Compression: compression, SbundleMult: 2}}
+			dm := bundle.NewDM("no-reply-"+compression, receive10G, cmn.OwtPut, extra)
+			tassert.CheckFatal(t, dm.RegRecv())
+			defer dm.UnregRecv()
+			dm.Open()
+
+			started := mono.NanoTime()
+			err := dm.Close(nil)
+			elapsed := mono.Since(started)
+			tassert.Fatalf(t, errors.Is(err, context.DeadlineExceeded), "expected %v, got %v", context.DeadlineExceeded, err)
+			tassert.Fatalf(t, elapsed < 4*sendFile, "close took %v (send-file %v)", elapsed, sendFile)
+			tassert.Fatalf(t, received.Load() == 2, "peer received %d FINs, expecting 2", received.Load())
+			// held reply on one stream must not delay FIN on the other
+			tassert.Fatalf(t, time.Duration(both.Load()-started) < sendFile, "second FIN arrived %v after close (send-file %v)",
+				time.Duration(both.Load()-started), sendFile)
+		})
+	}
 }
 
 func testBundle(t *testing.T, nvs cos.StrKVs) {
@@ -226,11 +329,7 @@ func testBundle(t *testing.T, nvs cos.StrKVs) {
 		tss          = make([]*httptest.Server, 0, 32)
 	)
 
-	// init local target
-	tMock := mock.NewTarget(nil)
-	tMock.SO = &sowner{}
-	core.T = tMock
-	lsnode := tMock.Snode()
+	lsnode := core.T.Snode()
 
 	// add target nodes
 	smap.Tmap = make(meta.NodeMap, 100)

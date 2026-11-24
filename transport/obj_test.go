@@ -37,7 +37,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/mono"
-	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/memsys"
 	"github.com/NVIDIA/aistore/tools"
@@ -90,18 +89,16 @@ func TestMain(t *testing.M) {
 	}
 
 	config := cmn.GCO.BeginUpdate()
+	config.Timeout.SendFile = cos.Duration(time.Minute)
 	config.Transport.MaxHeaderSize = memsys.PageSize
 	config.Transport.Burst = 256
 	config.Transport.IdleTeardown = cos.Duration(time.Second)
 	config.Transport.QuiesceTime = cos.Duration(10 * time.Second)
 	config.Log.Level = "3"
 	cmn.GCO.CommitUpdate(config)
+	mock.NewTarget(nil).SO = &sowner{}
 	sc := transport.Init(&dummyStatsTracker{}, nil, nil, false /*useIPv6*/)
 	go sc.Run()
-
-	tMock := mock.NewTarget(nil)
-	tMock.SO = &sowner{}
-	core.T = tMock
 
 	objmux = mux.NewServeMux(false /*enableTracing*/)
 	path := transport.ObjURLPath("")

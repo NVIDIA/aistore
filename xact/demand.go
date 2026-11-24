@@ -109,14 +109,18 @@ func (r *DemandBase) hkcb(now int64) time.Duration {
 	}
 
 	last := r.idle.last.Load()
-	if last != 0 && now-last >= idle {
-		if r.ticks != nil {
-			// signal parent xaction to finish and exit (via `IdleTimer` chan)
-			r.ticks.Close()
-		}
-		if r.parentCB != nil {
-			return r.parentCB(now)
-		}
+	if last == 0 {
+		return time.Duration(idle)
+	}
+	if elapsed := now - last; elapsed < idle {
+		return time.Duration(max(idle-elapsed, idle>>4)) // remaining window
+	}
+	if r.ticks != nil {
+		// signal parent xaction to finish and exit (via `IdleTimer` chan)
+		r.ticks.Close()
+	}
+	if r.parentCB != nil {
+		return r.parentCB(now)
 	}
 	return time.Duration(idle)
 }

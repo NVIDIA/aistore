@@ -6,6 +6,7 @@
 package bundle
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"sync"
@@ -19,11 +20,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport"
-)
-
-const (
-	closeFin = iota
-	closeStop
 )
 
 type (
@@ -129,16 +125,35 @@ func (sb *Streams) _lid() string {
 	return s.String()
 }
 
-// Close closes all contained streams;
-// graceful=true blocks until all pending objects get completed (for "completion", see transport/README.md)
-func (sb *Streams) Close(gracefully bool) {
-	if gracefully {
-		nlog.Infoln("close", sb.lid)
-		sb.apply(closeFin)
-	} else {
+// graceful close finishes all streams concurrently (one shared timeout.send_file_time deadline)
+// and joins the errors
+func (sb *Streams) Close(gracefully bool) error {
+	if !gracefully {
 		nlog.Infoln("stop", sb.lid)
-		sb.apply(closeStop)
+		sb.Abort()
+		return nil
 	}
+
+	nlog.Infoln("close", sb.lid)
+	var (
+		peers = sb.get()
+		wg    sync.WaitGroup
+		errs  = cos.NewErrs()
+	)
+	ctx, cancel := context.WithTimeout(context.Background(), sb.extra.Config.Timeout.SendFile.D())
+	defer cancel()
+	for _, peer := range peers {
+		for _, s := range peer.stsdest {
+			wg.Go(func() {
+				if err := s.FinContext(ctx); err != nil {
+					errs.Add(fmt.Errorf("%s: %w", s, err))
+				}
+			})
+		}
+	}
+	wg.Wait()
+	_, err := errs.JoinErr()
+	return err
 }
 
 // when (nodes == nil) transmit via all established streams in a bundle
@@ -379,30 +394,6 @@ func (sb *Streams) Abort() {
 			s.Abort()
 		}
 	}
-}
-
-func (sb *Streams) apply(action int) {
-	debug.Assert(action == closeFin || action == closeStop)
-	var (
-		streams = sb.get()
-		wg      = &sync.WaitGroup{}
-	)
-	for _, robin := range streams {
-		wg.Add(1)
-		go func(stsdest stsdest, wg *sync.WaitGroup) {
-			for _, s := range stsdest {
-				if !s.IsTerminated() {
-					if action == closeFin {
-						s.Fin()
-					} else {
-						s.Stop()
-					}
-				}
-			}
-			wg.Done()
-		}(robin.stsdest, wg)
-	}
-	wg.Wait()
 }
 
 // Open streams to all target peers from the given Smap.

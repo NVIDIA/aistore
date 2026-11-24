@@ -373,9 +373,14 @@ func (r *XactTCO) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		goto ex
 	}
 
-	r.IncPending()
-	err = r._recv(hdr, objReader)
-	r.DecPending()
+	// only data counts as activity: control (e.g., a finishing peer's 'done') must not extend idle
+	if hdr.Opcode == 0 {
+		r.IncPending()
+		err = r._recv(hdr, objReader)
+		r.DecPending()
+	} else {
+		err = r._recv(hdr, objReader)
+	}
 	transport.DrainAndFreeReader(objReader)
 ex:
 	if err != nil && cmn.Rom.V(4, cos.ModXs) {

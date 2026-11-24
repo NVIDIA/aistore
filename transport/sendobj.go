@@ -112,7 +112,7 @@ func (s *Stream) cmplLoop() {
 		}
 		s.doCmpl(&cmpl.obj, cmpl.err)
 	}
-	s.wg.Done()
+	close(s.cmplDone)
 }
 
 // handle the last interrupted transmission and pending SQ/SCQ

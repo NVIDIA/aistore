@@ -262,32 +262,47 @@ func (dm *DM) quiesce(d time.Duration) core.QuiRes {
 	return dm.xctn().Quiesce(d, dm.quicb)
 }
 
-func (dm *DM) Close(err error) {
+// stop on abort, otherwise finish the data and ACK streams and return any failure
+func (dm *DM) Close(err error) error {
 	if dm == nil {
 		if cmn.Rom.V(5, cos.ModTransport) {
 			nlog.Warningln("Warning: DM is <nil>") // e.g., single-node cluster
 		}
-		return
+		return err
 	}
 	if !dm.stage.opened.CAS(true, false) {
-		nlog.Errorln("Warning:", dm.String(), "not open")
-		return
+		// e.g., shared on-demand xaction: TxnAbort from more than one txn
+		nlog.Warningln(dm.String(), "not open")
+		return nil
 	}
 	if err == nil {
 		if xctn := dm.xctn(); xctn != nil && xctn.IsAborted() {
 			err = xctn.AbortErr()
 		}
 	}
-	// nil: close gracefully via `fin`, otherwise abort
-	dm.data.streams.Close(err == nil)
+	var (
+		gracefully = err == nil
+		dataErr    = dm.data.streams.Close(gracefully)
+		ackErr     error
+	)
 	if dm.useACKs() {
-		dm.ack.streams.Close(err == nil)
+		ackErr = dm.ack.streams.Close(gracefully)
+	}
+	if e := errors.Join(dataErr, ackErr); e != nil {
+		// record graceful-close failure (e.g., peer never responding to FIN)
+		// (graceful == false: abort and return nil)
+		debug.Assert(gracefully)
+		if xctn := dm.xctn(); xctn != nil && !xctn.IsAborted() {
+			xctn.AddErr(e)
+		}
+		err = e
 	}
 	if err == nil {
 		nlog.Infoln("closed", dm.String())
 	} else {
 		nlog.Warningln("closed", dm.String(), "cause:", err)
 	}
+	return err
 }
 
 func (dm *DM) Abort() {

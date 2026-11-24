@@ -78,6 +78,8 @@ type (
 		lastCh   cos.StopCh    // end-of-stream
 		pdu      *spdu         // PDU buffer
 		postCh   chan struct{} // to indicate that workCh has work
+		cmplDone chan struct{} // completion loop finished
+		finCh    chan struct{} // send loop finished, including cleanup
 		trname   string        // http endpoint: (trname, dstURL, dstID)
 		dstURL   string
 		dstID    string
@@ -96,7 +98,6 @@ type (
 			ticks        int           // num 1s ticks until idle timeout
 			index        int           // heap stuff
 		}
-		wg       sync.WaitGroup
 		sessST   atomic.Int64 // state of the TCP/HTTP session: active (connected) | inactive (disconnected)
 		sessID   int64        // stream session ID
 		numCur   int64        // gets reset to zero upon each timeout
@@ -126,6 +127,8 @@ func (s *Stream) initBase(client Client, dstURL, dstID string, extra *Extra) {
 	s.lastCh.Init()
 	s.stopCh.Init()
 	s.postCh = make(chan struct{}, 1)
+	s.cmplDone = make(chan struct{})
+	s.finCh = make(chan struct{})
 
 	// NOTE: PDU-based traffic - a MUST-have for "unsized" transmissions
 	if extra.UsePDU() {
@@ -175,7 +178,10 @@ func (s *base) startSend(streamable fmt.Stringer) (err error) {
 	}
 
 	if s.sessST.CAS(inactive, active) {
-		s.postCh <- struct{}{}
+		select {
+		case s.postCh <- struct{}{}:
+		default: // already posted
+		}
 		if cmn.Rom.V(5, cos.ModTransport) {
 			nlog.Infoln(s.String(), "inactive => active")
 		}
@@ -314,9 +320,10 @@ func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 	}
 
 	err = s.streamer.terminate(err)
-	s.wg.Done()
 
 	if err == errEndOfStream { // ok (via hdr.Opcode = opcFin => lastCh.Close)
+		<-s.cmplDone
+		close(s.finCh)
 		return
 	}
 
@@ -335,10 +342,11 @@ func (s *base) sendLoop(config *cmn.Config, dryrun bool) {
 	}
 
 	// wait for the SCQ/cmplCh to empty
-	s.wg.Wait()
+	<-s.cmplDone
 
-	// cleanup
+	// cleanup; signal FinContext before TermedCB (which may close the bundle)
 	s.streamer.abortPending(err, false /*completions*/)
+	close(s.finCh)
 
 	if err != errStopped {
 		if s.parent != nil && s.parent.TermedCB != nil {
