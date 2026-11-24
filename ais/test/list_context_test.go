@@ -38,8 +38,7 @@ import (
 //
 
 const (
-	lsoCtxStress = 3
-	// lrit: first 429 retry sleeps 1.5 * xs.remPageSleepIni (2s) +/- jitter; add a margin
+	lsoCtxStress    = 3
 	lsoCtxRetryWait = 4 * time.Second
 )
 
@@ -154,8 +153,14 @@ func TestLsoContext(t *testing.T) {
 		remote = attachLsoCtxRemote(t, bp, nat)
 	)
 
-	t.Run("lrit-retry-wait", func(t *testing.T) {
+	t.Run("backend-retry-wait", func(t *testing.T) {
 		b := remote.addBck(t, bp, "retry", lsoCtxRetry)
+		_, err := api.SetBucketProps(bp, b.bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+			Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+				Enabled: apc.Ptr(false), MaxTokens: apc.Ptr(2 * nat), Interval: apc.Ptr(cos.Duration(lsoCtxRetryWait)),
+			}, OnDemand: apc.Ptr(true), NumRetries: apc.Ptr(1)},
+		}})
+		tassert.CheckFatal(t, err)
 		xid, err := api.Prefetch(bp, b.bck, &apc.PrefetchMsg{})
 		tassert.CheckFatal(t, err)
 		waitLsoCtxCount(t, &b.calls, 1)
@@ -371,29 +376,6 @@ func TestPrefetchDT(t *testing.T) {
 			assertLsoCtxStable(t, &b.calls, int(previous), 200*time.Millisecond)
 		})
 	}
-	t.Run("first-page-retry", func(t *testing.T) {
-		tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
-		config := tools.GetClusterConfig(t)
-		t.Cleanup(func() {
-			tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": config.Client.ListObjTimeout.String()})
-		})
-		tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": "2s"})
-
-		b := remote.addBck(t, bp, "prefetch-first-page", lsoCtxRetryOnce)
-		xid, err := api.Prefetch(bp, b.bck, &apc.PrefetchMsg{})
-		tassert.CheckFatal(t, err)
-		waitLsoCtxCount(t, &b.calls, 1)
-		status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout})
-		tassert.CheckFatal(t, err)
-		tassert.Fatalf(t, status.IsFinished() && !status.IsAborted() && status.ErrMsg == "", "expected first-page retry to succeed, got %+v", status)
-		snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid})
-		tassert.CheckFatal(t, err)
-		tassert.Fatalf(t, len(snaps) == nat, "expected %d targets, got %v", nat, snaps)
-		for tid, all := range snaps {
-			tassert.Fatalf(t, len(all) == 1 && all[0].IsFinished() && !all[0].IsAborted(), "target %s: %+v", tid, all)
-		}
-		tassert.Errorf(t, b.calls.Load() == 2, "expected two backend LISTs, got %d", b.calls.Load())
-	})
 	t.Run("membership-change", func(t *testing.T) {
 		tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 2})
 		b := remote.addBck(t, bp, "prefetch-membership", lsoCtxBlock)
@@ -424,6 +406,72 @@ func TestPrefetchDT(t *testing.T) {
 		tassert.Fatalf(t, status.IsAborted(), "expected membership change to abort prefetch, got %+v", status)
 		tassert.Errorf(t, b.calls.Load() == 1, "expected one backend LIST, got %d", b.calls.Load())
 	})
+}
+
+func TestPrefetchListRetryPolicy(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2})
+	bp := tools.BaseAPIParams()
+	nat := tools.GetClusterMap(t, bp.URL).CountActiveTs()
+	remote := attachLsoCtxRemote(t, bp, nat)
+	config := tools.GetClusterConfig(t)
+	t.Cleanup(func() {
+		tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": config.Client.ListObjTimeout.String()})
+	})
+	tools.SetClusterConfig(t, cos.StrKVs{"client.list_timeout": "2s"})
+
+	for _, tc := range []struct {
+		name      string
+		mode      int
+		enabled   bool
+		onDemand  bool
+		retries   int
+		calls     int64
+		wantAbort bool
+	}{
+		{name: "off-success", mode: lsoCtxLastPage, calls: 1},
+		{name: "off-429-no-retry", mode: lsoCtxRetryOnce, calls: 1, wantAbort: true},
+		{name: "enabled-retry-recovers", mode: lsoCtxRetryOnce, enabled: true, retries: 1, calls: 2},
+		{name: "on-demand-retry-recovers", mode: lsoCtxRetryOnce, onDemand: true, retries: 1, calls: 2},
+		{name: "enabled-retries-exhausted", mode: lsoCtxRetry, enabled: true, retries: 1, calls: 2, wantAbort: true},
+		{name: "on-demand-retries-exhausted", mode: lsoCtxRetry, onDemand: true, retries: 1, calls: 2, wantAbort: true},
+		{name: "on-demand-zero-retries-uses-default", mode: lsoCtxRetryOnce, onDemand: true, calls: 2},
+		{name: "on-demand-non-rate-limit-error", mode: lsoCtxListFailure, onDemand: true, retries: 1, calls: 2, wantAbort: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := remote.addBck(t, bp, "prefetch-list-policy", tc.mode)
+			_, err := api.SetBucketProps(bp, b.bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+				Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+					Enabled: apc.Ptr(tc.enabled), MaxTokens: apc.Ptr(2 * nat), Interval: apc.Ptr(cos.Duration(3 * time.Second)),
+				}, OnDemand: apc.Ptr(tc.onDemand), NumRetries: apc.Ptr(tc.retries)},
+			}})
+			tassert.CheckFatal(t, err)
+			xid, err := api.Prefetch(bp, b.bck, &apc.PrefetchMsg{})
+			tassert.CheckFatal(t, err)
+			args := &xact.ArgsMsg{ID: xid, Kind: apc.ActPrefetchObjects, Timeout: tools.EvictPrefetchTimeout}
+			status, err := api.WaitForXactionIC(bp, args)
+			tassert.CheckFatal(t, err)
+			tassert.Errorf(t, status.IsAborted() == tc.wantAbort, "expected aborted=%t, got %+v", tc.wantAbort, status)
+			tassert.Errorf(t, b.calls.Load() == tc.calls, "expected %d backend LISTs, got %d", tc.calls, b.calls.Load())
+			if !status.IsAborted() {
+				tassert.Fatalf(t, status.IsFinished() && status.ErrMsg == "", "prefetch did not finish cleanly: %+v", status)
+			}
+			snaps, err := api.WaitForSnaps(bp, args, func(snaps xact.MultiSnap) (bool, bool, error) {
+				if len(snaps) != nat {
+					return false, false, nil
+				}
+				for _, all := range snaps {
+					if len(all) != 1 || !all[0].IsFinished() {
+						return false, false, nil
+					}
+				}
+				return true, false, nil
+			})
+			tassert.CheckFatal(t, err)
+			for tid, all := range snaps {
+				tassert.Errorf(t, len(all) == 1 && all[0].IsFinished() && all[0].IsAborted() == tc.wantAbort, "target %s: %+v", tid, all)
+			}
+		})
+	}
 }
 
 func attachLsoCtxRemote(t *testing.T, bp api.BaseParams, nat int) *lsoCtxRemote {

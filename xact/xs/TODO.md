@@ -18,14 +18,13 @@ dependencies noted where applicable.
 
 ## Remote prefix iteration: single designated target (highest priority)
 
-`lrit._prefix` (lrit.go): for a remote bucket, every target calls `backend.ListObjects` for the entire
+`lrit._prefix` (lrit.go): except for prefetch's designated-target flow, every target lists the entire remote
 prefix (`lsoPage`), page by page, and keeps only the names it owns (HRW).
 `XactNBI.Run` (create_nbi.go) also lists the remote bucket on every target before `filterKeepMine`;
 the duplication is not confined to `lrit`.
 
 - backend list traffic grows with cluster size: N targets, N times the `ListObjects` calls
-- larger clusters increase throttling pressure (429 or provider-reported 503); independent `lsoPage`
-  retries add requests, although each loop backs off and has a retry limit
+- larger clusters increase throttling pressure (429 or provider-reported 503); retries follow the bucket's backend policy
 - callers: prefetch, evict and delete (evict.go), archive, tcobjs - all list-range-prefix jobs on remote buckets
 
 Overhaul to an R-flow, as in list-objects (ais/plstcx.go `lsObjsR`; xs/lso.go):
@@ -91,30 +90,16 @@ Direction:
 
 Current behavior:
 
-- bucket has `rate_limit.backend.enabled`: `rlbackend` (ais/rlbackend.go) lazily builds a per-(bucket, verb)
+- with backend `enabled` or `on_demand`, `rlbackend` (ais/rlbackend.go) shares a per-(bucket, verb)
   `cos.AdaptRateLim` per target (`Bck.NewBackendRateLim`) and retries safely repeatable calls via
   `rlbackend.retry`, returning `ErrBackendRetry` when backend throttling exhausts retries
-- without that limiter, `lrit.lsoPage` has its own bounded backoff (`remPageSleepIni`, `remPageRetriesMax`);
-  prefetch records failed cold GETs rather than retrying them itself. ext/dload has separate HTTP retries
+- `lrit.lsoPage` follows the bucket policy, with no AIS LIST retries when both modes are off
 - moss's `adv.Sleep` and admission 429s concern local resource pressure; they are separate from backend throttling
 
 Goal: one mechanism for backend throttling; retain distinct handling for other retryable failures and local load.
 
-- a job (prefetch first) creates its `cos.AdaptRateLim` if and only if:
-  1. the bucket's backend rate limiter is not enabled, and
-  2. backend throttling actually happened (429 or a provider-classified throttling 503)
-- construction on demand and atomic (concurrent workers hit 429 at the same time): e.g., `atomic.Pointer` + CAS
-- start with validated `rate_limit.backend` defaults; factor construction out of `NewBackendRateLim`,
-  which currently returns nil when disabled. Divide a distributed budget among participating callers;
-  a single LIST DT should not receive only 1/N of the budget merely because N targets are active
-- after activation, workers share that job's limiter for the affected bucket/verb: acquire before calls,
-  including retries, and feed throttling errors back through `OnErr`
-- one shared retry helper for both worlds (generalize `rlbackend.retry`): bounded retries/wait,
-  cancellation-aware backoff, reader cleanup, and replayable bodies for PUT retries
-- preserve configured limits and `ErrBackendRetry` (as `lsoPage` already checks); do not stack a fallback
-  limiter/retry loop on top. Propagate fallback state to nested backend calls and blob-download children
-- scope: per job, keyed by (bucket, verb), including HEAD/GET/LIST as applicable; independent jobs still
-  have independent fallback budgets, so this does not enforce a bucket-wide aggregate limit
+- make token acquisition and retry backoff cancellation-aware
+- account for participating callers when dividing the budget; a single LIST DT currently receives only the per-target share
 
 ## Data mover: finish without the receive-side quiesce
 

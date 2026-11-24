@@ -6,10 +6,8 @@
 package xs
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"sync"
 	"time"
 
@@ -17,7 +15,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -372,63 +369,8 @@ func (r *lrit) _prefix(wi lrwi, smap *meta.Smap) error {
 	return nil
 }
 
-// list remote page: self-throttle and retry on 429 (see also: ais/rlbackend)
-// TODO: absorb into ais/rlbackend or remove once ListObjects rate limiting is
-// confirmed to handle all remote backends.
-const (
-	remPageRetriesMax = 6
-	remPageSleepIni   = 2 * time.Second
-)
-
-func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
-	ctx := r.parent.BackendCtx()
-	ecode, err = bp.ListObjects(ctx, r.bck, lsmsg, lst)
-	if err == nil || !tooManyReqs(ecode, err) || r.parent.IsAborted() {
-		return ecode, err
-	}
-
-	// already retried via configured rate-limiter
-	if _, ok := errors.AsType[*cmn.ErrBackendRetry](err); ok {
-		return ecode, err
-	}
-
-	var (
-		retries int
-		total   time.Duration
-		now     = mono.NanoTime()
-		sleep   = remPageSleepIni
-		nctx    = cmn.WithNoRetry(ctx)
-	)
-	for retries = 1; retries < remPageRetriesMax; retries++ {
-		sleep = cos.Jitter(sleep+sleep/2, now+int64(sleep))
-		select {
-		case <-ctx.Done():
-			if err := r.parent.AbortErr(); err != nil {
-				return 0, err
-			}
-			return 0, ctx.Err()
-		case <-time.After(sleep):
-		}
-		total += sleep
-
-		ecode, err = bp.ListObjects(nctx, r.bck, lsmsg, lst)
-		if err == nil {
-			if cmn.Rom.V(4, cos.ModXs) {
-				nlog.Warningln(r.bck.Cname(""), "list-objects: recovered after", retries, "retries, waited", total)
-			}
-			return 0, nil
-		}
-		if !tooManyReqs(ecode, err) || r.parent.IsAborted() {
-			return ecode, err
-		}
-	}
-	nlog.Warningln(r.bck.Cname(""), "list-objects: giving up after", retries-1, "retries, waited", total, "[", err, ecode, "]")
-
-	return ecode, err
-}
-
-func tooManyReqs(ecode int, err error) bool {
-	return ecode == http.StatusTooManyRequests || cmn.IsErrTooManyRequests(err)
+func (r *lrit) lsoPage(bp core.Backend, lsmsg *apc.LsoMsg, lst *cmn.LsoRes) (int, error) {
+	return bp.ListObjects(r.parent.BackendCtx(), r.bck, lsmsg, lst)
 }
 
 func (r *lrit) do(lom *core.LOM, wi lrwi, smap *meta.Smap) (bool /*this lom done*/, error) {

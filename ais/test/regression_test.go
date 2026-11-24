@@ -1364,7 +1364,10 @@ func TestPrefetchRetryRemoteAIS(t *testing.T) {
 		{name: "cold-get-with-bucket-configured-policy", enabled: true},
 		{name: "cold-get-with-on-demand-policy", onDemand: true},
 		{name: "on-demand-honors-one-retry-budget", onDemand: true, numRetries: 1, wantFailure: true},
+		{name: "prefix-cold-get-with-policy-disabled", prefix: "objects/", wantFailure: true},
+		{name: "prefix-cold-get-with-bucket-configured-policy", prefix: "objects/", enabled: true},
 		{name: "prefix-cold-get-with-on-demand-policy", prefix: "objects/", onDemand: true},
+		{name: "prefix-on-demand-honors-one-retry-budget", prefix: "objects/", onDemand: true, numRetries: 1, wantFailure: true},
 		{name: "blob-with-policy-disabled", blob: true, wantFailure: true},
 		{name: "blob-with-on-demand-policy", onDemand: true, blob: true},
 	} {
@@ -1426,6 +1429,9 @@ func TestPrefetchRetryRemoteAIS(t *testing.T) {
 
 			msg := apc.PrefetchMsg{ListRange: apc.ListRange{ObjNames: names}, NumWorkers: 4}
 			if tc.prefix != "" {
+				listed, err := api.ListObjects(remoteBP, remoteBck, &apc.LsoMsg{Prefix: tc.prefix, PageSize: 2}, api.ListArgs{Context: t.Context()})
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, len(listed.Entries) == numObjects, "expected LIST to return all %d objects despite frontend GET rate limiting, got %d", numObjects, len(listed.Entries))
 				msg.ListRange = apc.ListRange{Template: tc.prefix}
 			}
 			if tc.blob {

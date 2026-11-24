@@ -216,6 +216,10 @@ At first, the permutations may seem too numerous, but in reality it is easy to s
 - Frontend rate-limiting is enforced by a given running job and is _conjunctive_ (source and/or destination wise). When both limits are defined one of them will most likely "absorb" the other.
 - Backend is controlled by the corresponding `(bucket, verb)` rate limiter that keeps adjusting its runtime state based on the responses from remote storage. The same limiter serves client requests and all jobs, in either mode (see [Backend Activation Modes](#backend-activation-modes)).
 
+Remote LIST pagination in prefix-based prefetch, copy/transform, archive, and evict/delete jobs follows this same bucket policy. Configure `rate_limit.backend.on_demand=true` for pacing only after a rate-limit error, or `rate_limit.backend.enabled=true` for pacing from the start. `rlbackend` owns the retry budget and backoff.
+
+With both settings `false`, a backend LIST error propagates to the job without an AIS retry. The initial backend call's normal SDK retry policy is unchanged; SDK retries are disabled on calls retried by `rlbackend`.
+
 ---
 
 ## 6. Use Cases

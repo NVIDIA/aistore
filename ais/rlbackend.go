@@ -86,11 +86,9 @@ func (bp *rlbackend) HeadObj(ctx context.Context, lom *core.LOM, origReq *http.R
 
 // Direct callers (all via core.T.Backend):
 // - (*npgCtx).nextPageR (xact/xs/nextpage.go): remote LIST and bucket summary
-// - (*lrit).lsoPage (xact/xs/lrit.go): prefix prefetch, evict/delete, copy/transform, and archive
+// - (*lrit)._prefix and (*lrpages).next (xact/xs/lrit.go): prefix prefetch, evict/delete, copy/transform, and archive
 // - (*XactNBI).Run (xact/xs/create_nbi.go): native bucket inventory
 // - (*backendDlJob).getNextObjs (ext/dload/job.go): backend download
-//
-// TODO -- FIXME: (*lrit).lsoPage has its own retry loop - unify
 func (bp *rlbackend) ListObjects(ctx context.Context, bck *meta.Bck, msg *apc.LsoMsg, lst *cmn.LsoRes) (ecode int, err error) {
 	arl := bp.acquire(bck, apc.ActList)
 
