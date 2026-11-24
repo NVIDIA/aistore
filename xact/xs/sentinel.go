@@ -106,7 +106,7 @@ func (s *sentinel) qcb(tot time.Duration) core.QuiRes {
 		return core.QuiDone
 	}
 	// have "pending" targets
-	progressTimeout := max(s.config.Timeout.SendFile.D(), time.Minute)
+	progressTimeout := max(s.config.Timeout.SendFile.D(), s.qival())
 	return s._qcb(tot, s.qival(), progressTimeout, s.r.ErrCnt())
 }
 

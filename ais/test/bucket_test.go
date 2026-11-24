@@ -2270,8 +2270,9 @@ func TestCopyBucketSimple(t *testing.T) {
 func TestCopyBucketSlowPeer(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2})
 	const (
-		progressTimeout = time.Minute
-		perObj          = 4 * time.Second
+		qival    = 10 * time.Second
+		sendFile = 5 * time.Second
+		perObj   = 2 * time.Second
 	)
 	var (
 		bckFrom   = cmn.Bck{Name: "cp-slow-from" + cos.GenTie(), Provider: apc.AIS}
@@ -2282,7 +2283,7 @@ func TestCopyBucketSlowPeer(t *testing.T) {
 		names     = cos.NewStrSet()
 		maxTokens = 2 * max(smap.CountActiveTs(), smap.CountActivePs())
 		perTarget = cos.DivRound(maxTokens, smap.CountActiveTs())
-		numObjs   = perTarget + 1 + int(progressTimeout/perObj) + 5
+		numObjs   = perTarget + int(qival/perObj) + 1
 	)
 	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
 	p, err := api.HeadBucket(bp, bckFrom, false /*don't add*/)
@@ -2306,8 +2307,8 @@ func TestCopyBucketSlowPeer(t *testing.T) {
 		})
 	})
 	tools.SetClusterConfig(t, cos.StrKVs{
-		"timeout.send_file_time": progressTimeout.String(),
-		"timeout.max_host_busy":  progressTimeout.String(),
+		"timeout.send_file_time": sendFile.String(),
+		"timeout.max_host_busy":  qival.String(),
 	})
 
 	tlog.Logfln("%s: %d frontend tokens for each %v on each target", bckFrom.Cname(""), perTarget,
@@ -2326,12 +2327,17 @@ func TestCopyBucketSlowPeer(t *testing.T) {
 	tassert.CheckFatal(t, err)
 	t.Cleanup(func() { tools.DestroyBucket(t, proxyURL, bckTo) })
 
+	time.Sleep(time.Until(started.Add(qival + time.Second)))
+	snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: xid, DaemonID: tsi.ID()})
+	tassert.CheckFatal(t, err)
+	copied, _, _ := snaps.ObjCounts(xid)
+	tlog.Logfln("%s: %d of %d objects copied after %v", tsi.StringEx(), copied, numObjs, time.Since(started))
+	tassert.Fatalf(t, copied < int64(numObjs), "%s copied all %d objects before the first sentinel check (rate limit not applied?)",
+		tsi.StringEx(), numObjs)
+
 	status, err := api.WaitForXactionIC(bp, &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyBck, Timeout: 5 * time.Minute})
 	tassert.CheckFatal(t, err)
 	tassert.Errorf(t, !status.IsAborted(), "%s aborted: %s", xid, status.ErrMsg)
-	elapsed := time.Since(started)
-	tassert.Errorf(t, elapsed > progressTimeout, "%s took %v, not longer than the progress timeout %v (rate limit not applied?)",
-		xid, elapsed, progressTimeout)
 
 	list, err := api.ListObjects(bp, bckTo, nil, api.ListArgs{})
 	tassert.CheckFatal(t, err)
