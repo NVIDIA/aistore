@@ -418,7 +418,7 @@ func (r *LsoXact) fcleanup(int64) (d time.Duration) {
 			cos.DrainAnyChan(r.remtCh)
 		}
 		cos.DrainAnyChan(r.msgCh)
-		r.p.dm.UnregRecv()
+		go r.p.dm.UnregRecv() // quiesce outside the housekeeper
 	}
 	return d
 }

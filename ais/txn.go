@@ -349,9 +349,13 @@ func (txns *txns) _wait(txn txn, timeoutNetw, timeoutHost time.Duration) (err er
 
 // GC orphaned txns
 func (txns *txns) housekeep(int64) (d time.Duration) {
+	type orphanTxn struct {
+		txn txn
+		err error
+	}
 	var (
-		errs    []error
-		orphans []txn
+		warns   []error
+		orphans []orphanTxn
 		config  = cmn.GCO.Get()
 	)
 	d = hk.DelOldIval
@@ -365,36 +369,36 @@ func (txns *txns) housekeep(int64) (d time.Duration) {
 		d >>= 2
 	}
 	now := time.Now()
-	for _, txn := range txns.m {
+	for uuid, txn := range txns.m {
 		err, warn := checkTimeout(txn, now, config)
 		if err != nil {
-			errs = append(errs, err)
-			txn.abort(err)
-			delete(txns.m, txn.uuid())
-			orphans = append(orphans, txn)
+			delete(txns.m, uuid)
+			orphans = append(orphans, orphanTxn{txn, err})
 		} else if warn != nil {
-			errs = append(errs, warn)
+			warns = append(warns, warn)
 		}
 	}
-	txns.mtx.Unlock()
-
-	if len(orphans) > 0 || len(errs) > 0 {
-		go txns.cleanup(orphans, errs)
-	}
-	return d
-}
-
-func (txns *txns) cleanup(orphans []txn, errs []error) {
 	if len(orphans) > 0 {
 		txns.rendezvous.mtx.Lock()
-		for _, txn := range orphans {
-			delete(txns.rendezvous.m, txn.uuid())
+		for _, o := range orphans {
+			delete(txns.rendezvous.m, o.txn.uuid())
 		}
 		txns.rendezvous.mtx.Unlock()
 	}
-	for _, e := range errs {
-		nlog.Errorln(e)
+	txns.mtx.Unlock()
+
+	if len(orphans) > 0 || len(warns) > 0 {
+		// abort may wait for a data mover to quiesce
+		go func() {
+			for _, warn := range warns {
+				nlog.Warningln(warn)
+			}
+			for _, o := range orphans {
+				o.txn.abort(o.err)
+			}
+		}()
 	}
+	return d
 }
 
 func checkTimeout(txn txn, now time.Time, config *cmn.Config) (err, warn error) {
@@ -492,7 +496,7 @@ func (txn *txnBckBase) unlock() {
 
 func (txn *txnBckBase) abort(err error) {
 	txn.unlock()
-	nlog.Infoln(txn.String(), "aborted:", err)
+	nlog.WarningDepth(1, txn.String(), "aborted:", err)
 }
 
 func (txn *txnBckBase) String() string {

@@ -441,9 +441,22 @@ func abortReq(nl nl.Listener) cmn.HreqArgs {
 // housekeeping
 //
 
-const maxNotifsHK = time.Second >> 2
+// soft polling budget
+const maxNotifsSweep = cos.PollSleepMedium
 
 func (n *notifs) housekeep(now int64) time.Duration {
+	if n.size() == 0 {
+		return cos.Jitter(hk.Prune2mIval, now)
+	}
+	// rearm after the sweep so slow target polls cannot overlap
+	go func() {
+		d := n.sweep(now)
+		hk.Reg(notifsName+hk.NameSuffix, n.housekeep, d)
+	}()
+	return hk.UnregInterval
+}
+
+func (n *notifs) sweep(now int64) time.Duration {
 	// nl.EndTime() is wall-clock (set via time.Now().UnixNano() in nl.Callback);
 	// the hk-supplied `now` is mono, so use wall-clock for the EndTime comparison.
 	wallNow := time.Now().UnixNano()
@@ -463,7 +476,7 @@ func (n *notifs) housekeep(now int64) time.Duration {
 		return cos.Jitter(hk.Prune2mIval, now)
 	}
 
-	if elapsed := mono.Since(now); elapsed > maxNotifsHK {
+	if elapsed := mono.Since(now); elapsed > maxNotifsSweep {
 		return cos.Jitter(hk.Prune2mIval>>1, now)
 	}
 
@@ -483,7 +496,7 @@ func (n *notifs) housekeep(now int64) time.Duration {
 	nexthk := hk.Prune2mIval
 	for _, nl := range n.tempnl {
 		n.bcastGetStats(nl, hk.Prune2mIval)
-		if mono.Since(now) > maxNotifsHK {
+		if mono.Since(now) > maxNotifsSweep {
 			nexthk = hk.Prune2mIval >> 1
 			break
 		}

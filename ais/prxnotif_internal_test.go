@@ -70,7 +70,7 @@ func TestNotifHousekeepUsesWallClock(t *testing.T) {
 	n.fin.add(xnl, false /*locked*/)
 	tassert.Fatalf(t, n.fin.l.Load() == 1, "finished listener not registered")
 
-	n.housekeep(int64(time.Hour))
+	n.sweep(int64(time.Hour))
 	tassert.Errorf(t, n.fin.l.Load() == 0, "expired listener retained when housekeeping receives mono time")
 }
 
