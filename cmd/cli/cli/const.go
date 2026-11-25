@@ -1219,7 +1219,11 @@ var (
 	}
 
 	// archive
-	listArchFlag = cli.BoolFlag{Name: "archive", Usage: "List archived content (see docs/archive.md for details)"}
+	listArchFlag       = cli.BoolFlag{Name: "archive", Usage: "List archived content (see docs/archive.md for details)"}
+	listInArchOnlyFlag = cli.BoolFlag{
+		Name:  "in-arch-only",
+		Usage: "List only the files in archives: no archives, no other objects, no virtual directories",
+	}
 
 	archpathFlag = cli.StringFlag{ // for apc.QparamArchpath; PUT/append => shard
 		Name:  "archpath",

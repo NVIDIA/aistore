@@ -1,0 +1,13 @@
+echo "0123456789" > $OBJECT_1.txt
+ais bucket create ais://$BUCKET_1 // IGNORE
+
+# an archive, a sibling archive, and an object with the same prefix
+ais archive put $OBJECT_1.txt ais://$BUCKET_1/shard.tar --archpath=a.txt // IGNORE
+ais archive put $OBJECT_1.txt ais://$BUCKET_1/shard.tar-1.tar --archpath=a.txt // IGNORE
+ais put $OBJECT_1.txt ais://$BUCKET_1/shard.tar.txt // IGNORE
+
+# only the files in archives
+ais ls ais://$BUCKET_1 --in-arch-only --name-only -H
+
+ais bucket rm ais://$BUCKET_1 --yes // IGNORE
+rm -f $OBJECT_1.txt // IGNORE

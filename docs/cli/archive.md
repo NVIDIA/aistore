@@ -173,6 +173,28 @@ NAME                             SIZE
     sys.tar.lz4/docs/README      13.85KiB
 ```
 
+To list only the files in archives (no archives, no other objects, no virtual directories), use `--in-arch-only`:
+
+```console
+$ ais ls ais://nnn --in-arch-only
+NAME                             SIZE
+    sys.tar.lz4/api_linux.go     1.07KiB
+    sys.tar.lz4/cpu.go           1.07KiB
+    sys.tar.lz4/cpu_darwin.go    802B
+    sys.tar.lz4/cpu_linux.go     2.14KiB
+    sys.tar.lz4/docs/README      13.85KiB
+    sys.tar.lz4/mem.go           1.16KiB
+    sys.tar.lz4/mem_darwin.go    2.04KiB
+    sys.tar.lz4/mem_linux.go     2.81KiB
+    sys.tar.lz4/proc.go          784B
+    sys.tar.lz4/proc_darwin.go   369B
+    sys.tar.lz4/proc_linux.go    1.40KiB
+    sys.tar.lz4/sys_test.go      3.88KiB
+Listed: 12 names
+```
+
+`--in-arch-only` requires AIStore v5.3 or later. An older cluster ignores it and lists the same entries as `--archive`.
+
 ### Example 2: use `--template` flag to add source files
 
 Generally, the `--template` option combines (an optional) prefix and/or one or more ranges (e.g., bash brace expansions).
@@ -558,6 +580,7 @@ OPTIONS:
                             - to prevent this from happening, either use this '--dont-add' flag or run 'ais evict' command later
    --dont-wait            When _summarizing_ buckets do not wait for the respective job to finish -
                           use the job's UUID to query the results interactively
+   --in-arch-only         List only the files in archives: no archives, no other objects, no virtual directories
    --inv-id value         Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
    --inv-name value       Bucket inventory name (optional; system default name is '.inventory')
    --inventory            List objects using _bucket inventory_ (docs/s3compat.md); requires s3:// backend; will provide significant performance

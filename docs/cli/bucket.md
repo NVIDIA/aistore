@@ -248,6 +248,7 @@ NAME:
      * ais ls s3 --all                                     - list all s3 buckets (both in-cluster and remote).
    list archive contents:
      * ais ls ais://abc/sample.tar --archive   - list files inside a tar archive;
+     * ais ls ais://abc --in-arch-only         - list only the files inside all archives;
    list in pages (continues until '--max-pages', '--limit', Ctrl-C, or end of bucket):
      * ais ls s3://abc --paged --limit 1234000        - limited paged output (1234 pages), with default properties;
      * ais ls s3://abc --paged --limit 1234000 --nr   - same as above, non-recursively (skips nested directories);
@@ -358,6 +359,7 @@ NAME:
      * ais ls s3 --all                                     - list all s3 buckets (both in-cluster and remote).
    list archive contents:
      * ais ls ais://abc/sample.tar --archive   - list files inside a tar archive;
+     * ais ls ais://abc --in-arch-only         - list only the files inside all archives;
    list in pages (continues until '--max-pages', '--limit', Ctrl-C, or end of bucket):
      * ais ls s3://abc --paged --limit 1234000        - limited paged output (1234 pages), with default properties;
      * ais ls s3://abc --paged --limit 1234000 --nr   - same as above, non-recursively (skips nested directories);
@@ -404,6 +406,7 @@ OPTIONS:
                             - to prevent this from happening, either use this '--dont-add' flag or run 'ais evict' command later
    --dont-wait            When _summarizing_ buckets do not wait for the respective job to finish -
                           use the job's UUID to query the results interactively
+   --in-arch-only         List only the files in archives: no archives, no other objects, no virtual directories
    --inv-id value         Bucket inventory ID (optional; by default, we use bucket name as the bucket's inventory ID)
    --inv-name value       Bucket inventory name (optional; system default name is '.inventory')
    --inventory            List objects using _bucket inventory_ (docs/s3compat.md); requires s3:// backend; will provide significant performance
@@ -489,6 +492,7 @@ OPTIONS:
 | `--cached` | `bool` | list only those objects from a remote bucket that are present ("cached") | `false` |
 | `--skip-lookup` | `bool` | list public-access Cloud buckets that may disallow certain operations (e.g., `HEAD(bucket)`); use this option for performance _or_ to read Cloud buckets that allow _anonymous_ access | `false` |
 | `--archive` | `bool` | list archived content | `false` |
+| `--in-arch-only` | `bool` | list only the files in archives: no archives, no other objects, no virtual directories | `false` |
 | `--check-versions` | `bool` | check whether listed remote objects and their in-cluster copies are identical, ie., have the same versions; applies to remote backends that maintain at least some form of versioning information (e.g., version, checksum, ETag) | `false` |
 | `--summary` | `bool` | show bucket sizes and used capacity; by default, applies only to the buckets that are _present_ in the cluster (use '--all' option to override) | `false` |
 | `--bytes` | `bool` | show sizes in bytes (ie., do not convert to KiB, MiB, GiB, etc.) | `false` |

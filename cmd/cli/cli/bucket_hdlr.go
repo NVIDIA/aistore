@@ -122,6 +122,7 @@ const listAnyUsage = "List buckets, objects in buckets, and files in (.tar, .tgz
 	indent1 + "\t* ais ls s3 --all \t- list all s3 buckets (both in-cluster and remote).\n" +
 	indent1 + "list archive contents:\n" +
 	indent1 + "\t* ais ls ais://abc/sample.tar --archive \t- list files inside a tar archive;\n" +
+	indent1 + "\t* ais ls ais://abc --in-arch-only \t- list only the files inside all archives;\n" +
 	indent1 + "list in pages (continues until '--max-pages', '--limit', Ctrl-C, or end of bucket):\n" +
 	indent1 + "\t* ais ls s3://abc --paged --limit 1234000 \t- limited paged output (1234 pages), with default properties;\n" +
 	indent1 + "\t* ais ls s3://abc --paged --limit 1234000 --nr \t- same as above, non-recursively (skips nested directories);\n" +
@@ -257,6 +258,7 @@ var (
 		dontHeadRemoteFlag,
 		dontAddRemoteFlag,
 		listArchFlag,
+		listInArchOnlyFlag,
 		unitsFlag,
 		silentFlag,
 		dontWaitFlag,
@@ -1090,11 +1092,11 @@ func listAnyHandler(c *cli.Context) error {
 		return err
 	}
 proceed:
+	listArch := flagIsSet(c, listArchFlag) || flagIsSet(c, listInArchOnlyFlag)
 	switch {
 	case objName != "" && flagIsSet(c, diffFlag):
 		// --diff forces default case (see below)
 		prefix := objName
-		listArch := flagIsSet(c, listArchFlag)
 		return listObjects(c, bck, prefix, listArch, true /*print empty*/)
 
 	case objName != "":
@@ -1102,7 +1104,7 @@ proceed:
 		// (2) show (as in: HEAD) specified object, or
 		// (3) show part of a bucket that matches prefix = objName, or
 		// (4) summarize part of a bucket that --/--
-		if flagIsSet(c, listArchFlag) {
+		if listArch {
 			// (1)
 			return listArchHandler(c)
 		}
@@ -1162,7 +1164,6 @@ proceed:
 
 	default: // list objects
 		prefix := parseStrFlag(c, listObjPrefixFlag)
-		listArch := flagIsSet(c, listArchFlag) // include archived content, if requested
 		return listObjects(c, bck, prefix, listArch, true /*print empty*/)
 	}
 }

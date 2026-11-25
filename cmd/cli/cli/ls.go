@@ -268,6 +268,9 @@ func listObjects(c *cli.Context, bck cmn.Bck, prefix string, listArch, printEmpt
 	}
 	if listArch {
 		msg.SetFlag(apc.LsArchDir)
+		if flagIsSet(c, listInArchOnlyFlag) {
+			msg.SetFlag(apc.LsInArchOnly)
+		}
 
 		if bck.IsRemote() && !msg.IsFlagSet(apc.LsCached) {
 			const warn = "listing the contents of archives (\"shards\") is currently only supported for in-cluster (\"cached\") objects."
