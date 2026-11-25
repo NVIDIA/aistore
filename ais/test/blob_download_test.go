@@ -915,9 +915,9 @@ func TestBlobDownloadRemaisReadTimeout(t *testing.T) {
 func TestBlobDownloadAbortByKind(t *testing.T) {
 	const (
 		objSize    = 32 * cos.MiB
-		chunkSize  = 8 * cos.MiB
-		numWorkers = 4
-		numObjs    = 15
+		chunkSize  = cos.MiB
+		numWorkers = 2
+		numObjs    = 2
 	)
 	var (
 		proxyURL   = tools.RandomProxyURL(t)
@@ -935,13 +935,33 @@ func TestBlobDownloadAbortByKind(t *testing.T) {
 		prefix:    prefix,
 	}
 
-	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck, Long: true})
+	tools.CheckSkip(t, &tools.SkipTestArgs{RemoteBck: true, Bck: m.bck, MinMountpaths: 2, Long: true})
 
 	m.init(true /*cleanup*/)
 	initMountpaths(t, proxyURL)
 
 	tlog.Logfln("Provisioning %d objects of %s each", numObjs, cos.ToSizeIEC(objSize, 0))
 	m.remotePuts(true /*evict*/)
+
+	props, err := api.HeadBucket(baseParams, m.bck, false)
+	tassert.CheckFatal(t, err)
+	previous := props.RateLimit.Backend
+	t.Cleanup(func() {
+		_, err := api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+			Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+				Enabled: &previous.Enabled, MaxTokens: &previous.MaxTokens, Interval: &previous.Interval,
+			}, OnDemand: &previous.OnDemand},
+		}})
+		tassert.CheckError(t, err)
+	})
+	// Two requests per two seconds per target keep the 32-chunk downloads running.
+	numTargets := tools.GetClusterMap(t, proxyURL).CountActiveTs()
+	_, err = api.SetBucketProps(baseParams, m.bck, &cmn.BpropsToSet{RateLimit: &cmn.RateLimitConfToSet{
+		Backend: &cmn.AdaptiveToSet{RateLimitBaseToSet: cmn.RateLimitBaseToSet{
+			Enabled: apc.Ptr(true), MaxTokens: apc.Ptr(2 * numTargets), Interval: apc.Ptr(cos.Duration(2 * time.Second)),
+		}, OnDemand: apc.Ptr(false)},
+	}})
+	tassert.CheckFatal(t, err)
 
 	tlog.Logfln("Starting blob download for %d objects", numObjs)
 	blobMsg := &apc.BlobMsg{
@@ -953,30 +973,40 @@ func TestBlobDownloadAbortByKind(t *testing.T) {
 		xid, err := api.BlobDownload(baseParams, m.bck, objName, blobMsg)
 		tassert.CheckFatal(t, err)
 		xids[i] = xid
+		t.Cleanup(func() { _ = api.AbortXaction(baseParams, &xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl}) })
 	}
 
-	// Immediately abort ALL blob downloads by kind (no xid specified)
+	// Wait for actual range-read progress, not just xaction registration.
+	for _, xid := range xids {
+		args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceStartTimeout}
+		_, err = api.WaitForSnaps(baseParams, &args, func(snaps xact.MultiSnap) (bool, bool, error) {
+			_, snap, err := snaps.RunningTarget(xid)
+			return snap != nil && snap.Stats.Bytes >= chunkSize, false, err
+		})
+		tassert.CheckFatal(t, err)
+	}
+
+	// Abort ALL blob downloads by kind (no xid specified)
 	tlog.Logfln("Aborting all blob downloads by kind")
 	abortArgs := xact.ArgsMsg{Kind: apc.ActBlobDl}
-	err := api.AbortXaction(baseParams, &abortArgs)
+	err = api.AbortXaction(baseParams, &abortArgs)
 	tassert.CheckFatal(t, err)
 
 	// Wait for all blob download jobs to finish (aborted status)
 	tlog.Logfln("Waiting for all blob downloads to finish")
 
 	for _, xid := range xids {
-		args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceTimeout}
+		args := xact.ArgsMsg{ID: xid, Kind: apc.ActBlobDl, Timeout: tools.RebalanceStartTimeout}
 
-		err = api.WaitForXaction(baseParams, &args)
+		snaps, err := api.WaitForSnaps(baseParams, &args, blobdlFinished)
 		tassert.CheckFatal(t, err)
+		for _, targetSnaps := range snaps {
+			for _, snap := range targetSnaps {
+				tassert.Errorf(t, snap.AbortedX, "expected aborted blob download %s, got %+v", xid, snap)
+			}
+		}
 	}
-	tlog.Logfln("All blob downloads aborted or finished")
-
-	// Evict all objects to clean up any that completed successfully before abort
-	tlog.Logfln("Evicting all objects to ensure clean state")
-	for _, objName := range m.objNames {
-		_ = api.EvictObject(baseParams, m.bck, objName)
-	}
+	tlog.Logfln("All blob downloads aborted")
 
 	// Validate no chunks on disk for all objects
 	tlog.Logfln("Validating no leftover chunks on disk for all objects")
