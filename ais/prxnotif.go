@@ -378,7 +378,7 @@ func (n *notifs) finPostReb(nl nl.Listener, smap *smapX) (done bool) {
 	}
 	nl.Unlock()
 	for _, node := range fin {
-		nlog.Infoln(nl.Name()+":", node.StringEx(), "is in maintenance post-rebalance - counting it as finished")
+		nlog.Infoln(nl.Name(), node.StringEx(), "is in maintenance post-rebalance - counting it as finished")
 	}
 	return done
 }

@@ -199,6 +199,15 @@ The following cases assume pod-derived IDs.
 | Target retains its volumes while the scope changes | The stored ID wins; the changed derivation setting is ignored. |
 | Proxy restarts with a changed scope | The proxy derives a different ID. A local Smap that lacks the new ID stops startup. |
 
+**Fast rejoin.** When a crashed target restarts and self-joins before keepalive removes it from the Smap, the primary may skip rebalance. This is best-effort and requires all of the following:
+
+* the target keeps its volume: no lost mountpaths and no pending resilver;
+* its local Smap and BMD are current (same UUID and version as the primary's);
+* no interrupted rebalance, and no change in node flags or placement weight;
+* the latest rebalance was a full (not bucket-scoped) rebalance, and the current primary has observed its successful completion at the current Smap version.
+
+The primary then records the target's new verifying key in the Smap and responds with the completed rebalance (RMD); the target does not run it. Otherwise, the target self-joins as usual, and the primary starts a rebalance.
+
 At startup, AIS checks the target ID in mountpath extended attributes and VMD for the volumes it will use, the same way as for an ID specified via `-daemon_id`/`AIS_DAEMON_ID`. It stamps mountpaths that lack an ID, independently of the object metadata write policy (`write_policy.md`). At runtime, attaching or enabling a mountpath with a foreign ID in its extended attribute fails with `sie#10`. See the [storage integrity error reference](/docs/troubleshooting.md#sie-error-reference).
 
 **Blank volumes do not recover local data.** AIS does not detect that an existing target has returned with blank volumes. Objects backed by remote buckets can be fetched again on a cold GET. Objects in `ais://` buckets with no surviving copies are lost.

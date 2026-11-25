@@ -44,6 +44,7 @@ type (
 	// the targets. It is distributed when some kind of rebalance is required.
 	rebMD struct {
 		meta.RMD
+		doneSmapVer atomic.Int64 // primary only: Smap version covered by this (completed, full) rebalance
 	}
 
 	// rmdOwner is used to keep the information about the rebalances. Currently
@@ -89,9 +90,7 @@ func (*rebMD) sgl() *memsys.SGL  { return nil }
 func (r *rebMD) inc() { r.Version++ }
 
 func (r *rebMD) clone() *rebMD {
-	dst := &rebMD{}
-	cos.CopyStruct(dst, r)
-	return dst
+	return &rebMD{RMD: r.RMD}
 }
 
 func (r *rebMD) String() string {
@@ -314,11 +313,13 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	if cb != nil {
 		f = cb
 	}
-	if len(maint) == 0 {
-		nl.F = f
-	} else {
-		nl.F = m.withCompleteMaint(f, maint)
+	if len(maint) != 0 {
+		f = m.withCompleteMaint(f, maint)
 	}
+	if !m.limited {
+		f = m.withRebDone(f)
+	}
+	nl.F = f
 
 	for _, tsi := range tsis {
 		// apc.ActStopMaintenance: the target is transitioning: maintenance => active
@@ -335,6 +336,20 @@ func (m *rmdModifier) listen(cb func(nl nl.Listener)) {
 	}
 	err := m.p.notifs.add(nl)
 	debug.AssertNoErr(err)
+}
+
+// record Smap version upon successful completion (see fast rejoin)
+func (m *rmdModifier) withRebDone(f func(nl.Listener)) func(nl.Listener) {
+	sver := m.smapCtx.nver
+	if sver == 0 {
+		sver = m.smapCtx.smap.Version
+	}
+	return func(l nl.Listener) {
+		if !l.IsAborted() && l.ErrCnt() == 0 {
+			m.cur.doneSmapVer.Store(sver)
+		}
+		f(l)
+	}
 }
 
 // called when rebalance is done:

@@ -16,6 +16,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
+	"github.com/NVIDIA/aistore/cmn/fname"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -836,9 +837,12 @@ func (r *Trunner) log(now int64, uptime time.Duration, config *cmn.Config) {
 		nlog.Infoln(ln)
 	}
 
-	// clear 'node-restarted'
-	if uptime > 10*time.Hour {
-		clr |= cos.NodeRestarted
+	// clear 'node-restarted': remove the marker that also enables GFN and slow keepalive
+	// (RemoveMarker clears the alert; compare w/ rebalance completion and fast rejoin)
+	if uptime > 10*time.Hour && r.nodeStateFlags().IsSet(cos.NodeRestarted) {
+		if !fs.RemoveMarker(fname.NodeRestartedPrev, r, false /*stopping*/) {
+			clr |= cos.NodeRestarted // failed to remove: clear the alert anyway (no retries)
+		}
 	}
 
 	// 7. separately, memory and CPU alerts

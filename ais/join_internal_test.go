@@ -245,17 +245,13 @@ func TestCluPostVerify(t *testing.T) {
 		flags         cos.NodeStateFlags
 		signed        bool
 		absent        bool
-		rebalance     bool
 		verifiedEarly bool
 		rejectAt      string
 	}{
 		{name: "unsigned self-join", apiOp: apc.SelfJoin, rejectAt: "verify"},
 		{name: "signed self-join", apiOp: apc.SelfJoin, signed: true, verifiedEarly: true},
-		{name: "unsigned restarted keepalive", apiOp: apc.Keepalive, flags: cos.NodeRestarted, rejectAt: "verify"},
-		{name: "promoted keepalive", apiOp: apc.Keepalive, flags: cos.NodeRestarted, signed: true, rebalance: true, verifiedEarly: true},
-		{name: "restarted keepalive without rebalance", apiOp: apc.Keepalive, flags: cos.NodeRestarted, signed: true, absent: true,
-			verifiedEarly: true},
 		{name: "ordinary member keepalive", apiOp: apc.Keepalive},
+		{name: "restarted keepalive (markers cleared)", apiOp: apc.Keepalive, flags: cos.NodeRestarted | cos.RebalanceInterrupted},
 		{name: "unsigned absent keepalive", apiOp: apc.Keepalive, absent: true, rejectAt: "admit"},
 		{name: "signed absent keepalive", apiOp: apc.Keepalive, signed: true, absent: true},
 	} {
@@ -269,7 +265,7 @@ func TestCluPostVerify(t *testing.T) {
 				nsi = newSnode("absent", apc.Proxy)
 			}
 			config := &cmn.Config{}
-			config.Rebalance = &cmn.RebalanceConf{Enabled: test.rebalance}
+			config.Rebalance = &cmn.RebalanceConf{}
 			c := &clupost{
 				p: p, w: httptest.NewRecorder(), r: req, config: config, apiOp: test.apiOp, body: body,
 				smap: smap, bmd: newBucketMD(), nsi: nsi, nversStr: cmn.VersionAIStore,
@@ -278,11 +274,11 @@ func TestCluPostVerify(t *testing.T) {
 
 			stage := "verify"
 			err := c.verify()
+			if test.apiOp == apc.Keepalive {
+				tassert.Fatalf(t, !c.regReq.Flags.IsAnySet(rebMarkerFlags), "keepalive markers not cleared: %s", c.regReq.Flags)
+			}
 			if err == nil {
-				tassert.Fatalf(t, !c.resumeReb(), "resumeReb stopped admission")
-				if test.rebalance {
-					tassert.Fatalf(t, c.apiOp == apc.SelfJoin, "expected promotion, got %q", c.apiOp)
-				}
+				c.resumeReb()
 				if test.verifiedEarly {
 					// admission must not repeat the early proof check
 					req.Header.Del(apc.HdrJoinSig)

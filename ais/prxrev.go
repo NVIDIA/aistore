@@ -150,7 +150,7 @@ func (p *proxy) _reverse(w http.ResponseWriter, r *http.Request, isPub bool) {
 		}
 		// otherwise, warn and go ahead
 		// (e.g. scenario: shutdown when transitioning through states)
-		nlog.Warningln(p.String()+":", si.StringEx(), "status is:", daeStatus)
+		nlog.Warningln(p.String(), si.StringEx(), "status is:", daeStatus)
 	}
 
 	// 5. when destination is no more

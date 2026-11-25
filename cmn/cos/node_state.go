@@ -39,6 +39,7 @@ const (
 	LowCPU                                           // warning
 	DiskOOS                                          // disk out of space
 	DiskLowCapacity                                  // warning
+	FastRejoin                                       // self-join only: target requests, primary acknowledges
 )
 
 const (
@@ -162,6 +163,10 @@ func (f NodeStateFlags) _str(sb []string) string {
 	}
 	if f&DiskLowCapacity == DiskLowCapacity {
 		sb = append(sb, "disk-low-capacity") // disk
+	}
+
+	if f.IsSet(FastRejoin) {
+		sb = append(sb, "fast-rejoin")
 	}
 
 	l := len(sb)

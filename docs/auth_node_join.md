@@ -56,7 +56,7 @@ This document describes both the design, the capabilities, and the current imple
 |---|---|
 | Startup self-join: node proves possession to the primary | Supported |
 | Startup self-join: primary proves possession to the node | Supported |
-| Slow keepalive that would admit an absent or restarted node | Supported |
+| Slow keepalive that would admit an absent node | Supported |
 | Credential permission and non-empty checks; fail-closed at startup | Supported |
 | Timestamp binding, bounded by `auth.intra_cluster.nonce_window` | Supported |
 | Administrative join | Not implemented yet - see [Future Development](#future-development) |

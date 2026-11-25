@@ -154,7 +154,7 @@ func (t *target) objHeadBatch(w http.ResponseWriter, r *http.Request) (ecode int
 	hdr.Set(cos.HdrContentType, cos.ContentBinary)
 	hdr.Set(cos.HdrContentLength, strconv.Itoa(len(out)))
 	if _, err := w.Write(out); err != nil {
-		nlog.Warningln(t.String(), apc.HdbTag+":", err) // (broken pipe; benign)
+		nlog.Warningln(t.String(), apc.HdbTag, err) // (broken pipe; benign)
 	}
 	return 0, nil
 }

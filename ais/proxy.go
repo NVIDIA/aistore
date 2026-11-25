@@ -1348,7 +1348,7 @@ func (p *proxy) syncNewICOwners(smap, newSmap *smapX) {
 		if p.SID() != psi.ID() && newSmap.IsIC(psi) && !smap.IsIC(psi) {
 			go func(psi *meta.Snode) {
 				if err := p.ic.sendOwnershipTbl(psi, newSmap); err != nil {
-					nlog.Errorln(p.String()+": failed to send ownership table to", psi.String()+":", err)
+					nlog.Errorln(p.String(), "failed to send ownership table to", psi.String()+":", err)
 				}
 			}(psi)
 		}

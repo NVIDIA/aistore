@@ -102,6 +102,12 @@ func (*target) interruptedRestarted() (i, r bool) {
 	return i, r
 }
 
+// request fast-rejoin at startup self-join (not standby => admin-join; see recvCluMeta)
+func (t *target) canFastRejoin() bool {
+	return !t.NodeStarted() && !daemon.cli.target.standby && !t.boot.newVol &&
+		!daemon.cli.target.startWithLostMountpath && !daemon.resilver.required && !fs.MarkerExists(fname.ResilverMarker)
+}
+
 // Backend initialization and resolution ===============================================
 //
 // Each backend provider (aws, gcp, azure, oci) goes through a 3-way classification
@@ -181,9 +187,9 @@ func (t *target) initBackends() {
 
 	if aisConf := config.Backend.Get(apc.AIS); aisConf != nil {
 		if err := aisbp.Apply(aisConf, "init", &config.ClusterConfig); err != nil {
-			nlog.Errorln(t.String()+":", err, "- proceeding to start anyway")
+			nlog.Errorln(t.String(), err, "- proceeding to start anyway")
 		} else {
-			nlog.Infoln(t.String()+": remote-ais", aisConf)
+			nlog.Infoln(t.String(), "remote-ais", aisConf)
 		}
 	}
 

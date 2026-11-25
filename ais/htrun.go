@@ -59,6 +59,7 @@ const (
 // extra or extended state - currently, target only
 type htext interface {
 	interruptedRestarted() (bool, bool)
+	canFastRejoin() bool
 }
 
 type ratelim struct {
@@ -183,6 +184,9 @@ func (h *htrun) cluMeta(opts cmetaFillOpt) (*cluMeta, error) {
 		}
 		if restarted {
 			cm.Flags = cm.Flags.Set(cos.NodeRestarted)
+			if !rebInterrupted && opts.htext.canFastRejoin() {
+				cm.Flags = cm.Flags.Set(cos.FastRejoin)
+			}
 		}
 	}
 	if !opts.skipPrimeTime && smap.IsPrimary(h.si) {
@@ -2737,7 +2741,7 @@ func (h *htrun) rmSelf(smap *smapX, ignoreErr bool) error {
 		f := cos.Ternary(ignoreErr, nlog.Infof, nlog.Errorf)
 		f("%s: failed to remove %s (self) from %s: %v(%d)", apc.ActSelfRemove, h.si, smap, err, status)
 	} else {
-		nlog.Infoln(apc.ActSelfRemove+":", h.String(), "(self) from", smap.StringEx())
+		nlog.Infoln(apc.ActSelfRemove, h.String(), "(self) from", smap.StringEx())
 	}
 	freeCargs(cargs)
 	freeCR(res)

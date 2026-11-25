@@ -18,6 +18,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/xact"
 
 	jsoniter "github.com/json-iterator/go"
 )
@@ -31,11 +32,14 @@ import (
 //
 // Rules:
 // - fast keepalive returns before `clupost` is created;
-// - when configured, explicit self-joins and restarted keepalives are authenticated (see docs/auth_node_join.md);
+// - when configured, explicit self-joins and absent-node keepalives are authenticated (see docs/auth_node_join.md);
 // - validation resolves node flags and the action for the current operation;
-// - resumeReb may promote a restarted keepalive to self-join and update cluster action message;
+// - keepalives do not carry rebalance markers (see htrun.regTo): verify clears them;
 // - joinKalive runs under the Smap lock and decides whether Smap mutation is needed;
 // - dispatch performs externally visible responses and metasync/rebalance work.
+
+// rebalance markers: self-join only (see htrun.regTo)
+const rebMarkerFlags = cos.RebalanceInterrupted | cos.NodeRestarted | cos.FastRejoin
 
 type clupost struct {
 	p      *proxy
@@ -67,6 +71,8 @@ type clupost struct {
 		err     error
 		smapVer int64
 		ok      bool
+		// (v5.3)
+		fastRejoined bool // target receives completed RMD in the join response
 	}
 }
 
@@ -132,9 +138,7 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 	}
 
 	// resume interrupted rebalance
-	if c.resumeReb() {
-		return
-	}
+	c.resumeReb()
 
 	c.msg = &apc.ActMsg{Action: c.action, Name: c.nsi.ID()}
 
@@ -297,9 +301,8 @@ func (c *clupost) verify() error {
 	case apc.SelfJoin: // TODO: support admin-join as well
 		return c.verifyJoinSecret()
 	case apc.Keepalive:
-		if c.regReq.Flags.IsSet(cos.NodeRestarted) {
-			return c.verifyJoinSecret()
-		}
+		// keepalives do not carry rebalance markers (see htrun.regTo)
+		c.regReq.Flags = c.regReq.Flags.Clear(rebMarkerFlags)
 	}
 	return nil
 }
@@ -459,10 +462,6 @@ func (c *clupost) handshake() (stop bool) {
 			nlog.Warningf("%s: self-joining %s [err %v, confirmed %t]", p, nsi.StringEx(), err, ok)
 		}
 	case apc.Keepalive:
-		// resumeReb will promote this request to self-join; kalive will not use confirmation
-		if c.config.Rebalance.Enabled && c.regReq.Flags.IsSet(cos.NodeRestarted) {
-			break
-		}
 		if osi := c.smap.GetNode(nsi.ID()); osi != nil && !osi.EqNetID(nsi) {
 			c.confirm.osi = osi
 			c.confirm.smapVer = c.smap.Version
@@ -472,10 +471,10 @@ func (c *clupost) handshake() (stop bool) {
 	return false
 }
 
-// resume interrupted rebalance bookkeeping; promote a restarted keepalive to self-join
-func (c *clupost) resumeReb() (stop bool) {
+// resume interrupted rebalance bookkeeping
+func (c *clupost) resumeReb() {
 	if !c.config.Rebalance.Enabled {
-		return false
+		return
 	}
 
 	var (
@@ -492,15 +491,6 @@ func (c *clupost) resumeReb() (stop bool) {
 			}
 		}
 	}
-	// when keepalive becomes a new join
-	if restarted && c.apiOp == apc.Keepalive {
-		c.apiOp = apc.SelfJoin
-
-		// see rmdModifier.listen: ActSelfJoinTarget adds the joining target to reb-notifiers
-		stop = c.setActionCheckVer()
-	}
-
-	return stop
 }
 
 // respond to the admitted (or not-updated) node and, when joining, broadcast the new Smap
@@ -540,14 +530,26 @@ func (c *clupost) dispatch(msync bool) {
 	}
 
 	if c.apiOp == apc.SelfJoin {
-		// respond to the self-joining node with cluster-meta that does not include Smap
+		// ordinary self-joins receive the updated Smap via metasync
 		md, err := p.cluMeta(cmetaFillOpt{skipSmap: true})
 		if err != nil {
 			p.writeErr(w, r, err)
 			return
 		}
+		var (
+			ctx   *smapModifier
+			clone *smapX
+		)
+		if c.regReq.Flags.IsSet(cos.FastRejoin) {
+			ctx, clone = c.fastRejoin(md)
+		}
 		c.setVerHdr()
 		p.writeJoinJSON(w, r, md, path.Join(c.msg.Action, c.nsi.ID()), nodeJoinResponseHMACDomain)
+		if clone != nil {
+			// committed: metasync after responding (compare with mcastJoined)
+			c._joinedFinal(ctx, clone)
+			return
+		}
 	}
 
 	go func() {
@@ -555,6 +557,87 @@ func (c *clupost) dispatch(msync bool) {
 			nlog.Errorf("%s: failed to join %s: %v", p, c.nsi.StringEx(), err)
 		}
 	}()
+}
+
+// fast rejoin (best-effort): commit new incarnation without rebalance
+// - respond with the new Smap and the completed RMD
+// - return nil when declined (fall back to regular self-join)
+func (c *clupost) fastRejoin(md *cluMeta) (*smapModifier, *smapX) {
+	var (
+		p      = c.p
+		owner  = p.owner.smap
+		ctx    = &smapModifier{pre: c._joinedPre, final: c._joinedFinal, msg: c.msg, nsi: c.nsi, flags: c.flags}
+		clone  *smapX
+		err    error
+		reason string
+	)
+	owner.mu.Lock()
+	switch {
+	case c.smap != owner.get() || c.bmd != p.owner.bmd.get() || md.RMD != p.owner.rmd.get():
+		reason = "cluster metadata changed"
+	case p.canRebalance(c.smap, false /*cleanup mode*/) != nil:
+		reason = "cannot rebalance"
+	default:
+		reason = c.checkFastRejoin(md.RMD)
+	}
+	if reason == "" {
+		if clone, err = owner.prepost(ctx); err == nil {
+			md.RMD.doneSmapVer.Store(clone.Version) // still covered: same placement
+		}
+	}
+	owner.mu.Unlock()
+
+	switch {
+	case reason != "":
+		nlog.Infoln(p.String(), "fast rejoin", c.nsi.StringEx(), "declined:", reason)
+		return nil, nil
+	case err != nil:
+		nlog.Warningln(p.String(), "fast rejoin", c.nsi.StringEx(), "failed:", err)
+		return nil, nil
+	}
+	c.confirm.fastRejoined = true
+	md.Flags = md.Flags.Set(cos.FastRejoin)
+	md.Smap = clone
+	nlog.Infoln(p.String(), "fast rejoin", c.nsi.StringEx(), clone.StringEx(), "- no rebalance:",
+		xact.RebID2S(md.RMD.Version), "completed")
+	return ctx, clone
+}
+
+// return empty string when eligible, the reason otherwise
+func (c *clupost) checkFastRejoin(rmd *rebMD) string {
+	req := &c.regReq
+	switch {
+	case !c.nsi.IsTarget():
+		return "not a target"
+	case !req.Flags.IsSet(cos.NodeRestarted) || req.Flags.IsSet(cos.RebalanceInterrupted):
+		return "flags: " + req.Flags.String()
+	case rmd.doneSmapVer.Load() != c.smap.Version:
+		return xact.RebID2S(rmd.Version) + " not completed at " + c.smap.String()
+	case req.Smap == nil || req.Smap.UUID != c.smap.UUID || req.Smap.Version != c.smap.Version:
+		return "local Smap differs from " + c.smap.String()
+	case req.BMD == nil || req.BMD.UUID != c.bmd.UUID || req.BMD.Version != c.bmd.Version:
+		return "local BMD differs from " + c.bmd.String()
+	}
+
+	var (
+		old   = c.smap.GetTarget(c.nsi.ID())
+		saved = req.Smap.GetTarget(c.nsi.ID())
+	)
+	switch {
+	case old == nil || saved == nil:
+		return "not present in " + c.smap.String()
+	case old.InMaintOrDecomm() || old.Flags != c.flags:
+		return "node flags: " + old.Fl2S()
+	case old.PlacementWeight() != c.joinWeight:
+		return "placement weight changed"
+	case len(old.VerifyingKey) == 0 || len(c.nsi.VerifyingKey) == 0:
+		return "no verifying key"
+	case !old.SameIncarnation(saved):
+		return "local Smap records a different incarnation"
+	case old.SameIncarnation(c.nsi):
+		return "same incarnation"
+	}
+	return ""
 }
 
 func (c *clupost) signJoinResponse(body []byte) {
@@ -707,7 +790,7 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 		return false, false, err
 	}
 	if !c.config.Rebalance.Enabled {
-		c.regReq.Flags = c.regReq.Flags.Clear(cos.RebalanceInterrupted | cos.NodeRestarted)
+		c.regReq.Flags = c.regReq.Flags.Clear(rebMarkerFlags)
 	}
 	if osi != nil {
 		if osi.Type() != c.nsi.Type() {
@@ -759,7 +842,7 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 
 // validate node-join under the Smap lock:
 // - reject if this proxy is no longer primary
-// - absent ordinary keepalive: verify join secret (self-joins and restarted keepalives checked earlier)
+// - absent keepalive: verify join secret (self-joins checked earlier)
 // - admin-join: use the peer version obtained by its handshake; join-secret verification is TODO
 // - every request, including no-op re-registration: enforce version boundary and Smap/BMD placement
 // - primary startup: defer unweighted targets (see startupWeights)
@@ -773,7 +856,7 @@ func (c *clupost) admit(osi *meta.Snode) error {
 	}
 
 	absent := c.apiOp == apc.Keepalive && osi == nil
-	if absent && !c.regReq.Flags.IsSet(cos.NodeRestarted) {
+	if absent {
 		if err := c.verifyJoinSecret(); err != nil {
 			return err
 		}
@@ -844,6 +927,14 @@ func (c *clupost) recheckJoinPlacement(smap *smapX) error {
 		return cmn.NewErrHTTP(nil, err, http.StatusConflict)
 	}
 	if smap != c.smap {
+		if c.apiOp == apc.Keepalive {
+			id := c.nsi.ID()
+			wasMember := c.smap.GetNode(id) != nil
+			isMember := smap.GetNode(id) != nil
+			if wasMember != isMember {
+				return fmt.Errorf("%w: %s membership changed since admission", errKaliveRejected, c.nsi)
+			}
+		}
 		weight, err := c.placementWeight(smap)
 		if err != nil {
 			return newErrJoinRejected(nil, err)
@@ -979,12 +1070,10 @@ func (c *clupost) mcastJoined() (string, error) {
 		return ctx.rmdCtx.rebID, nil // xid
 	}
 
-	// [NOTE]
-	// one (arguably, cosmetic) side effect of not rebalancing is: markers and node state flags
-	// e.g. when a node crashes (and then rejoins back again) in a cluster with rebalance disabled
-	// the node's marker will state "restarted"
-	// and will remain such until the cluster gets eventually rebalanced
-
+	// Note re markers and state flags:
+	// - a restarted target can retain its on-disk marker when rebalance is disabled
+	// - fast rejoin clears the marker explicitly
+	// - NodeRestarted alert expires after 10h of uptime
 	return "", nil
 }
 
@@ -1009,8 +1098,7 @@ func (c *clupost) _joinedPre(ctx *smapModifier, clone *smapX) error {
 	return nil
 }
 
-// RMD is always transmitted to provide for its (RMD's) replication -
-// done under Smap lock to serialize with respect to new joins.
+// allocate the join-triggered RMD under the Smap lock
 func (c *clupost) _joinedPost(ctx *smapModifier, clone *smapX) {
 	p := c.p
 	if ctx.nsi.IsProxy() {
@@ -1069,14 +1157,14 @@ func (c *clupost) _joinedFinal(ctx *smapModifier, clone *smapX) {
 	}
 
 	reb := ctx.rmdCtx != nil && ctx.rmdCtx.rebID != ""
-	if !reb {
-		// replicate RMD across (existing nodes will drop it upon version comparison)
-		rmd := p.owner.rmd.get()
-		pairs = append(pairs, revsPair{rmd, actMsgExt})
-	} else {
+	if reb {
 		debug.AssertFunc(func() bool { return ctx.rmdCtx.prev.version() < ctx.rmdCtx.cur.version() })
 		actMsgExt.UUID = ctx.rmdCtx.rebID
 		pairs = append(pairs, revsPair{ctx.rmdCtx.cur, actMsgExt})
+	} else if !c.confirm.fastRejoined {
+		// replicate RMD across (existing nodes will drop it upon version comparison)
+		rmd := p.owner.rmd.get()
+		pairs = append(pairs, revsPair{rmd, actMsgExt})
 	}
 
 	if tokens != nil {

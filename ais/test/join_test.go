@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,6 +30,7 @@ import (
 	"github.com/NVIDIA/aistore/tools/tassert"
 	"github.com/NVIDIA/aistore/tools/tlog"
 	"github.com/NVIDIA/aistore/volume"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 type joinTestBody struct {
@@ -37,6 +39,94 @@ type joinTestBody struct {
 }
 
 const invalidNodeJoinSecret = "invalid-node-join-secret"
+
+// crash and quickly restart a target (before keepalive removes it from the cluster):
+// - after a full rebalance: fast rejoin, no rebalance
+// - after a bucket-scoped rebalance: regular self-join and full rebalance
+func TestFastRejoin(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2})
+	if !tools.GetClusterConfig(t).Rebalance.Enabled {
+		t.Skip("requires rebalance enabled")
+	}
+	var (
+		m = &ioContext{
+			t:         t,
+			num:       500,
+			fileSize:  cos.KiB,
+			fixedSize: true,
+			silent:    true,
+		}
+		bp = tools.BaseAPIParams(tools.GetPrimaryURL())
+	)
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+	m.puts()
+
+	tsi, err := m.smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+
+	for _, scoped := range []bool{false, true} {
+		// 1. the latest rebalance: full or bucket-scoped
+		args := xact.ArgsMsg{Kind: apc.ActRebalance}
+		if scoped {
+			args.Bck = m.bck
+		}
+		xid, err := api.StartXaction(bp, &args, "")
+		tassert.CheckFatal(t, err)
+		tools.WaitForRebalanceByID(t, bp, xid)
+		tlog.Logfln("scoped=%t: %s completed", scoped, xid)
+
+		// 2. crash and restart
+		smap := tools.GetClusterMap(t, bp.URL)
+		cmd, err := tools.CrashNode(tsi)
+		tassert.CheckFatal(t, err)
+		started := time.Now()
+		tassert.CheckFatal(t, tools.RestoreNode(cmd, false, "target"))
+		smap, err = tools.WaitForClusterState(bp.URL, "target rejoined", smap.Version,
+			m.originalProxyCount, m.originalTargetCount)
+		tassert.CheckFatal(t, err)
+		tassert.CheckFatal(t, tools.WaitNodeReady(tsi.URL(cmn.NetPublic)))
+		tlog.Logfln("%s rejoined in %v", tsi.StringEx(), time.Since(started))
+
+		next := smap.GetTarget(tsi.ID())
+		tassert.Fatalf(t, next != nil && !next.SameIncarnation(tsi), "expected new incarnation of %s", tsi.StringEx())
+		tsi = next
+
+		// 3. check rebalance: none vs full
+		primary := fastRejoinNsti(t, bp, smap.Primary)
+		gen := xact.RebID2S(primary.RMD.Version)
+		if scoped {
+			tassert.Fatalf(t, xact.CompareRebIDs(gen, xid) > 0, "expected full rebalance after %s, got %s", xid, gen)
+			tools.WaitForRebalanceByID(t, bp, gen)
+		} else {
+			tassert.Fatalf(t, gen == xid, "expected no rebalance after fast rejoin: %s => %s", xid, gen)
+			snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{Kind: apc.ActRebalance, DaemonID: tsi.ID()})
+			if !cmn.IsStatusNotFound(err) {
+				tassert.CheckFatal(t, err)
+				tassert.Fatalf(t, len(snaps[tsi.ID()]) == 0, "%s: unexpected rebalance: %v", tsi.StringEx(), snaps)
+			}
+		}
+
+		// 4. check the restarted target: RMD in sync, no "restarted" state
+		nsti := fastRejoinNsti(t, bp, tsi)
+		tassert.Fatalf(t, nsti.RMD.Version == primary.RMD.Version, "%s: RMD v%d, primary v%d",
+			tsi.StringEx(), nsti.RMD.Version, primary.RMD.Version)
+		tassert.Fatalf(t, !nsti.Flags.IsSet(cos.NodeRestarted), "%s: unexpected flags %s", tsi.StringEx(), nsti.Flags)
+
+		// 5. all objects in place
+		m.gets(nil, true /*withValidation*/)
+		m.ensureNoGetErrors()
+	}
+}
+
+// node state info, including metadata versions and state flags (see apc.QparamClusterInfo)
+func fastRejoinNsti(t *testing.T, bp api.BaseParams, si *meta.Snode) (nsti cos.NodeStateInfo) {
+	rp := api.ReqParams{BaseParams: bp, Path: apc.URLPathHealth.S, Query: url.Values{apc.QparamClusterInfo: []string{"true"}}}
+	rp.BaseParams.URL, rp.BaseParams.Method = si.URL(cmn.NetPublic), http.MethodGet
+	_, err := rp.DoReqAny(&nsti)
+	tassert.CheckFatal(t, err)
+	return nsti
+}
 
 func TestJoinBackendOnDemand(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinProxies: 2})
@@ -761,13 +851,13 @@ func TestSelfJoinSecret(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		t.Run("rebalance="+strconv.FormatBool(enabled), func(t *testing.T) {
 			tools.SetClusterConfig(t, cos.StrKVs{"rebalance.enabled": strconv.FormatBool(enabled)})
-			testNodeJoinRequests(t, proxyURL, validSecret, enabled)
+			testNodeJoinRequests(t, proxyURL, validSecret)
 			testProxySelfJoin(t, proxyURL, secretPath, validSecret, nodeDir)
 		})
 	}
 }
 
-func testNodeJoinRequests(t *testing.T, proxyURL, secret string, rebalanceEnabled bool) {
+func testNodeJoinRequests(t *testing.T, proxyURL, secret string) {
 	var (
 		smap = tools.GetClusterMap(t, proxyURL)
 		bp   = tools.BaseAPIParams(proxyURL)
@@ -788,33 +878,14 @@ func testNodeJoinRequests(t *testing.T, proxyURL, secret string, rebalanceEnable
 	unknown.PubNet = meta.NetInfo{Hostname: "127.0.0.1", Port: "19080", URL: "http://127.0.0.1:19080"}
 	unknown.ControlNet = meta.NetInfo{Hostname: "127.0.0.1", Port: "19081", URL: "http://127.0.0.1:19081"}
 	unknown.DataNet = meta.NetInfo{Hostname: "127.0.0.1", Port: "19082", URL: "http://127.0.0.1:19082"}
-	// Negative: unsigned admission keepalives are rejected.
-	for _, test := range []struct {
-		name              string
-		body              joinTestBody
-		requiresRebalance bool
-	}{
-		{name: "restarted", body: joinTestBody{SI: node, Flags: cos.NodeRestarted}, requiresRebalance: true},
-		{name: "unknown", body: joinTestBody{SI: unknown}},
-	} {
-		if test.requiresRebalance && !rebalanceEnabled {
-			continue
-		}
-		t.Run("unsigned keepalive "+test.name, func(t *testing.T) {
-			body := cos.MustMarshal(test.body)
-			err := (&api.ReqParams{BaseParams: bp, Path: apc.URLPathCluKalive.S, Body: body, Header: header}).DoRequest()
-			herr := cmn.AsErrHTTP(err)
-			tassert.Fatalf(t, herr != nil && herr.Status == http.StatusUnauthorized,
-				"expected status %d, got %v", http.StatusUnauthorized, err)
-		})
-	}
-	if rebalanceEnabled {
-		// Positive: a signed restarted keepalive can re-admit the node.
-		body = cos.MustMarshal(joinTestBody{SI: node, Flags: cos.NodeRestarted})
-		header = nodeJoinHeader(body, secret)
-		header.Set(apc.HdrNodeVersion, cmn.VersionAIStore)
-		tassert.CheckFatal(t, (&api.ReqParams{BaseParams: bp, Path: apc.URLPathCluKalive.S, Body: body, Header: header}).DoRequest())
-	}
+	// Negative: unsigned keepalive that would admit an absent node is rejected.
+	t.Run("unsigned keepalive unknown", func(t *testing.T) {
+		body := cos.MustMarshal(joinTestBody{SI: unknown})
+		err := (&api.ReqParams{BaseParams: bp, Path: apc.URLPathCluKalive.S, Body: body, Header: header}).DoRequest()
+		herr := cmn.AsErrHTTP(err)
+		tassert.Fatalf(t, herr != nil && herr.Status == http.StatusUnauthorized,
+			"expected status %d, got %v", http.StatusUnauthorized, err)
+	})
 
 	var (
 		selfJoinBody      = cos.MustMarshal(joinTestBody{SI: node})
