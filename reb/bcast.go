@@ -112,7 +112,8 @@ func (reb *Reb) rxReady(tsi *meta.Snode, rargs *rargs) bool /*ready*/ {
 		status, ok := reb.checkStage(tsi, rargs, rebStageTraverse)
 		if ok {
 			debug.Func(func() {
-				debug.Assertf(status.Running, "%s: not running: [ tid=%s abrted=%t stage=%d reb-id=%d vs my %s ]",
+				debug.Assertf(status.Running || status.Stage >= rebStageFin,
+					"%s: not running: [ tid=%s abrted=%t stage=%d reb-id=%d vs my %s ]",
 					core.T.String(), tsi.ID(), status.Aborted, status.Stage, status.RebID, xreb.ID())
 			})
 

@@ -44,6 +44,8 @@ type prmTests struct {
 
 // flow: TestPromote (tests) => runProvider x (provider tests) => test.do(bck)
 func TestPromote(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{MinTargets: 1})
+
 	const many = 1000
 	tests := []prmTests{
 		// short and long

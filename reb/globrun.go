@@ -310,11 +310,7 @@ func (reb *Reb) Run(smap *meta.Smap, extArgs *ExtArgs) {
 	// left over from a previously aborted/interrupted run (or a node restart)
 	extArgs.Tstats.SetClrFlag(cos.NodeAlerts, cos.Rebalancing, cos.RebalanceInterrupted)
 
-	// run: nwp workers (if any), lazy deletion, rebalance joggers (no-EC[, EC))
-	if !rargs.ecUsed {
-		reb.runNwp(rargs)
-	}
-
+	// run: rebalance joggers (no-EC[, EC]) and nwp workers (if any)
 	err := reb.run(rargs)
 
 	if err == nil {
@@ -364,8 +360,19 @@ func (reb *Reb) run(rargs *rargs) error {
 	reb.stages.stage.Store(rebStageTraverse)
 	rargs.stats.stage(rebStageTraverse)
 
+	// wait for peers before starting either traversal
+	errCnt := bcast(rargs, reb.rxReady) // ignore timeout
+	if err := rargs.xreb.AbortErr(); err != nil {
+		nlog.Infoln(rargs.logHdr, "abort rx-ready", err, "num-fail", errCnt)
+		return err
+	}
+	if errCnt > 0 {
+		nlog.Errorln(rargs.logHdr, "rx-ready num-fail:", errCnt)
+	}
+
 	// No EC-enabled buckets - run only regular rebalance
 	if !rargs.ecUsed {
+		reb.runNwp(rargs)
 		return reb.runNoEC(rargs)
 	}
 
@@ -525,15 +532,6 @@ func (reb *Reb) endStreams(rargs *rargs, err error) (ok bool, stage uint32) {
 func (reb *Reb) runEC(rargs *rargs) error {
 	nlog.Infoln(rargs.logHdr, "start ec run")
 
-	errCnt := bcast(rargs, reb.rxReady) // ignore timeout
-	if err := rargs.xreb.AbortErr(); err != nil {
-		nlog.Infoln(rargs.logHdr, "abort ec rx-ready", err, "num-fail", errCnt)
-		return err
-	}
-	if errCnt > 0 {
-		nlog.Errorln(rargs.logHdr, "ec rx-ready num-fail", errCnt) // unlikely
-	}
-
 	reb.runECjoggers(rargs)
 
 	if err := rargs.xreb.AbortErr(); err != nil {
@@ -544,19 +542,11 @@ func (reb *Reb) runEC(rargs *rargs) error {
 	return nil
 }
 
-// when not a single bucket has EC enabled
+// when not a single bucket has EC enabled (or in parallel with runEC, with no nwp workers)
 func (reb *Reb) runNoEC(rargs *rargs) error {
 	debug.Assert(rargs.m == reb)
 	nlog.Infoln(rargs.logHdr, "start no-ec run")
 
-	errCnt := bcast(rargs, reb.rxReady) // ignore timeout
-	if err := rargs.xreb.AbortErr(); err != nil {
-		nlog.Infoln(rargs.logHdr, "abort rx-ready", err, "num-fail", errCnt)
-		return err
-	}
-	if errCnt > 0 {
-		nlog.Errorln(rargs.logHdr, "rx-ready num-fail:", errCnt)
-	}
 	var (
 		wg  = &sync.WaitGroup{}
 		ver = rargs.smap.Version

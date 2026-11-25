@@ -971,7 +971,8 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) error {
 	if err := smap.validate(); err != nil {
 		return err
 	}
-	if smap.GetNode(t.SID()) == nil {
+	self := smap.GetTarget(t.SID())
+	if self == nil {
 		return fmt.Errorf(fmtSelfNotPresent, t, smap.StringEx())
 	}
 	for _, tsi := range rmd.TargetIDs {
@@ -981,6 +982,11 @@ func (t *target) receiveRMD(newRMD *rebMD, msg *actMsgExt) error {
 		}
 	}
 	if !t.regstate.disabled.Load() {
+		if self.InMaintPostReb() {
+			// already evacuated; record the generation without starting it
+			t.owner.rmd.put(newRMD)
+			return nil
+		}
 		oxid := xact.RebID2S(rmd.Version)
 		t._runRe(newRMD, msg, smap, oxid)
 		return nil
@@ -1268,7 +1274,8 @@ func (t *target) metasyncPut(w http.ResponseWriter, r *http.Request) {
 	if errBMD == nil && newBMD != nil {
 		errBMD = t.receiveBMD(newBMD, msgBMD, payload, bmdRecv, sender, false /*silent*/)
 	}
-	if errRMD == nil && newRMD != nil {
+	// skip RMD when Smap from the same payload failed to apply (metasync will retry both)
+	if errRMD == nil && newRMD != nil && (errSmap == nil || isErrDowngrade(errSmap)) {
 		t.owner.rmd.Lock()
 		errRMD = t.receiveRMD(newRMD, msgRMD)
 		t.owner.rmd.Unlock()

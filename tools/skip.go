@@ -138,9 +138,9 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 	}
 
 	if args.MinTargets > 0 {
-		if smap.CountActiveTs() < args.MinTargets {
+		if n := smap.CountActiveTs(); n < args.MinTargets {
 			tb.Skipf("%s requires at least %d active targets (have %d)",
-				tb.Name(), args.MinTargets, smap.CountTargets())
+				tb.Name(), args.MinTargets, n)
 		}
 	}
 
@@ -153,6 +153,9 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 
 	if args.MinMountpaths > 0 {
 		targets := smap.Tmap.ActiveNodes()
+		if len(targets) == 0 {
+			tb.Skipf("%s requires at least %d mountpaths (have no active targets)", tb.Name(), args.MinMountpaths)
+		}
 		proxyURL := GetPrimaryURL()
 		bp := BaseAPIParams(proxyURL)
 		mpList, err := api.GetMountpaths(bp, targets[0])
