@@ -19,7 +19,6 @@ import (
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/stats"
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/archive"
-	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/mono"
@@ -111,15 +110,23 @@ func postNewWorkOrder() (err error) {
 		wo, err = newGetWorkOrder(op)
 	case opGetMpdStream:
 		wo, err = newMpdStreamWorkOrder()
-	default:
-		debug.Assert(op == opGetBatch, op)
+	case opGetBatch:
 		wo, err = newGetBatchWorkOrder()
 	}
-
-	if err == nil {
-		workCh <- wo
+	if err != nil {
+		return err
 	}
-	return err
+
+	if runParams.numEpochs > 0 {
+		switch op {
+		case opGet, opGetMpdStream:
+			epochReadsPosted++
+		case opGetBatch:
+			epochReadsPosted += int64(len(wo.moss.In))
+		}
+	}
+	workCh <- wo
+	return nil
 }
 
 func completeWorkOrder(wo *workOrder, terminating bool) {
@@ -155,8 +162,10 @@ func completeWorkOrder(wo *workOrder, terminating bool) {
 
 	switch wo.op {
 	case opUpdateExisting:
-		elapsed = time.Duration(wo.startPut - wo.start)
-		debug.Assert(elapsed >= 0)
+		if wo.startPut != 0 {
+			elapsed = time.Duration(wo.startPut - wo.start)
+			debug.Assert(elapsed >= 0)
+		}
 		fallthrough
 	case opGet:
 		getPending--
@@ -375,7 +384,7 @@ func doGetMpdStream(wo *workOrder) {
 	wo.size, wo.err = getMpdStreamDiscard(url, wo, runParams)
 }
 
-func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup, numGets *atomic.Int64) {
+func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for {
@@ -391,12 +400,10 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 			doPut(wo)
 		case opGet:
 			doGet(wo)
-			numGets.Inc()
 		case opUpdateExisting:
 			// TODO: fix latency stats
 			doGet(wo)
 			if wo.err == nil {
-				numGets.Inc()
 				wo.startPut = mono.NanoTime()
 				doPut(wo)
 			}
@@ -406,7 +413,6 @@ func worker(wos <-chan *workOrder, results chan<- *workOrder, wg *sync.WaitGroup
 			doGetBatch(wo)
 		case opGetMpdStream:
 			doGetMpdStream(wo)
-			numGets.Inc()
 		default:
 			debug.Assert(false, wo.op)
 		}
@@ -522,10 +528,14 @@ func newGetBatchWorkOrder() (*workOrder, error) {
 	}
 
 	getBatchPending++
-	wo := allocGetBatchWO(runParams.getBatchSize)
+	batchSize := runParams.getBatchSize
+	if runParams.numEpochs > 0 {
+		batchSize = int(min(int64(batchSize), runParams.epochReadLimit-epochReadsPosted))
+	}
+	wo := allocGetBatchWO(batchSize)
 
 	var i int
-	objnameGetter.IterBatch(runParams.getBatchSize, func(name string) bool {
+	objnameGetter.IterBatch(batchSize, func(name string) bool {
 		wo.moss.In[i].ObjName, wo.moss.In[i].ArchPath = decodeArchName(name)
 		i++
 		return true

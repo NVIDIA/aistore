@@ -236,6 +236,58 @@ func TestAISLoaderCleanup(t *testing.T) {
 	})
 }
 
+func TestAISLoaderEpochs(t *testing.T) {
+	const (
+		numObjs       = 3
+		epochs        = 3
+		batchSize     = 2
+		objectSize    = 10 // bytes
+		numReads      = epochs * numObjs
+		wantReadBytes = int64(numReads * objectSize)
+	)
+	runner := newE2ERunner(t, "epochs")
+	bp := tools.BaseAPIParams(runner.proxyURL)
+	if runner.created {
+		tools.CreateBucket(t, runner.proxyURL, runner.bck, nil, false)
+	}
+	for i := range numObjs {
+		name := fmt.Sprintf("%s/data-%d", runner.rootPrefix, i)
+		_, err := api.PutObject(&api.PutArgs{
+			BaseParams: bp,
+			Bck:        runner.bck,
+			ObjName:    name,
+			Reader:     readers.NewBytes(cos.CryptoRandB(objectSize)),
+		})
+		tassert.CheckFatal(t, err)
+	}
+
+	for _, test := range []struct {
+		name      string
+		batchSize int
+		workers   int
+		wantCount int64
+	}{
+		{name: "GET", workers: 2, wantCount: numReads},
+		{name: "GET excess workers", workers: numReads + 1, wantCount: numReads},
+		{name: "GetBatch", batchSize: batchSize, workers: 2, wantCount: cos.DivCeil(numReads, batchSize)},
+		{name: "GetBatch excess workers", batchSize: batchSize, workers: numReads + 1, wantCount: cos.DivCeil(numReads, batchSize)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			report := runner.run(t, "epochs", 0, time.Minute, false,
+				"-subdir="+runner.rootPrefix+"/",
+				"-pctput=0",
+				"-epochs="+strconv.Itoa(epochs),
+				"-get-batchsize="+strconv.Itoa(test.batchSize),
+				"-numworkers="+strconv.Itoa(test.workers),
+			)
+			got := cos.Ternary(test.batchSize != 0, report.GetBatch, report.Get)
+			assertOperation(t, test.name, got)
+			tassert.Fatalf(t, got.Count == test.wantCount, "expected %d read operations, got %d", test.wantCount, got.Count)
+			tassert.Fatalf(t, got.Bytes == wantReadBytes, "expected %d payload bytes, got %d", wantReadBytes, got.Bytes)
+		})
+	}
+}
+
 func TestAISLoaderFileListObj(t *testing.T) {
 	runner := newE2ERunner(t, "file-list-obj")
 	bp := tools.BaseAPIParams(runner.proxyURL)
@@ -281,7 +333,7 @@ func TestAISLoaderFileListObj(t *testing.T) {
 			"-filelist-obj="+listBck.Cname(listObjName),
 		)
 		assertOperation(t, "file list GET", report.Get)
-		tassert.Fatalf(t, report.Get.Count >= numObjs, "expected at least %d GETs to cover the manifest, got %d", numObjs, report.Get.Count)
+		tassert.Fatalf(t, report.Get.Count == numObjs, "expected %d GETs to cover the manifest, got %d", numObjs, report.Get.Count)
 	})
 
 	t.Run("Missing Object List", func(t *testing.T) {

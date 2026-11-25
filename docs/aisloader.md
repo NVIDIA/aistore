@@ -691,6 +691,8 @@ $ aisloader -bucket=ais://my_bucket -pctput=0 -duration=10m -numworkers=8 \
 
 With version 2.1, `aisloader` can now benchmark [Get-Batch](#getbatch-distributed-multi-object-retrieval) operations using the `--get-batchsize` flag (range: 1-1000). The tool consumes TAR streams (see note below), validates archived file counts, and tracks Get-Batch-specific statistics. The `--continue-on-err` flag enables testing of soft-error handling behavior.
 
+With `-epochs`, each name in a GetBatch request counts toward the run's read limit. Batches may cross epoch boundaries. The final batch is shortened when fewer than `-get-batchsize` reads remain.
+
 > Supported serialization formats include: `.tar` (default), `.tar.gz`, `.tar.lz4`, and `.zip`.
 
 ## Random Access Across Very Large Collections

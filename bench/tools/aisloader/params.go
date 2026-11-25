@@ -55,6 +55,9 @@ type (
 		updateExistingPct    int         // percentage of GETs followed by PUT updates
 		numEpochs            uint        // number of full read-only passes through bucket
 		permShuffleMax       uint        // threshold for switching to affine name-getter (memory vs compute tradeoff)
+
+		// resolved
+		epochReadLimit int64 // object reads across all epochs for this loader
 	}
 
 	// Object size constraints and integrity

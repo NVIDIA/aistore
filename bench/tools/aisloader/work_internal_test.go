@@ -9,7 +9,60 @@ import (
 
 	"github.com/NVIDIA/aistore/bench/tools/aisloader/namegetter"
 	"github.com/NVIDIA/aistore/cmn/cos"
+	"github.com/NVIDIA/aistore/tools/tassert"
 )
+
+func TestPostNewWorkOrderEpochs(t *testing.T) {
+	oldParams, oldGetter, oldWorkCh := runParams, objnameGetter, workCh
+	oldPosted, oldTotal := epochReadsPosted, totalWOs
+	oldGet, oldBatch, oldMpd := getPending, getBatchPending, mpdStreamPending
+	t.Cleanup(func() {
+		runParams, objnameGetter, workCh = oldParams, oldGetter, oldWorkCh
+		epochReadsPosted, totalWOs = oldPosted, oldTotal
+		getPending, getBatchPending, mpdStreamPending = oldGet, oldBatch, oldMpd
+	})
+
+	names := []string{"a", "b", "c", "d"}
+	runParams = &params{workloadParams: workloadParams{numEpochs: 1}}
+	runParams.epochReadLimit = int64(runParams.numEpochs) * int64(len(names))
+
+	objnameGetter = &namegetter.PermShuffle{}
+	workCh = make(chan *workOrder, 1)
+
+	for _, test := range []struct {
+		name                  string
+		op, batchSize, mpdPct int
+		want                  []int
+	}{
+		{name: "GET", op: opGet, want: []int{1, 1, 1, 1}},
+		{name: "MPD stream", op: opGetMpdStream, mpdPct: 100, want: []int{1, 1, 1, 1}},
+		{name: "GetBatch with full batches", op: opGetBatch, batchSize: 2, want: []int{2, 2}},
+		{name: "GetBatch with remainder", op: opGetBatch, batchSize: 3, want: []int{3, 1}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runParams.getBatchSize = test.batchSize
+			runParams.mpdStreamPct = test.mpdPct
+			objnameGetter.Init(names, cos.NowRand())
+			epochReadsPosted = 0 // postNewWorkOrder increments this counter.
+
+			for i, want := range test.want {
+				before := epochReadsPosted
+				tassert.CheckFatal(t, postNewWorkOrder())
+				wo := <-workCh
+				defer freeWO(wo)
+				tassert.Fatalf(t, wo.op == test.op, "operation = %d, want %d", wo.op, test.op)
+				if wo.op == opGetBatch {
+					got := len(wo.moss.In)
+					tassert.Fatalf(t, got == want, "batch %d: got %d objects, want %d", i, got, want)
+				}
+				posted := epochReadsPosted - before
+				tassert.Fatalf(t, posted == int64(want), "batch %d: posted %d reads, want %d", i, posted, want)
+			}
+			tassert.Fatalf(t, epochReadsPosted == runParams.epochReadLimit,
+				"total reads: got %d, want %d", epochReadsPosted, runParams.epochReadLimit)
+		})
+	}
+}
 
 // shouldUsePercentage: verifies percentages outside the open interval (0, 100)
 // short-circuit without consulting the hashed selection.

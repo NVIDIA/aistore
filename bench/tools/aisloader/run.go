@@ -123,6 +123,7 @@ var (
 	totalWOs         uint64 // main-loop only (used for deterministic hashing)
 	getBatchPending  int64  // main-loop only
 	mpdStreamPending int64  // main-loop only
+	epochReadsPosted int64  // main-loop only: object reads posted toward `-epochs`
 
 	traceHTTPSig atomic.Bool
 
@@ -138,8 +139,6 @@ var (
 
 	suffixIDMaskLen uint
 	suffixID        uint64
-
-	numGets atomic.Int64
 
 	gmm      *memsys.MMSA
 	stopping atomic.Bool
@@ -313,6 +312,7 @@ func Start(version, buildtime string) (err error) {
 		if runParams.getBatchSize > l {
 			return fmt.Errorf("batch size (%d) exceeds dataset size (%d)", runParams.getBatchSize, l)
 		}
+		runParams.epochReadLimit = int64(runParams.numEpochs) * int64(l)
 
 		// initialize global name-getter and announce
 		objnameGetter = ng
@@ -404,7 +404,7 @@ func Start(version, buildtime string) (err error) {
 	wg := &sync.WaitGroup{}
 	for range runParams.numWorkers {
 		wg.Add(1)
-		go worker(workCh, resCh, wg, &numGets)
+		go worker(workCh, resCh, wg)
 	}
 	if runParams.putPct != 0 {
 		wo2Free = make([]*workOrder, 0, wo2FreeSize)
@@ -434,20 +434,18 @@ func Start(version, buildtime string) (err error) {
 
 	// Get the workers started
 	for range runParams.numWorkers {
-		if err = postNewWorkOrder(); err != nil {
+		if runParams.numEpochs > 0 && epochLimitReached() {
 			break
 		}
-	}
-	if err != nil {
-		goto Done
+		if err = postNewWorkOrder(); err != nil {
+			goto Done
+		}
 	}
 
 MainLoop:
 	for runParams.putSizeUpperBound == 0 || accumulatedStats.put.TotalBytes() < runParams.putSizeUpperBound {
-		if runParams.numEpochs > 0 { // if defined
-			if numGets.Load() > int64(runParams.numEpochs)*int64(objnameGetter.Len()) {
-				break
-			}
+		if runParams.numEpochs > 0 && epochLimitReached() {
+			break
 		}
 
 		// Prioritize showing stats otherwise we will dropping the stats intervals.
@@ -519,6 +517,10 @@ Done:
 	fmt.Printf("\nActual run duration: %v\n", time.Since(tsStart))
 
 	return err
+}
+
+func epochLimitReached() bool {
+	return epochReadsPosted >= runParams.epochReadLimit
 }
 
 func isDirectS3() bool {
