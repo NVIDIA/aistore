@@ -280,9 +280,10 @@ func TestGracefulCloseNoReply(t *testing.T) {
 	for _, compression := range []string{apc.CompressNever, apc.CompressAlways} {
 		t.Run(compression, func(t *testing.T) {
 			var (
-				received atomic.Int64
-				both     atomic.Int64 // mono time: both FINs received
-				release  = make(chan struct{})
+				received     atomic.Int64
+				both         atomic.Int64 // mono time: both FINs received
+				disconnected = make(chan struct{}, 2)
+				release      = make(chan struct{})
 			)
 			ts := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 				if n, _ := io.Copy(io.Discard, r.Body); n != 0 {
@@ -291,6 +292,8 @@ func TestGracefulCloseNoReply(t *testing.T) {
 					}
 					select {
 					case <-release:
+					case <-r.Context().Done():
+						disconnected <- struct{}{}
 					case <-time.After(6 * sendFile):
 						t.Error("close still waiting for reply")
 					}
@@ -316,6 +319,14 @@ func TestGracefulCloseNoReply(t *testing.T) {
 			// held reply on one stream must not delay FIN on the other
 			tassert.Fatalf(t, time.Duration(both.Load()-started) < sendFile, "second FIN arrived %v after close (send-file %v)",
 				time.Duration(both.Load()-started), sendFile)
+			deadline := time.After(4 * sendFile)
+			for range 2 {
+				select {
+				case <-disconnected:
+				case <-deadline:
+					t.Fatal("peer still has an open request after FIN timeout")
+				}
+			}
 		})
 	}
 }

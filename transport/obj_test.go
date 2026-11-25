@@ -529,17 +529,18 @@ func TestCompletionCount(t *testing.T) {
 		}
 		numSent++
 		if numSent > 5000 && rem == 3 {
-			stream.Stop()
 			break
 		}
 	}
-	// collect all pending completions until timeout
-	started := time.Now()
-	for numCompleted.Load() < numSent {
-		time.Sleep(time.Millisecond * 10)
-		if time.Since(started) > time.Second*10 {
-			break
+	stream.Stop()
+
+	// wait for both object completions and stream termination
+	deadline := time.Now().Add(10 * time.Second)
+	for numCompleted.Load() < numSent || !stream.IsTerminated() {
+		if time.Now().After(deadline) {
+			t.Fatalf("sent %d, completed %d, terminated %t", numSent, numCompleted.Load(), stream.IsTerminated())
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	if numSent == numCompleted.Load() {
 		tlog.Logf("sent %d = %d completed, %d received\n", numSent, numCompleted.Load(), numReceived.Load())

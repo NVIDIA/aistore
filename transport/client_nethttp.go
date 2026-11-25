@@ -41,6 +41,7 @@ func NewIntraDataClient() (client *http.Client) {
 	} else {
 		client = cmn.NewClient(cargs)
 	}
+	client.Transport.(*http.Transport).ResponseHeaderTimeout = replyTimeout(config)
 	return
 }
 

@@ -55,18 +55,12 @@ var _ streamer = (*Stream)(nil)
 // object stream //
 ///////////////////
 
-// terminate sets the termination error (errEndOfStream, errStopped, or actual error)
-// and returns the effective error after considering any prior termination.
+// terminate the stream: publish the termination error (errEndOfStream, errStopped, or actual error)
+// and return the effective one (first wins)
 func (s *Stream) terminate(err error) (actErr error) {
-	ok := s.term.done.CAS(false, true)
+	ok := s.term.err.CompareAndSwap(nil, &err)
 	debug.Func(func() { debug.Assert(ok, s.String()) })
-
-	s.term.mu.Lock()
-	if s.term.err == nil {
-		s.term.err = err // errEndOfStream, errStopped, or actual error
-	}
-	actErr = s.term.err
-	s.term.mu.Unlock()
+	actErr = *s.term.err.Load()
 
 	s.Stop()
 	s.cmplCh <- cmpl{actErr, Obj{Hdr: ObjHdr{Opcode: opcFin}}}

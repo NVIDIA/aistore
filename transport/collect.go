@@ -191,6 +191,7 @@ func (gc *collector) apply(c *ctrl) {
 
 	if exists {
 		// one tick of grace for draining before final cleanup
+		s.time.reaping = true
 		s.time.ticks = 1
 	}
 }
@@ -250,6 +251,9 @@ func (gc *collector) do() {
 				continue
 			}
 
+			if !s.time.reaping {
+				continue
+			}
 			s.time.ticks--
 			if s.time.ticks <= 0 {
 				delete(gc.streams, sessID)
@@ -268,8 +272,8 @@ func (gc *collector) do() {
 	}
 
 	for _, s := range gc.streams {
-		if s.time.ticks > 0 {
-			continue
+		if s.IsTerminated() || s.time.ticks > 0 {
+			continue // (terminated: waiting for remove; no idle tick)
 		}
 
 		setCollectTicks(s, int(s.time.idleTeardown/cmn.DfltTransportTick))

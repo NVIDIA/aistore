@@ -5,11 +5,13 @@
 package transport
 
 import (
+	"context"
 	"errors"
 	"io"
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
 )
@@ -54,6 +56,58 @@ func TestDoCmplRetainsNonFinalError(t *testing.T) {
 	}
 	if !errors.Is(gotErr, expected) {
 		t.Fatalf("completion error %v, expected %v", gotErr, expected)
+	}
+}
+
+// termination is visible while the sender is still posting its final completion
+func TestCollectorWaitsForRemove(t *testing.T) {
+	s := &Stream{}
+	s.streamer = s
+	eos := errEndOfStream
+	s.term.err.Store(&eos)
+	s.time.ticks = 1
+	s.workCh = make(chan *Obj)
+	s.cmplCh = make(chan cmpl)
+	s.maxhdr, _ = g.mm.Alloc()
+	gc := &collector{streams: map[int64]*base{s.sessID: &s.base}, ticker: time.NewTicker(time.Hour)}
+	defer gc.ticker.Stop()
+
+	gc.do()
+	if len(gc.streams) != 1 {
+		t.Fatal("reaped stream before remove")
+	}
+	gc.apply(&ctrl{s: &s.base})
+	gc.do()
+	if len(gc.streams) != 0 {
+		t.Fatal("did not reap stream after remove")
+	}
+}
+
+func TestFinCanceledDuringCleanup(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	peerErr := errors.New("peer rejected FIN")
+	for _, tc := range []struct {
+		name                    string
+		term, pending, finished error
+	}{
+		{"peer-error", peerErr, peerErr, peerErr},
+		{"end-of-stream", errEndOfStream, context.Canceled, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &Stream{}
+			s.stopCh.Init()
+			s.finCh = make(chan struct{})
+			term := tc.term
+			s.term.err.Store(&term)
+			if err := s.FinContext(ctx); err != tc.pending {
+				t.Fatalf("during cleanup: got %v, want %v", err, tc.pending)
+			}
+			close(s.finCh)
+			if err := s.FinContext(ctx); err != tc.finished {
+				t.Fatalf("after cleanup: got %v, want %v", err, tc.finished)
+			}
+		})
 	}
 }
 

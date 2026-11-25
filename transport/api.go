@@ -207,21 +207,37 @@ func (s *Stream) FinContext(ctx context.Context) error {
 			case s.workCh <- fin:
 			case <-s.stopCh.Listen():
 			case <-ctx.Done():
-				s.Stop()
-				return ctx.Err()
+				return s.finCanceled(ctx.Err())
 			}
 		}
 	}
 	select {
 	case <-s.finCh:
 	case <-ctx.Done():
-		s.Stop()
-		return ctx.Err()
+		return s.finCanceled(ctx.Err())
 	}
 	if err := s.TermInfo(); err != errEndOfStream {
 		return err
 	}
 	return nil
+}
+
+// preserve a known failure even if cleanup outlasts the caller's deadline
+func (s *Stream) finCanceled(cause error) error {
+	perr := s.term.err.Load()
+	if perr == nil {
+		s.Stop()
+		return cause
+	}
+	if err := *perr; err != errEndOfStream {
+		return err
+	}
+	select {
+	case <-s.finCh:
+		return nil
+	default:
+		return cause
+	}
 }
 
 //////////////////////

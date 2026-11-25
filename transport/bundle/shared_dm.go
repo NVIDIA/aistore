@@ -149,9 +149,9 @@ func (sdm *sharedDM) Open(config *cmn.Config, selected *cmn.XactConf) error {
 		debug.AssertNoErr(err)
 		return err
 	}
-	sdm.dm.parent = &transport.Parent{
-		TermedCB: sdm.reconnect,
-	}
+	parent := &transport.Parent{}
+	parent.TermedCB = func(dstID string, err error) { sdm.reconnect(parent, dstID, err) }
+	sdm.dm.parent = parent
 	sdm.dm.Open()
 
 	debug.AssertFunc(func() bool { return sdm.last.Load() != 0 }) // touched above
@@ -163,8 +163,10 @@ func (sdm *sharedDM) Open(config *cmn.Config, selected *cmn.XactConf) error {
 }
 
 // TODO: reconnect() must become common for all DM-based xactions
-func (sdm *sharedDM) reconnect(dstID string, err error) {
-	if !sdm.isOpen() {
+func (sdm *sharedDM) reconnect(parent *transport.Parent, dstID string, err error) {
+	sdm.ocmu.Lock()
+	if !sdm.isOpen() || sdm.dm.parent != parent {
+		sdm.ocmu.Unlock()
 		return
 	}
 	// same epoch? (a Smap bump that leaves targets intact - e.g., proxy join/leave - does not count)
@@ -181,27 +183,23 @@ func (sdm *sharedDM) reconnect(dstID string, err error) {
 		err = fmt.Errorf("%s: failed reconnecting to %s (%w --> %w)", sdm.trname(), dstID, err, e)
 		nlog.Errorln(core.T.String(), err, "- closing/aborting...")
 
-		// tear down entire SDM bundle
-		// safe to race with local idle close, see dm.Close() and dm.UnregRecv()
-		sdm.Close(err)
+		sdm.finishClose(err)
 		return
 	}
 
-	// ping remote peer
-	go sdm.gosend(dstID)
-}
+	// send the ping on this bundle after releasing ocmu
+	tsi := streams.Smap().GetNode(dstID)
+	sdm.touch()
+	sdm.ocmu.Unlock()
+	if tsi == nil {
+		return // (unlikely)
+	}
 
-func (sdm *sharedDM) gosend(dstID string) {
 	o := transport.AllocSend()
 	o.Hdr.Opcode = transport.OpcReconnect
 	o.Hdr.SID = core.T.SID()
-
-	smap := core.T.Sowner().Get()
-	tsi := smap.GetNode(dstID)
-	if tsi != nil && sdm.isOpen() {
-		err := sdm.Send(o, nil /*roc*/, tsi, nil)
-		nlog.Warningln(core.T.String(), "reconnect/send:", sdm.trname(), "-->", dstID, err)
-	}
+	err = streams.Send(o, nil /*roc*/, tsi)
+	nlog.Warningln(core.T.String(), "reconnect/send:", sdm.trname(), "-->", dstID, err)
 }
 
 func (sdm *sharedDM) CanSend(sid string) (err error) {
