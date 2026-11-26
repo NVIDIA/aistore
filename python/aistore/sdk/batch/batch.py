@@ -4,7 +4,9 @@
 
 import base64
 from io import BytesIO
-from typing import Generator, List, Tuple, Union, Optional
+from typing import Generator, List, Tuple, Union, Optional, cast
+
+from requests import Response
 from urllib3.response import HTTPResponse
 
 from aistore.sdk.batch.extractor.extractor_registry import get_extractor
@@ -31,6 +33,23 @@ logger = get_logger(__name__)
 
 # Type alias for batch get results: generator yielding (metadata, content) pairs
 BatchResult = Generator[Tuple[MossOut, bytes], None, None]
+
+
+def _with_response_cleanup(response: Response, entries: BatchResult) -> BatchResult:
+    """Return a generator that closes its response even before the first read."""
+
+    def generate() -> Generator[Optional[Tuple[MossOut, bytes]], None, None]:
+        try:
+            yield None
+        except BaseException:
+            response.close()
+            raise
+        yield from entries
+
+    result = generate()
+    # Enter the cleanup handler without starting archive extraction.
+    next(result)
+    return cast(BatchResult, result)
 
 
 class Batch:
@@ -312,7 +331,8 @@ class Batch:
         Returns:
             Union[BatchResult, HTTPResponse]:
                 - If raw=True: HTTPResponse object (caller must close)
-                - If raw=False: Generator yielding (MossOut, file_content) tuples
+                - If raw=False: Generator yielding (MossOut, file_content) tuples.
+                  Close it if you stop before consuming all entries.
 
         Raises:
             ValueError: If no objects are added, or tar_buffer_size is invalid or
@@ -386,10 +406,14 @@ class Batch:
 
         # TODO: Handle error response, create customized errors
         if request_snapshot.streaming_get:
-            return self._extract_streaming(response, request_snapshot, tar_buffer_size)
-        return self._extract_multipart(
-            response, decode_as_stream, request_snapshot, tar_buffer_size
-        )
+            entries = self._extract_streaming(
+                response, request_snapshot, tar_buffer_size
+            )
+        else:
+            entries = self._extract_multipart(
+                response, decode_as_stream, request_snapshot, tar_buffer_size
+            )
+        return _with_response_cleanup(response, entries)
 
     def _extract_streaming(
         self, response, request_snapshot: MossReq, tar_buffer_size: Optional[int] = None

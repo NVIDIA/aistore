@@ -29,6 +29,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- Closing a `Batch.get()` result releases its HTTP response even before reading an entry.
 - Fixed `Bucket.list_archive()` and `AISMultiShardStream` to skip objects that
   only share the archive name as a prefix (such as `a.tar.gz` or `a.tar-1.tar/f`).
 - Fixed SDK exception pickling to preserve error types, messages, and attributes

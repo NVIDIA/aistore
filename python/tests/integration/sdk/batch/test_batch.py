@@ -19,6 +19,31 @@ from tests.utils import case_matrix
 class TestBatch(ParallelTestBase):  # pylint: disable=too-many-public-methods
     """Integration tests for Batch API with various modes and configurations."""
 
+    @case_matrix([(True, False), (False, False), (False, True)])
+    def test_close_batch_before_iteration(self, case):
+        """Close the HTTP response even when no batch entries are read."""
+        streaming_get, decode_as_stream = case
+        obj, _ = self._create_object_with_content()
+        batch = self.client.batch(objects=[obj], streaming_get=streaming_get)
+        request = batch.request_client.request
+
+        def capture_response(*args, **kwargs):
+            response = request(*args, **kwargs)
+            self.addCleanup(response.close)
+            responses.append(response)
+            return response
+
+        responses = []
+        with patch.object(
+            batch.request_client, "request", side_effect=capture_response
+        ):
+            result = batch.get(decode_as_stream=decode_as_stream)
+
+        response = responses[0]
+        with patch.object(response, "close", wraps=response.close) as close:
+            result.close()
+            close.assert_called_once_with()
+
     @case_matrix(
         [("multipart", False), ("multipart", True), ("stream", False), ("stream", True)]
     )
