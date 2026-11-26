@@ -321,8 +321,9 @@ class FlaskServer(ETLServer):
                         exc_info=True,
                     )
                     self.close_reader(reader)
-                    reader = self._get_stream_reader(path)
+                    reader = None
                     time.sleep(delay)
+                    reader = self._get_stream_reader(path)
         finally:
             self.close_reader(reader)
         raise AssertionError("unreachable: loop always returns or raises")

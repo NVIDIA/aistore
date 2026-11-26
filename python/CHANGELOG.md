@@ -29,6 +29,7 @@ We structure this changelog in accordance with [Keep a Changelog](https://keepac
 
 ### Fixed
 
+- Streaming ETL direct PUT retries wait before reopening the source stream.
 - Fixed `Bucket.list_archive()` and `AISMultiShardStream` to skip objects that
   only share the archive name as a prefix (such as `a.tar.gz` or `a.tar-1.tar/f`).
 - Fixed SDK exception pickling to preserve error types, messages, and attributes
