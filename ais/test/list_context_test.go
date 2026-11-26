@@ -705,10 +705,9 @@ func waitLsoCtxAborted(t *testing.T, bp api.BaseParams, xid, kind string, minAbo
 					continue
 				}
 				// user abort may race with IC abort: the first target to report aborted
-				// triggers IC(notifications) => (abort the rest)
+				// triggers IC(notifications) => (abort the rest via T2T with the original cause)
 				// (see prxnotif done())
-				if snap.IsAborted() &&
-					(snap.AbortErr == cmn.ErrXactUserAbort.Error() || snap.AbortErr == cmn.ErrXactICNotifAbort.Error()) {
+				if snap.IsAborted() && snap.AbortErr == cmn.ErrXactUserAbort.Error() {
 					aborted++
 				}
 			}

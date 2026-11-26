@@ -76,6 +76,7 @@ type (
 	jsonNL struct {
 		Type string              `json:"type"`
 		NL   jsoniter.RawMessage `json:"nl"`
+		Err  string              `json:"err,omitempty"`
 	}
 )
 
@@ -347,11 +348,11 @@ func (*notifs) markFinished(nl nl.Listener, tsi *meta.Snode, srcErr error, abort
 	}
 	nl.MarkFinished(tsi)
 	if aborted {
-		nl.SetAborted()
 		if srcErr == nil {
 			detail := fmt.Sprintf("%s from %s", nl, tsi.StringEx())
 			srcErr = cmn.NewErrAborted(nl.String(), detail, nil)
 		}
+		nl.SetAborted(srcErr)
 	}
 	if srcErr != nil {
 		nl.AddErr(srcErr)
@@ -426,14 +427,13 @@ func abortReq(nl nl.Listener) cmn.HreqArgs {
 		// - downloader implements abort via http.MethodDelete and uses different messaging
 		return dload.AbortReq(nl.UUID() /*job ID*/)
 	}
-	msg := apc.ActMsg{
-		Action: apc.ActXactStop,
-		Name:   cmn.ErrXactICNotifAbort.Error(),
-		Value:  xact.ArgsMsg{ID: nl.UUID() /*xid*/, Kind: nl.Kind()},
+	// T2T abort with the cause (see xact.RecvAbortXact)
+	args := cmn.HreqArgs{Method: http.MethodPost}
+	args.Path = xact.T2TCtrlPath(nl.Kind(), nl.UUID() /*xid*/, xact.NoneWID, xact.OpcodeAbortXact)
+	if err := nl.AbortErr(); err != nil {
+		args.Body = []byte(err.Error())
+		args.Header = http.Header{cos.HdrContentType: []string{cos.ContentBinary}}
 	}
-	args := cmn.HreqArgs{Method: http.MethodPut}
-	args.Body = cos.MustMarshal(msg)
-	args.Path = apc.URLPathXactions.S
 	return args
 }
 
@@ -638,7 +638,7 @@ repeat:
 		err := &errNodeNotFound{si: n.p.si, smap: smap, msg: "abort " + nl.String() + " via 'smap-changed':", id: sid}
 		nl.Lock()
 		nl.AddErr(err)
-		nl.SetAborted()
+		nl.SetAborted(err)
 		nl.Unlock()
 	}
 	if len(remnl) == 0 {
@@ -939,6 +939,9 @@ func newNLMsg(nl nl.Listener) *notifListenMsg {
 func (n *notifListenMsg) MarshalJSON() (data []byte, err error) {
 	n.nl.RLock()
 	msg := jsonNL{Type: n.nl.Kind(), NL: cos.MustMarshal(n.nl)}
+	if err := n.nl.Err(); err != nil {
+		msg.Err = err.Error()
+	}
 	n.nl.RUnlock()
 	return jsoniter.Marshal(msg)
 }
@@ -954,7 +957,15 @@ func (n *notifListenMsg) UnmarshalJSON(data []byte) (err error) {
 	} else {
 		n.nl = &xact.NotifXactListener{ListenerBase: *nl.NewNLB("", t.Type, "", nil, 0)}
 	}
-	return jsoniter.Unmarshal(t.NL, n.nl)
+	if err = jsoniter.Unmarshal(t.NL, n.nl); err != nil || t.Err == "" {
+		return err
+	}
+	err = errors.New(t.Err)
+	if n.nl.IsAborted() {
+		n.nl.SetAborted(err)
+	}
+	n.nl.AddErr(err)
+	return nil
 }
 
 //

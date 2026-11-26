@@ -208,7 +208,7 @@ func (xctn *Base) Abort(err error) bool {
 		close(xctn.abort.ch)
 	}
 
-	if !Table[xctn.kind].Quiet || cmn.Rom.V(4, cos.ModXs) {
+	if (!Table[xctn.kind].Quiet || cmn.Rom.V(4, cos.ModXs)) && ShouldLogAbort(err, cos.ModXs) {
 		nlog.InfoDepth(1, xctn.Name(), err)
 	}
 	return true
@@ -261,6 +261,9 @@ func (xctn *Base) Finish() {
 	case quiet:
 		return
 	case aborted:
+		if xerr == nil && !ShouldLogAbort(err, cos.ModXs) {
+			return
+		}
 		nlog.Warningln(xname, "aborted:", err)
 	default:
 		nlog.Warningln(xname, "finished w/err: [", err, "]")

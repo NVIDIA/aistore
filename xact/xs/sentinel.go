@@ -169,7 +169,7 @@ func (s *sentinel) status(tid string, progressTimeout time.Duration, ecnt *atomi
 		tsi   = s.smap.GetTarget(tid)
 		apair = s.pend.m[tid]
 	)
-	rs, err := s.base.QueryRunState(tsi)
+	rs, cause, err := s.base.QueryRunState(tsi)
 	if err != nil {
 		cmn.SparseWarn(cos.ModXs, ecnt.Inc(), s.r.Name(), xact.OpcodeStatus, tsi.StringEx(), err)
 		last := apair.last.Load()
@@ -190,7 +190,8 @@ func (s *sentinel) status(tid string, progressTimeout time.Duration, ecnt *atomi
 	case core.RunStateFinished:
 		s.done(tid, "finished") // its 'done' is late or lost
 	case core.RunStateAborted:
-		xact.RecvAbortXact(s.r, tid, "aborted (status)") // (Quiesce returns QuiAborted)
+		nlog.Warningln(s.r.Name(), "peer", meta.Tname(tid), "aborted (status)")
+		xact.RecvAbortXact(s.r, cause) // (Quiesce returns QuiAborted)
 	default: // running or idle
 		apair.alive()
 	}

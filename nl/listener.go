@@ -6,6 +6,7 @@ package nl
 
 import (
 	"sync"
+	ratomic "sync/atomic"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -33,8 +34,9 @@ type Listener interface {
 	Err() error
 	ErrCnt() int
 	UUID() string
-	SetAborted()
+	SetAborted(err error)
 	IsAborted() bool
+	AbortErr() error
 	Status() *Status
 	SetStats(daeID string, stats any)
 	NodeStats() *NodeStats
@@ -90,7 +92,8 @@ type (
 		// runtime
 		EndTimeX atomic.Int64 // timestamp when finished
 		mu       sync.RWMutex
-		AbortedX atomic.Bool // sets if the xaction is Aborted
+		AbortedX atomic.Bool            // sets if the xaction is Aborted
+		abortErr ratomic.Pointer[error] // the cause
 	}
 
 	Status struct {
@@ -133,7 +136,6 @@ func (nlb *ListenerBase) RUnlock() { nlb.mu.RUnlock() }
 func (nlb *ListenerBase) Notifiers() meta.NodeMap         { return nlb.Srcs }
 func (nlb *ListenerBase) UUID() string                    { return nlb.Common.UUID }
 func (nlb *ListenerBase) IsAborted() bool                 { return nlb.AbortedX.Load() }
-func (nlb *ListenerBase) SetAborted()                     { nlb.AbortedX.CAS(false, true) }
 func (nlb *ListenerBase) EndTime() int64                  { return nlb.EndTimeX.Load() }
 func (nlb *ListenerBase) IsFinished() bool                { return nlb.EndTime() > 0 }
 func (nlb *ListenerBase) ProgressInterval() time.Duration { return nlb.progress }
@@ -172,10 +174,26 @@ func (nlb *ListenerBase) AddErr(err error) { nlb.errs.Add(err) }
 func (nlb *ListenerBase) ErrCnt() int      { return nlb.errs.Cnt() }
 
 func (nlb *ListenerBase) Err() error {
+	if err := nlb.AbortErr(); err != nil {
+		return err
+	}
 	if nlb.ErrCnt() == 0 {
 		return nil
 	}
 	return &nlb.errs
+}
+
+func (nlb *ListenerBase) SetAborted(err error) {
+	if nlb.abortErr.CompareAndSwap(nil, &err) {
+		nlb.AbortedX.Store(true)
+	}
+}
+
+func (nlb *ListenerBase) AbortErr() error {
+	if perr := nlb.abortErr.Load(); perr != nil {
+		return *perr
+	}
+	return nil
 }
 
 func (nlb *ListenerBase) SetStats(daeID string, stats any) {

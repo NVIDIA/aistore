@@ -20,6 +20,7 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 // Data Mover (DM): a _bundle_ of streams (this target => other target) with atomic reg, open, and broadcast help
@@ -297,9 +298,10 @@ func (dm *DM) Close(err error) error {
 		}
 		err = e
 	}
-	if err == nil {
+	switch {
+	case err == nil:
 		nlog.Infoln("closed", dm.String())
-	} else {
+	case xact.ShouldLogAbort(err, cos.ModTransport):
 		nlog.Warningln("closed", dm.String(), "cause:", err)
 	}
 	return err

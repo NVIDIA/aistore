@@ -6,6 +6,7 @@ package integration_test
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools"
 	"github.com/NVIDIA/aistore/tools/readers"
 	"github.com/NVIDIA/aistore/tools/tassert"
@@ -322,6 +324,65 @@ func TestRechunkAbort(t *testing.T) {
 	tlog.Logln("Validating object data integrity after abort...")
 	m.gets(nil, true /*withValidation*/)
 	tlog.Logfln("SUCCESS: All %d objects validated successfully after rechunk abort", m.num)
+}
+
+// IC abort carries the cause to the peers
+func TestRechunkPeerAbort(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2, Long: true, NonRoot: true})
+	var (
+		bck      = cmn.Bck{Name: "rechunk-abort" + cos.GenTie(), Provider: apc.AIS}
+		m        = &ioContext{t: t, num: 1, fileSize: 8 * cos.MiB, bck: bck, chunksConf: &ioCtxChunksConf{multipart: true, numChunks: 8}}
+		proxyURL = tools.RandomProxyURL(t)
+		bp       = tools.BaseAPIParams(proxyURL)
+		props    = &cmn.BpropsToSet{Chunks: &cmn.ChunksConfToSet{ObjSizeLimit: apc.Ptr(cos.SizeIEC(0))}}
+	)
+	tools.CreateBucket(t, proxyURL, bck, props, true /*cleanup*/)
+	m.initAndSaveState(true /*cleanup*/)
+	m.puts()
+
+	tsi, err := m.smap.HrwObjName2T(meta.CloneBck(&bck), m.objNames[0])
+	tassert.CheckFatal(t, err)
+	mpathsReadOnly(t, bp, tsi, &bck, fs.WorkCT)
+
+	// keep the peers running until the IC abort
+	rcs := holdPeerObjs(t, bp, m.smap, bck, tsi.ID())
+
+	xid, err := api.RechunkBucket(bp, bck, &apc.RechunkMsg{})
+	tassert.CheckFatal(t, err)
+	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActRechunk, Timeout: 30 * time.Second}
+	_, err = api.WaitForSnaps(bp, args, func(snaps xact.MultiSnap) (bool, bool, error) {
+		return peersAborted(snaps, tsi.ID(), len(rcs)), false, nil
+	})
+	tassert.Fatalf(t, err == nil, "peers did not abort after %s failed: %v", tsi.StringEx(), err)
+	for _, rc := range rcs {
+		rc.Close()
+	}
+	snaps, err := api.WaitForSnaps(bp, args, func(snaps xact.MultiSnap) (bool, bool, error) {
+		return allTargetsFinished(snaps, m.smap.CountActiveTs()), false, nil
+	})
+	tassert.CheckFatal(t, err)
+
+	checkPeerAbortCause(t, snaps, tsi, os.ErrPermission.Error())
+	checkICAbortCause(t, bp, args, snaps, tsi)
+}
+
+func holdPeerObjs(t *testing.T, bp api.BaseParams, smap *meta.Smap, bck cmn.Bck, tid string) (rcs []io.ReadCloser) {
+	const size = 64 * cos.MiB // > socket buffers (the GET blocks)
+	for _, si := range smap.Tmap {
+		if si.ID() == tid || si.InMaintOrDecomm() {
+			continue
+		}
+		objName := tools.GenerateObjectNameOnTarget("held-", bck, smap, si)
+		r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: size, CksumType: cos.ChecksumNone})
+		tassert.CheckFatal(t, err)
+		_, err = api.PutObject(&api.PutArgs{BaseParams: bp, Bck: bck, ObjName: objName, Reader: r})
+		tassert.CheckFatal(t, err)
+		rc, _, err := api.GetObjectReader(bp, bck, objName, nil)
+		tassert.CheckFatal(t, err)
+		t.Cleanup(func() { rc.Close() })
+		rcs = append(rcs, rc)
+	}
+	return rcs
 }
 
 type chunkProps struct {

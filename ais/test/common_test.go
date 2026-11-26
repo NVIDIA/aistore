@@ -897,6 +897,49 @@ func (m *ioContext) stopMaintenance(target *meta.Snode) string {
 	return rebID
 }
 
+// all targets other than tid report aborted
+func peersAborted(snaps xact.MultiSnap, tid string, numPeers int) bool {
+	var n int
+	for id, tsnaps := range snaps {
+		if id != tid && len(tsnaps) == 1 && tsnaps[0].IsAborted() {
+			n++
+		}
+	}
+	return n == numPeers
+}
+
+// check that the abort started on tsi with the cause and that each peer has the same text
+func checkPeerAbortCause(t *testing.T, snaps xact.MultiSnap, tsi *meta.Snode, cause string) {
+	origin := snaps[tsi.ID()][0].AbortErr
+	tassert.Fatalf(t, strings.Contains(origin, cause), "%s: expected cause %q, got %q", tsi.StringEx(), cause, origin)
+	for tid, tsnaps := range snaps {
+		for _, snap := range tsnaps {
+			tassert.Errorf(t, snap.AbortErr == origin,
+				"%s: expected the cause from %s %q, got %q", meta.Tname(tid), tsi.StringEx(), origin, snap.AbortErr)
+		}
+	}
+}
+
+// check that the job status (IC) is the cause from tsi
+func checkICAbortCause(t *testing.T, bp api.BaseParams, args *xact.ArgsMsg, snaps xact.MultiSnap, tsi *meta.Snode) {
+	status, err := api.WaitForXactionIC(bp, args)
+	tassert.CheckFatal(t, err)
+	cause := snaps[tsi.ID()][0].AbortErr
+	tassert.Errorf(t, status.IsAborted(), "job status: not aborted")
+	tassert.Errorf(t, status.ErrMsg == cause, "job status: expected the cause from %s %q, got %q", tsi.StringEx(), cause, status.ErrMsg)
+}
+
+// make the `ct` directories of `bck` read-only on each mountpath of tsi
+func mpathsReadOnly(t *testing.T, bp api.BaseParams, tsi *meta.Snode, bck *cmn.Bck, ct string) {
+	mpList, err := api.GetMountpaths(bp, tsi)
+	tassert.CheckFatal(t, err)
+	for _, mpath := range mpList.Available {
+		dir := (&fs.Mountpath{Path: mpath}).MakePathCT(bck, ct)
+		tassert.CheckFatal(t, os.Chmod(dir, 0o555))
+		t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	}
+}
+
 // expects snapshots filtered by a single xaction ID.
 func allTargetsFinished(snaps xact.MultiSnap, numTargets int) bool {
 	if len(snaps) != numTargets {

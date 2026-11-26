@@ -373,7 +373,9 @@ func (r *XactMoss) Abort(err error) bool {
 	// unreg idle callback prior to quiesce
 	r.DemandBase.Stop()
 
-	nlog.Infoln(r.Name(), "aborting:", err)
+	if xact.ShouldLogAbort(err, cos.ModXs) {
+		nlog.Infoln(r.Name(), "aborting:", err)
+	}
 
 	r.activeWG.Wait()
 	r._abortQuiesce()
@@ -608,7 +610,7 @@ func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 		defer wi.unpin()
 		wi.startup.refc.Inc()
 	case xact.OpcodeAbortXact:
-		xact.RecvAbortXact(r, sid, string(body))
+		xact.RecvAbortXact(r, string(body))
 	case xact.OpcodeAbortWI:
 		debug.Assert(wid != xact.NoneWID)
 		var errCause string

@@ -113,51 +113,85 @@ func TestCopyMultiObjSimple(t *testing.T) {
 
 // one target aborts with a local cause (each peer must get that cause)
 func TestCopyMultiObjPeerAbort(t *testing.T) {
-	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2})
-	if os.Geteuid() == 0 {
-		t.Skip("root bypasses directory permissions (CAP_DAC_OVERRIDE): the read-only destination does not fail")
-	}
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2, NonRoot: true})
+	testCopyPeerAbort(t, apc.ActCopyObjects)
+}
+
+func TestCopyBucketPeerAbort(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2, Long: true, NonRoot: true})
+	testCopyPeerAbort(t, apc.ActCopyBck)
+}
+
+func testCopyPeerAbort(t *testing.T, kind string) {
+	const (
+		numOwn     = 2  // source and copy on tsi (the abort starts on tsi)
+		numPerPeer = 10 // source and copy on the peers (they still run at the abort)
+		size       = cos.MiB
+	)
 	var (
 		bckFrom  = cmn.Bck{Name: "cp-abort-from" + cos.GenTie(), Provider: apc.AIS}
 		bckTo    = cmn.Bck{Name: "cp-abort-to" + cos.GenTie(), Provider: apc.AIS}
-		m        = &ioContext{t: t, num: 60, fileSize: 8 * cos.MiB, bck: bckFrom}
 		proxyURL = tools.RandomProxyURL(t)
 		bp       = tools.BaseAPIParams(proxyURL)
+		smap     = tools.GetClusterMap(t, proxyURL)
 	)
 	tools.CreateBucket(t, proxyURL, bckFrom, nil, true /*cleanup*/)
-	m.initAndSaveState(true /*cleanup*/)
-	m.puts()
 	tools.CreateBucket(t, proxyURL, bckTo, nil, true /*cleanup*/)
+	tsi, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
 
-	tsi, err := m.smap.GetRandTarget()
-	tassert.CheckFatal(t, err)
-	mpList, err := api.GetMountpaths(bp, tsi)
-	tassert.CheckFatal(t, err)
-	for _, mpath := range mpList.Available {
-		dir := (&fs.Mountpath{Path: mpath}).MakePathCT(&bckTo, fs.ObjCT)
-		tassert.CheckFatal(t, os.Chmod(dir, 0o555))
-		t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	objNames := copyAbortNames(t, smap, bckFrom, bckTo, tsi.ID(), numOwn, numPerPeer*(smap.CountActiveTs()-1))
+	for _, objName := range objNames {
+		r, err := readers.New(&readers.Arg{Type: readers.Rand, Size: size, CksumType: cos.ChecksumNone})
+		tassert.CheckFatal(t, err)
+		_, err = api.PutObject(&api.PutArgs{BaseParams: bp, Bck: bckFrom, ObjName: objName, Reader: r})
+		tassert.CheckFatal(t, err)
 	}
+	mpathsReadOnly(t, bp, tsi, &bckTo, fs.ObjCT)
 
-	msg := cmn.TCOMsg{ToBck: bckTo}
-	msg.ObjNames = m.objNames
-	xid, err := api.CopyMultiObj(bp, bckFrom, &msg)
+	var xid string
+	if kind == apc.ActCopyObjects {
+		msg := cmn.TCOMsg{ToBck: bckTo}
+		msg.ObjNames = objNames
+		xid, err = api.CopyMultiObj(bp, bckFrom, &msg)
+	} else {
+		xid, err = api.CopyBucket(bp, bckFrom, bckTo, &apc.TCBMsg{})
+	}
 	tassert.CheckFatal(t, err)
-	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects, Timeout: 30 * time.Second}
+	args := &xact.ArgsMsg{ID: xid, Kind: kind, Timeout: 30 * time.Second}
 	snaps, err := api.WaitForSnaps(bp, args, func(snaps xact.MultiSnap) (bool, bool, error) {
-		return allTargetsFinished(snaps, m.smap.CountActiveTs()), false, nil
+		return allTargetsFinished(snaps, smap.CountActiveTs()), false, nil
 	})
 	tassert.CheckFatal(t, err)
 
-	for tid, tsnaps := range snaps {
-		if tid == tsi.ID() {
-			continue
-		}
-		for _, snap := range tsnaps {
-			tassert.Errorf(t, strings.Contains(snap.AbortErr, os.ErrPermission.Error()),
-				"%s: expected the cause from %s, got %q", meta.Tname(tid), tsi.StringEx(), snap.AbortErr)
+	checkPeerAbortCause(t, snaps, tsi, os.ErrPermission.Error())
+	if xact.Table[kind].ICMode != xact.ICNone {
+		checkICAbortCause(t, bp, args, snaps, tsi)
+	}
+}
+
+// HRW-select names local to tid (abort origin) and names that skip tid (peers)
+func copyAbortNames(t *testing.T, smap *meta.Smap, bckFrom, bckTo cmn.Bck, tid string, numOwn, numOther int) []string {
+	var (
+		from, to = meta.CloneBck(&bckFrom), meta.CloneBck(&bckTo)
+		own      = make([]string, 0, numOwn)
+		other    = make([]string, 0, numOther)
+	)
+	smap.InitDigests()
+	for i := 0; len(own) < numOwn || len(other) < numOther; i++ {
+		objName := fmt.Sprintf("cp-abort-%d", i)
+		src, err := smap.HrwObjName2T(from, objName)
+		tassert.CheckFatal(t, err)
+		dst, err := smap.HrwObjName2T(to, objName)
+		tassert.CheckFatal(t, err)
+		switch {
+		case src.ID() == tid && dst.ID() == tid && len(own) < numOwn:
+			own = append(own, objName)
+		case src.ID() != tid && dst.ID() != tid && len(other) < numOther:
+			other = append(other, objName)
 		}
 	}
+	return append(own, other...)
 }
 
 // tco calls DemandBase.Stop before Quiesce and each target must still count the 'done' of its peers

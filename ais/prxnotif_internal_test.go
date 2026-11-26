@@ -56,6 +56,89 @@ func TestNotifPulledStatsPrefersAbortError(t *testing.T) {
 	tassert.Errorf(t, xnl.Err().Error() == abortErr, "expected %q, got %v", abortErr, xnl.Err())
 }
 
+// peers report the original abort cause
+func TestNotifAbortSameCause(t *testing.T) {
+	cos.InitShortID(0)
+	const (
+		cause    = "out of space"
+		numPeers = 8
+	)
+	var (
+		aborted = finRep{errMsg: cause, aborted: true}
+		other   = finRep{errMsg: "o1: not found"}
+	)
+	for _, test := range []struct {
+		name      string
+		pull      bool
+		recvFirst bool
+	}{
+		{"push/origin-first", false, false},
+		{"push/recv-first", false, true},
+		{"pull/origin-first", true, false},
+		{"pull/recv-first", true, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var (
+				origin = newSnode("t0", apc.Target)
+				tother = newSnode("tx", apc.Target)
+				srcs   = meta.NodeMap{origin.ID(): origin, tother.ID(): tother}
+				peers  = make([]*meta.Snode, 0, numPeers)
+			)
+			for i := range numPeers {
+				peer := newSnode("t"+strconv.Itoa(i+1), apc.Target)
+				srcs[peer.ID()] = peer
+				peers = append(peers, peer)
+			}
+			var (
+				xnl = xact.NewXactNL(cos.GenUUID(), apc.ActECEncode, &meta.Smap{}, srcs)
+				n   = newTestNotifs()
+			)
+			notifFin(n, xnl, tother, other, test.pull)
+			if !test.recvFirst {
+				notifFin(n, xnl, origin, aborted, test.pull)
+			}
+			for _, peer := range peers {
+				notifFin(n, xnl, peer, aborted, test.pull)
+			}
+			if test.recvFirst {
+				notifFin(n, xnl, origin, aborted, test.pull)
+			}
+
+			tassert.Fatalf(t, xnl.IsAborted() && xnl.AbortErr() != nil, "listener not aborted")
+			tassert.Errorf(t, xnl.AbortErr().Error() == cause, "expected cause %q, got %v", cause, xnl.AbortErr())
+			tassert.Errorf(t, xnl.ErrCnt() == 2, "expected 2 errors (%q and %q), got %v", other.errMsg, cause, xnl.Err())
+			tassert.Errorf(t, xnl.Err().Error() == cause, "job status: expected cause %q, got %v", cause, xnl.Err())
+
+			args := abortReq(xnl)
+			tassert.Errorf(t, string(args.Body) == cause, "IC abort: expected %q, got %q", cause, args.Body)
+
+			var rcv notifListenMsg // IC ownership transfer
+			tassert.CheckFatal(t, jsoniter.Unmarshal(cos.MustMarshal(newNLMsg(xnl)), &rcv))
+			tassert.Errorf(t, rcv.nl.IsAborted() && rcv.nl.Err() != nil && rcv.nl.Err().Error() == cause,
+				"IC handoff: expected cause %q, got %v", cause, rcv.nl.Err())
+		})
+	}
+}
+
+type finRep struct {
+	errMsg  string
+	aborted bool
+}
+
+func notifFin(n *notifs, xnl *xact.NotifXactListener, tsi *meta.Snode, rep finRep, pull bool) {
+	snap := &core.Snap{ID: xnl.UUID(), EndTime: time.Now(), AbortedX: rep.aborted}
+	if rep.aborted {
+		snap.AbortErr = rep.errMsg
+	} else {
+		snap.Err = rep.errMsg
+	}
+	if pull {
+		n.reconcilePulledStats(xnl, tsi, snap, true /*finished*/, rep.aborted)
+		return
+	}
+	n._finished(xnl, tsi, &core.NotifMsg{UUID: xnl.UUID(), ErrMsg: rep.errMsg, AbortedX: rep.aborted, Data: cos.MustMarshal(snap)})
+}
+
 func TestNotifHousekeepUsesWallClock(t *testing.T) {
 	cos.InitShortID(0)
 	xid := cos.GenUUID()

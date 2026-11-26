@@ -10,10 +10,12 @@ import (
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
+	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
+	"github.com/NVIDIA/aistore/xact"
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
@@ -90,7 +92,9 @@ func newBckRename(uuid, kind string, tcbArgs *xreg.TCBArgs) (xctn *BckRename, er
 func (r *BckRename) Run(wg *sync.WaitGroup) {
 	r.XactTCB.run(wg)
 	if r.IsAborted() {
-		nlog.Infoln(r.Name(), "aborted", r.AbortErr())
+		if err := r.AbortErr(); xact.ShouldLogAbort(err, cos.ModXs) {
+			nlog.Infoln(r.Name(), "aborted", err)
+		}
 	} else {
 		core.T.BMDVersionFixup(nil, r.XactTCB.args.BckFrom.Clone()) // piggyback bucket renaming (last step) on getting updated BMD
 	}

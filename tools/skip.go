@@ -6,6 +6,7 @@ package tools
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/NVIDIA/aistore/api"
@@ -35,6 +36,7 @@ type SkipTestArgs struct {
 	CloudBck              bool
 	NotCloudBck           bool
 	K8s                   bool
+	NonRoot               bool
 }
 
 const fmtSkippingShort = "skipping %s in short mode"
@@ -61,6 +63,9 @@ func CheckSkip(tb testing.TB, args *SkipTestArgs) {
 	}
 	if args.RequiresTLS && !cos.IsHTTPS(proxyURLReadOnly) {
 		tb.Skipf("%s requires TLS cluster deployment", tb.Name())
+	}
+	if args.NonRoot && os.Geteuid() == 0 {
+		tb.Skipf("%s cannot run as root: root bypasses file permissions", tb.Name())
 	}
 	if args.NoNodeJoinSecret {
 		config, err := getClusterConfig()

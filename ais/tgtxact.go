@@ -173,9 +173,8 @@ func (t *target) httpxput(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err := cos.Ternary(msg.Name == cmn.ErrXactICNotifAbort.Error(), cmn.ErrXactICNotifAbort, cmn.ErrXactUserAbort)
 		flt := xreg.Flt{ID: xargs.ID, Kind: xargs.Kind, Bck: bck}
-		xreg.DoAbort(&flt, err)
+		xreg.DoAbort(&flt, cmn.ErrXactUserAbort)
 	default:
 		t.writeErrAct(w, r, msg.Action)
 	}
@@ -396,13 +395,13 @@ func (t *target) continueTCO(w http.ResponseWriter, r *http.Request) {
 	xtco.ContMsg(&tcomsg)
 }
 
-// client: target running the same xaction ID
+// client: target running the same xaction ID or primary
 // TODO: transition transport.OpcDone to this out-of-band path
 func (t *target) xactCtrl(w http.ResponseWriter, r *http.Request, kind, xid, wid, opcode string) {
 	xctn, err := xreg.GetXact(xid)
 	if err != nil || xctn == nil {
 		xname := xact.Cname(kind, xid)
-		t.writeErr(w, r, cos.NewErrNotFound(t, xname), http.StatusNotFound)
+		t.writeErr(w, r, cos.NewErrNotFound(t, xname), http.StatusNotFound, Silent)
 		return
 	}
 
@@ -419,8 +418,13 @@ func (t *target) xactCtrl(w http.ResponseWriter, r *http.Request, kind, xid, wid
 	sid := r.Header.Get(apc.HdrSenderID)
 	switch {
 	case opcode == xact.OpcodeStatus: // all kinds (x-moss included)
+		rs := xctn.RunState()
+		b := rs.Bytes()
+		if err := xctn.AbortErr(); rs == core.RunStateAborted && err != nil {
+			b = append(b, err.Error()...)
+		}
 		w.Header().Set(cos.HdrContentType, cos.ContentBinary)
-		if _, err := w.Write(xctn.RunState().Bytes()); err != nil {
+		if _, err := w.Write(b); err != nil {
 			nlog.Warningln(t.String(), xctn.Name(), opcode, err)
 		}
 		return
@@ -429,7 +433,7 @@ func (t *target) xactCtrl(w http.ResponseWriter, r *http.Request, kind, xid, wid
 		debug.Assert(ok)
 		err = xmoss.RecvCtrl(wid, sid, opcode, body)
 	case opcode == xact.OpcodeAbortXact:
-		xact.RecvAbortXact(xctn, sid, string(body))
+		xact.RecvAbortXact(xctn, string(body))
 	default:
 		err = fmt.Errorf("%s: unsupported T2T control [%q, %q]", xctn.Name(), wid, opcode)
 	}

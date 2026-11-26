@@ -35,46 +35,41 @@ const (
 
 const NoneWID = "-" // wid is optional, may not be present
 
-var (
-	errRecvAbortXact = errors.New("remote target aborted xaction")   // to avoid duplicated broadcast
-	errRecvAbortWI   = errors.New("remote target aborted work item") // sender-side cancellation
-)
-
-func (xctn *Base) NewErrRecvAbortXact(tid, errCause string) error {
-	return newErrRecvAbortXact(xctn.Cname(), tid, errCause)
+// abort from a peer or the IC with the original cause as its text (do not re-broadcast)
+type errRecvAbortXact struct {
+	cause string
 }
 
-func newErrRecvAbortXact(cname, tid, errCause string) error {
-	return fmt.Errorf("%w: %s [%s: %q]", errRecvAbortXact, cname, meta.Tname(tid), errCause)
+var errRecvAbortWI = errors.New("remote target aborted work item") // sender-side cancellation
+
+func (e *errRecvAbortXact) Error() string { return cos.Left(e.cause, "received abort") }
+
+func RecvAbortXact(xctn core.Xact, errCause string) { xctn.Abort(&errRecvAbortXact{errCause}) }
+
+func IsErrRecvAbortXact(err error) bool {
+	_, ok := errors.AsType[*errRecvAbortXact](err)
+	return ok
 }
 
-func RecvAbortXact(xctn core.Xact, tid, errCause string) {
-	err := newErrRecvAbortXact(xctn.Cname(), tid, errCause)
-	if xctn.Abort(err) {
-		nlog.Warningln(err)
-	}
-}
+func ShouldLogAbort(err error, mod int) bool { return !IsErrRecvAbortXact(err) || cmn.Rom.V(4, mod) }
 
-func IsErrRecvAbortXact(err error) bool { return errors.Is(err, errRecvAbortXact) }
-
-// query peer's run state (OpcodeStatus)
-func (xctn *Base) QueryRunState(tsi *meta.Snode) (core.RunState, error) {
+// query peer's run state (OpcodeStatus) and the cause when aborted
+func (xctn *Base) QueryRunState(tsi *meta.Snode) (core.RunState, string, error) {
 	b, err := xctn.SendCtrl(tsi, "", OpcodeStatus, nil)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	rs, err := core.ParseRunState(b)
 	if err != nil {
-		return 0, fmt.Errorf("%s: %s: %w", xctn.Name(), tsi.StringEx(), err)
+		return 0, "", fmt.Errorf("%s: %s: %w", xctn.Name(), tsi.StringEx(), err)
 	}
-	return rs, nil
+	return rs, string(b[1:]), nil
 }
 
-// return true if other targets get the same abort without T2T (peer, proxy xact-stop, or cluster-wide event)
+// return true if other targets get the same abort without T2T (peer or IC T2T abort, user xact-stop, or cluster-wide event)
 // TODO: a shared cause found locally (e.g., missing source bucket) is not marked
 func (xctn *Base) SkipAbortBcast(err error) bool {
-	return IsErrRecvAbortXact(err) || xctn.IsClusterAbort() ||
-		errors.Is(err, cmn.ErrXactUserAbort) || errors.Is(err, cmn.ErrXactICNotifAbort)
+	return IsErrRecvAbortXact(err) || xctn.IsClusterAbort() || errors.Is(err, cmn.ErrXactUserAbort)
 }
 
 func (xctn *Base) BcastAbort(smap *meta.Smap) {
@@ -91,10 +86,13 @@ func (xctn *Base) NewErrRecvAbortWI(tid, wid, errCause string) error {
 
 func IsErrRecvAbortWI(err error) bool { return errors.Is(err, errRecvAbortWI) }
 
+func T2TCtrlPath(kind, xid, wid, opcode string) string {
+	return apc.URLPathXactions.Join(T2TCtrl, kind, xid, cos.Left(wid, NoneWID), opcode)
+}
+
 // return response body, if any
 func (xctn *Base) SendCtrl(tsi *meta.Snode, wid, opcode string, body []byte) ([]byte, error) {
-	path := apc.URLPathXactions.Join(T2TCtrl, xctn.Kind(), xctn.ID(), cos.Left(wid, NoneWID), opcode)
-	return core.T.IntraCtrlPost(tsi, path, body)
+	return core.T.IntraCtrlPost(tsi, T2TCtrlPath(xctn.Kind(), xctn.ID(), wid, opcode), body)
 }
 
 // asynchronous broadcast with bounded launch parallelism

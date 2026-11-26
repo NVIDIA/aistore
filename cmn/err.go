@@ -308,9 +308,8 @@ var (
 	ErrNoMountpaths   = errors.New("no mountpaths")
 
 	// aborts
-	ErrXactRenewAbort   = errors.New("renewal abort")
-	ErrXactUserAbort    = errors.New("user abort")              // via apc.ActXactStop
-	ErrXactICNotifAbort = errors.New("IC(notifications) abort") // ditto
+	ErrXactRenewAbort = errors.New("renewal abort")
+	ErrXactUserAbort  = errors.New("user abort") // via apc.ActXactStop
 
 	ErrGetTxBenign = errors.New("Warning: failed to transmit GET response") //nolint:staticcheck // making an exception for Warning
 )
