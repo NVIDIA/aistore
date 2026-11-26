@@ -431,6 +431,7 @@ func TestTCOPeerControl(t *testing.T) {
 		tassert.CheckFatal(t, done(b)) // late push after cleanup
 		r.Finish()
 		tassert.Fatalf(t, !r.Abort(errors.New("late abort")) && !r.IsAborted(), "finished job accepted abort")
+		tassert.Fatalf(t, !r.AbortByOwner(errors.New("late owner abort")) && !r.IsAborted(), "finished job accepted owner abort")
 	})
 
 	t.Run("abort", func(t *testing.T) {
@@ -447,6 +448,31 @@ func TestTCOPeerControl(t *testing.T) {
 		tassert.Fatalf(t, err != nil && err.Error() == cause, "lost original cause: %v", err)
 		tassert.Fatalf(t, xact.IsErrRecvAbortXact(err) && r.SkipAbortBcast(err), "received abort would be re-broadcast")
 		tassert.Fatalf(t, len(r.sntl.pend.last) == 2, "aborted peer was marked done")
+	})
+
+	t.Run("abort-owner", func(t *testing.T) {
+		const cause = "peer failed to drain outbound data"
+
+		// pull: a peer reports aborted while this job is stopping
+		r := newXact()
+		r.SetStopping()
+		tassert.Fatalf(t, !r.Abort(errors.New("outside abort")) && !r.IsAborted(), "accepted outside abort while stopping")
+		r.sntl.onStatus(a, core.RunStateAborted, 0, cause)
+		err := r.AbortErr()
+		tassert.Fatalf(t, err != nil && err.Error() == cause && xact.IsErrRecvAbortXact(err), "lost peer abort while stopping: %v", err)
+		rs, _, got, err := xact.ParseStatusReply(xact.StatusReply(r))
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, rs == core.RunStateAborted && got == cause, "invalid status after abort: %s, %q", rs, got)
+		tassert.Fatalf(t, r.EndTime().IsZero(), "owner abort finished before teardown")
+		r.Finish()
+
+		// owner: sentinel timeout and failed close while stopping
+		r = newXact()
+		r.SetStopping()
+		tassert.Fatalf(t, r.sntl._qabort(errors.New(cause)) == core.QuiAborted && r.IsAborted(), "lost sentinel abort while stopping")
+		tassert.Fatalf(t, !r.AbortByOwner(errors.New("second abort")), "accepted second abort")
+		err = r.AbortErr()
+		tassert.Fatalf(t, err != nil && err.Error() == cause && !xact.IsErrRecvAbortXact(err), "invalid abort cause: %v", err)
 	})
 
 	t.Run("in-band", func(t *testing.T) {

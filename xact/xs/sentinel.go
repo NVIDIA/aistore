@@ -195,7 +195,7 @@ func (s *sentinel) onStatus(tid string, rs core.RunState, flags xact.StatusFlags
 	switch {
 	case rs == core.RunStateAborted:
 		nlog.Warningln(s.r.Name(), "peer", meta.Tname(tid), "aborted (status)")
-		xact.RecvAbortXact(s.r, cause) // (Quiesce returns QuiAborted)
+		s.base.RecvAbortByOwner(cause) // (Quiesce returns QuiAborted)
 	case rs == core.RunStateFinished || doneSending:
 		s.done(tid, "status") // its 'done' is late or lost
 	default: // running or idle
@@ -207,9 +207,10 @@ func (s *sentinel) onStatus(tid string, rs core.RunState, flags xact.StatusFlags
 	}
 }
 
+// called by the quiesce owner before Finish
 func (s *sentinel) _qabort(err error) core.QuiRes {
 	nlog.ErrorDepth(1, err)
-	s.r.Abort(err)
+	s.base.AbortByOwner(err)
 	return core.QuiAborted
 }
 

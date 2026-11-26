@@ -47,6 +47,9 @@ func (e *errRecvAbortXact) Error() string { return cos.Left(e.cause, "received a
 
 func RecvAbortXact(xctn core.Xact, errCause string) { xctn.Abort(&errRecvAbortXact{errCause}) }
 
+// (see AbortByOwner)
+func (xctn *Base) RecvAbortByOwner(errCause string) { xctn.AbortByOwner(&errRecvAbortXact{errCause}) }
+
 func IsErrRecvAbortXact(err error) bool {
 	_, ok := errors.AsType[*errRecvAbortXact](err)
 	return ok
