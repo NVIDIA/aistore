@@ -248,6 +248,94 @@ func TestCopyMultiObjQuiesce(t *testing.T) {
 		xid, last.Sub(first), progressTimeout)
 }
 
+// reuse one TCO while a peer sends into targets that already finished their local work.
+func TestCopyMultiObjSlowPeer(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{Long: true, MinTargets: 2})
+	const batches = 3
+	var (
+		from = cmn.Bck{Name: "cp-slow-from" + cos.GenTie(), Provider: apc.AIS}
+		to   = cmn.Bck{Name: "cp-slow-to" + cos.GenTie(), Provider: apc.AIS}
+		purl = tools.RandomProxyURL(t)
+		bp   = tools.BaseAPIParams(purl)
+		smap = tools.GetClusterMap(t, purl)
+	)
+	props := &cmn.BpropsToSet{Cksum: &cmn.CksumConfToSet{Type: apc.Ptr(cos.ChecksumCesXxh)}}
+	tools.CreateBucket(t, purl, from, props, true /*cleanup*/)
+	tools.CreateBucket(t, purl, to, props, true /*cleanup*/)
+	slow, err := smap.GetRandTarget()
+	tassert.CheckFatal(t, err)
+	var receiver *meta.Snode
+	for id, si := range smap.Tmap {
+		if id != slow.ID() && !si.InMaintOrDecomm() {
+			receiver = si
+			break
+		}
+	}
+
+	tassert.Fatalf(t, receiver != nil, "no receiver other than %s", slow.StringEx())
+
+	perTarget, rl := frontendRateLim(smap, time.Second)
+	batchSize := perTarget + 4
+	names := make([]string, 0, batches*batchSize)
+	smap.InitDigests()
+	for i := 0; len(names) < cap(names); i++ {
+		name := fmt.Sprintf("slow-%d", i)
+		src, err := smap.HrwObjName2T(meta.CloneBck(&from), name)
+		tassert.CheckFatal(t, err)
+		dst, err := smap.HrwObjName2T(meta.CloneBck(&to), name)
+		tassert.CheckFatal(t, err)
+		if src.ID() == slow.ID() && dst.ID() == receiver.ID() {
+			names = append(names, name)
+			tassert.CheckFatal(t, tools.PutObjRR(bp, from, name, cos.KiB, cos.ChecksumCesXxh))
+		}
+	}
+	_, err = api.SetBucketProps(bp, from, &cmn.BpropsToSet{RateLimit: rl})
+	tassert.CheckFatal(t, err)
+
+	var xid string
+	for i := range batches {
+		msg := cmn.TCOMsg{ToBck: to}
+		msg.ObjNames = names[i*batchSize : (i+1)*batchSize]
+		id, err := api.CopyMultiObj(bp, from, &msg)
+		tassert.CheckFatal(t, err)
+		if xid == "" {
+			xid = id
+		}
+		tassert.Fatalf(t, id == xid, "expected shared TCO %s, got %s", xid, id)
+	}
+
+	wantTxns := fmt.Sprintf(" txns:%d/%d ", batches, batches)
+	args := &xact.ArgsMsg{ID: xid, Kind: apc.ActCopyObjects, DaemonID: receiver.ID(), Timeout: time.Minute}
+	snaps, err := api.WaitForSnaps(bp, args, func(snaps xact.MultiSnap) (bool, bool, error) {
+		for _, snap := range snaps[receiver.ID()] {
+			if snap.IsAborted() {
+				return false, false, fmt.Errorf("%s aborted: %s", xid, snap.AbortErr)
+			}
+			if strings.Contains(snap.CtlMsg, wantTxns) {
+				return true, false, nil
+			}
+		}
+		return false, false, nil
+	})
+	tassert.CheckFatal(t, err)
+	snap := snaps[receiver.ID()][0]
+	tassert.Fatalf(t, !strings.Contains(snap.CtlMsg, "] ["), "finished local work retained: %s", snap.CtlMsg)
+	tassert.Fatalf(t, snap.Stats.InObjs < int64(len(names)), "slow peer finished before receiver's local work: %s", snap.CtlMsg)
+	tlog.Logfln("%s finished all local transactions with %d/%d incoming objects received", receiver.StringEx(), snap.Stats.InObjs, len(names))
+
+	args.DaemonID = ""
+	args.Timeout = 2 * time.Minute
+	tassert.CheckFatal(t, api.WaitForXaction(bp, args))
+	list, err := api.ListObjects(bp, to, nil, api.ListArgs{})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(list.Entries) == len(names), "expected %d copied objects, got %d", len(names), len(list.Entries))
+	for _, name := range names {
+		attrs, err := api.GetObjectWithValidation(bp, to, name, nil)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, attrs.Size() == cos.KiB, "unexpected size for %s: %d", name, attrs.Size())
+	}
+}
+
 func TestCopyMultiObj(t *testing.T) {
 	runProviderTests(t, func(t *testing.T, bck *meta.Bck) {
 		testCopyMobj(t, bck)

@@ -58,6 +58,11 @@ func TestFastRejoin(t *testing.T) {
 		}
 		bp = tools.BaseAPIParams(tools.GetPrimaryURL())
 	)
+	// wait out rebalances left by earlier tests
+	xargs := xact.ArgsMsg{Kind: apc.ActRebalance, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
+	_, err := api.WaitForSnaps(bp, &xargs, xargs.NotRunning())
+	tassert.CheckFatal(t, err)
+
 	m.initAndSaveState(true /*cleanup*/)
 	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
 	m.puts()
@@ -103,7 +108,7 @@ func TestFastRejoin(t *testing.T) {
 			snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{Kind: apc.ActRebalance, DaemonID: tsi.ID()})
 			if !cmn.IsStatusNotFound(err) {
 				tassert.CheckFatal(t, err)
-				tassert.Fatalf(t, len(snaps[tsi.ID()]) == 0, "%s: unexpected rebalance: %v", tsi.StringEx(), snaps)
+				tassert.Fatalf(t, len(snaps[tsi.ID()]) == 0, "%s: unexpected rebalance: %s", tsi.StringEx(), cos.MustMarshal(snaps))
 			}
 		}
 

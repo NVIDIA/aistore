@@ -55,12 +55,9 @@ type (
 		owt      cmn.OWT
 	}
 	tcowi struct {
-		r    *XactTCO
-		msg  *cmn.TCOMsg
-		pend struct {
-			n atomic.Int64
-		}
-		lrp int
+		r   *XactTCO
+		msg *cmn.TCOMsg
+		lrp atomic.Int32
 	}
 	tcoCtlStats struct {
 		begin  atomic.Int64
@@ -80,6 +77,7 @@ type (
 // interface guard
 var (
 	_ core.Xact      = (*XactTCO)(nil)
+	_ xact.Peer      = (*XactTCO)(nil)
 	_ xreg.Renewable = (*tcoFactory)(nil)
 	_ lrwi           = (*tcowi)(nil)
 	_ lrwi           = (*syncwi)(nil)
@@ -205,10 +203,6 @@ func (r *XactTCO) BeginMsg(msg *cmn.TCOMsg) {
 	r.pend.mtx.Lock()
 
 	r.pend.m[msg.TxnUUID] = wi
-	// Initialize pend.n here (not in doMsg) to prevent race where OpcDone
-	// arrives before doMsg sets pend.n. sntl.nat is valid since Start() ran.
-	wi.pend.n.Store(int64(r.sntl.nat - 1))
-	r.wiCnt.Inc()
 	r.ctl.begin.Inc()
 
 	r.pend.mtx.Unlock()
@@ -267,7 +261,7 @@ func (r *XactTCO) doMsg(msg *cmn.TCOMsg) (stop bool) {
 			msg.TCBMsg.Prefix, " vs ", lrit.prefix)
 		lrit.prefix = cos.Left(lrit.prefix, msg.TCBMsg.Prefix)
 	}
-	wi.lrp = lrit.lrp
+	wi.lrp.Store(int32(lrit.lrp))
 
 	nworkers := int64(len(lrit.nwp.workers))
 	r.nworkers.Add(nworkers)
@@ -314,14 +308,13 @@ outer:
 		select {
 		case msg := <-r.workCh:
 			stop := r.doMsg(msg)
+			r.pend.mtx.Lock()
+			delete(r.pend.m, msg.TxnUUID)
+			r.pend.mtx.Unlock()
 			r.ctl.done.Inc()
 			r.DecPending()
 			if stop {
 				break outer
-			}
-			if r.p.dm != nil {
-				// Per-transaction OpcDone: finished sending objects for this txn
-				r.sntl.bcastDone(msg.TxnUUID, r.p.dm)
 			}
 		case <-r.IdleTimer():
 			break outer
@@ -331,15 +324,18 @@ outer:
 	}
 	r.DemandBase.Stop() // prevent new requests from reusing this xaction
 
-	// quiesce and close DM (compare w/ tcb.go)
-	if r.p.dm != nil && !r.IsAborted() {
-		// Xaction-level OpcDone: whole xaction is done, entering Quiesce
-		r.sntl.bcastDone(r.ID(), r.p.dm)
-		r.sntl.initLast(mono.NanoTime())
-		r.Quiesce(r.sntl.qival(), r.sntl.qcb) // wait for others
-	}
 	if r.p.dm != nil {
-		r.p.dm.Close(r.AbortErr())
+		// drain outbound streams before notifying peers; keep receiving until all peers are done (compare w/ tcb)
+		if err := r.p.dm.Close(r.AbortErr()); err != nil {
+			r.Abort(err)
+		} else if !r.IsAborted() {
+			r.sntl.txDone.Store(true)
+			r.BcastCtrl(r.sntl.smap, "", xact.OpcodeDone, nil)
+			r.sntl.initLast(mono.NanoTime())
+			if r.Quiesce(r.sntl.qival(), r.sntl.qcb) == core.QuiDone {
+				r.p.dm.SkipRxQuiesce()
+			}
+		}
 		r.p.dm.UnregRecv()
 	}
 
@@ -393,29 +389,10 @@ ex:
 // TODO: refactor - currently duplicates tcb.go
 func (r *XactTCO) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if hdr.Opcode != 0 {
-		switch hdr.Opcode {
-		case transport.OpcDone:
-			// Two types of OpcDone - distinguished by whether uuid matches a txnUUID:
-			uuid := cos.UnsafeS(hdr.Opaque)
-			r.pend.mtx.Lock()
-			wi, ok := r.pend.m[uuid]
-			r.pend.mtx.Unlock()
-			if ok {
-				// (1) Per-txn OpcDone (sent after doMsg, see: sntl.bcastDone(msg.TxnUUID...))
-				//     Sender finished copying objects for this specific transaction.
-				n := wi.pend.n.Dec()
-				if n == 0 {
-					r.wiCnt.Dec()
-				}
-			} else {
-				// (2) Xaction-level OpcDone (sent before Quiesce, see: sntl.bcastDone(r.ID()...))
-				//     Sender's whole xaction is done; mark them complete for Quiesce.
-				r.sntl.rxDone(hdr)
-			}
-		default:
-			return abortOpcode(r, hdr.Opcode)
+		if hdr.Opcode == transport.OpcDone {
+			return abortInbandDone(r, hdr.SID)
 		}
-		return nil
+		return abortOpcode(r, hdr.Opcode)
 	}
 
 	debug.Assert(hdr.Opcode == 0)
@@ -464,9 +441,15 @@ func (r *XactTCO) CtlMsg() string {
 		return ""
 	}
 
+	r.pend.mtx.Lock()
+	wis := make([]*tcowi, 0, len(r.pend.m))
+	for _, wi := range r.pend.m {
+		wis = append(wis, wi)
+	}
+	r.pend.mtx.Unlock()
+
 	var sb cos.SB
-	n := r.wiCnt.Load()
-	sb.Init(ctlMsgBufSize + 80*int(n))
+	sb.Init(ctlMsgBufSize + 80*len(wis))
 	tag := cos.Ternary(r.Kind() == apc.ActETLObjects, "etl ", "cp ")
 	sb.WriteString(tag)
 	sb.WriteString(r.args.BckFrom.Cname(""))
@@ -496,16 +479,9 @@ func (r *XactTCO) CtlMsg() string {
 	sb.WriteInt64(r.ctl.pruned.Load())
 	sb.WriteUint8(']')
 
-	if n == 0 {
+	if len(wis) == 0 {
 		return sb.String()
 	}
-
-	r.pend.mtx.Lock()
-	wis := make([]*tcowi, 0, len(r.pend.m))
-	for _, wi := range r.pend.m {
-		wis = append(wis, wi)
-	}
-	r.pend.mtx.Unlock()
 
 	sb.WriteString(" [")
 	for i, wi := range wis {
@@ -518,6 +494,16 @@ func (r *XactTCO) CtlMsg() string {
 
 	return sb.String()
 }
+
+// as xact.Peer
+func (r *XactTCO) RecvCtrl(wid, sid, opcode string, body []byte) error {
+	if opcode != xact.OpcodeDone || wid != xact.NoneWID || len(body) != 0 || r.p.dm == nil {
+		return fmt.Errorf("%s: unexpected T2T control [%q, %q, body=%d, dm=%t]", r.Name(), wid, opcode, len(body), r.p.dm != nil)
+	}
+	return r.sntl.recvDone(sid)
+}
+
+func (r *XactTCO) StatusFlags() xact.StatusFlags { return r.sntl.statusFlags() }
 
 ///////////
 // tcowi //
@@ -547,16 +533,11 @@ func (wi *tcowi) do(lom *core.LOM, lrit *lrit, buf []byte) {
 func (wi *tcowi) append(sb *cos.SB) {
 	msg := wi.msg
 
-	msg.ListRange.Str(sb, wi.lrp == lrpPrefix)
+	msg.ListRange.Str(sb, wi.lrp.Load() == lrpPrefix)
 	if msg.Transform.Name != "" {
 		sb.WriteString(", etl:")
 		sb.WriteString(msg.Transform.Name)
 	}
-	if pend := wi.pend.n.Load(); pend > 0 {
-		sb.WriteString(", pending:")
-		sb.WriteInt64(pend)
-	}
-
 	sb.WriteString(", flags:")
 	first := true
 	if msg.LatestVer {

@@ -230,7 +230,7 @@ func (s *sentinel) pending() {
 // receive
 //
 
-// in-band 'done' (TCO, archive)
+// in-band 'done' (archive)
 func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
 	debug.Assert(s.isPeer(hdr.SID), s.r.Name(), " unexpected 'done' from ", hdr.SID)
 	if rs := s.r.RunState(); rs == core.RunStateFinished || rs == core.RunStateAborted {

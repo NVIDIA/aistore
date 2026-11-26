@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -26,8 +27,10 @@ import (
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
+	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
 //
@@ -378,4 +381,90 @@ func TestTCBPeerAbort(t *testing.T) {
 			tassert.Fatalf(t, len(s.pend.last) == 1, "aborted peer was marked done")
 		})
 	}
+}
+
+// accept peer completion after the demand job starts stopping
+func TestTCOPeerControl(t *testing.T) {
+	const a, b = "peerA", "peerB"
+	fs.NewTestMFS(mock.NewIOS())
+	prev := core.T
+	mock.NewTarget(mock.NewBaseBownerMock())
+	t.Cleanup(func() { core.T = prev })
+	xreg.Init()
+	newXact := func() *XactTCO {
+		r := &XactTCO{
+			streamingX: streamingX{p: &streamingF{dm: &bundle.DM{}}},
+			args:       &xreg.TCOArgs{BckTo: meta.NewBck("dst", apc.AIS, cmn.NsGlobal)},
+		}
+		r.Base.InitBase(t.Context(), cos.GenUUID(), apc.ActCopyObjects, nil)
+		smap := &meta.Smap{Tmap: meta.NodeMap{a: {DaeID: a}, b: {DaeID: b}}}
+		r.sntl.init(r, &r.Base, r.p.dm, cmn.GCO.Get(), smap, 3)
+		r.sntl.initLast(1)
+		return r
+	}
+
+	t.Run("done", func(t *testing.T) {
+		r := newXact()
+		done := func(sid string) error { return r.RecvCtrl(xact.NoneWID, sid, xact.OpcodeDone, nil) }
+		tassert.Fatalf(t, done("unknown") != nil, "accepted unknown peer")
+		tassert.Fatalf(t, done(core.T.SID()) != nil, "accepted self")
+		tassert.Fatalf(t, r.RecvCtrl(xact.NoneWID, a, xact.OpcodeStatus, nil) != nil, "accepted wrong opcode")
+		tassert.Fatalf(t, r.RecvCtrl("txn", a, xact.OpcodeDone, nil) != nil, "accepted transaction done")
+		tassert.Fatalf(t, r.RecvCtrl(xact.NoneWID, a, xact.OpcodeDone, []byte("x")) != nil, "accepted body")
+		tassert.Fatalf(t, len(r.sntl.pend.last) == 2, "rejected control changed pending peers")
+		tassert.Fatalf(t, r.StatusFlags() == 0, "premature done-sending flag")
+
+		r.SetStopping()
+		r.sntl.txDone.Store(true)
+		rs, flags, cause, err := xact.ParseStatusReply(xact.StatusReply(r))
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, rs == core.RunStateRunning && flags.IsSet(xact.StatusDoneSending) && cause == "",
+			"invalid stopping status: %s, %d, %q", rs, flags, cause)
+		tassert.CheckFatal(t, done(a))
+		tassert.CheckFatal(t, done(a))
+		r.sntl.onStatus(a, core.RunStateRunning, 0, "") // stale reply must not resurrect a
+		tassert.Fatalf(t, len(r.sntl.pend.last) == 1, "duplicate done or stale status changed pending peers")
+
+		r.sntl.onStatus(b, rs, flags, cause) // recover a missed push
+		tassert.Fatalf(t, r.sntl.qcb(0) == core.QuiDone, "still waiting for peers")
+		r.sntl.cleanup()
+		tassert.CheckFatal(t, done(b)) // late push after cleanup
+		r.Finish()
+		tassert.Fatalf(t, !r.Abort(errors.New("late abort")) && !r.IsAborted(), "finished job accepted abort")
+	})
+
+	t.Run("abort", func(t *testing.T) {
+		const cause = "peer failed to drain outbound data"
+		source, r := newXact(), newXact()
+		source.sntl.txDone.Store(true)
+		source.Abort(errors.New(cause))
+		rs, flags, got, err := xact.ParseStatusReply(xact.StatusReply(source))
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, rs == core.RunStateAborted && flags == 0 && got == cause,
+			"invalid aborted status: %s, %d, %q", rs, flags, got)
+		r.sntl.onStatus(a, rs, flags, got)
+		err = r.AbortErr()
+		tassert.Fatalf(t, err != nil && err.Error() == cause, "lost original cause: %v", err)
+		tassert.Fatalf(t, xact.IsErrRecvAbortXact(err) && r.SkipAbortBcast(err), "received abort would be re-broadcast")
+		tassert.Fatalf(t, len(r.sntl.pend.last) == 2, "aborted peer was marked done")
+	})
+
+	t.Run("in-band", func(t *testing.T) {
+		for _, wid := range []string{"", cos.GenUUID()} {
+			r := newXact()
+			err := r._recv(&transport.ObjHdr{Opcode: transport.OpcDone, SID: a, Opaque: []byte(wid)}, nil)
+			tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), "mixed-version") && r.IsAborted(),
+				"accepted in-band done (wid %q): %v", wid, err)
+		}
+	})
+}
+
+func TestMossAbortAfterStopping(t *testing.T) {
+	r := &XactMoss{}
+	r.Base.InitBase(t.Context(), cos.GenUUID(), apc.ActGetBatch, nil)
+	tassert.Fatalf(t, r.SetStopping(), "failed to claim cleanup")
+	err := errors.New("late peer abort")
+	tassert.Fatalf(t, !r.Base.Abort(err), "base allowed abort after cleanup was claimed")
+	tassert.Fatalf(t, !r.Abort(err), "abort entered cleanup owned by fini")
+	tassert.Fatalf(t, !r.IsAborted(), "abort changed state after cleanup was claimed")
 }
