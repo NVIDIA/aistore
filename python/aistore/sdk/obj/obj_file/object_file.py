@@ -147,6 +147,7 @@ class ObjectFileReader(BufferedIOBase):
     def close(self) -> None:
         """Close the file."""
         self._closed = True
+        self._remainder = None
         self._stream.close()
 
 
