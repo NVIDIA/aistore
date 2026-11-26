@@ -58,6 +58,7 @@ type (
 			opened atomic.Bool
 			laterx atomic.Bool
 			unregg atomic.Bool // in UnregRecv
+			skipQu atomic.Bool // skip Rx quiesce in UnregRecv
 		}
 	}
 )
@@ -168,7 +169,7 @@ func (dm *DM) UnregRecv() {
 	}
 
 	xctn := dm.xctn()
-	if xctn != nil {
+	if xctn != nil && !dm.stage.skipQu.Load() {
 		// quiesce outside locks
 		dm.stage.regmtx.Unlock()
 		timeout := dm.Config.Transport.QuiesceTime.D()
@@ -193,6 +194,13 @@ func (dm *DM) UnregRecv() {
 
 	dm.stage.regged.Store(false)
 	dm.stage.unregg.Store(false)
+	dm.stage.skipQu.Store(false)
+}
+
+// all peers finished sending, each after graceful close (in-band fin)
+// UnregRecv therefore skips the Rx quiesce
+func (dm *DM) SkipRxQuiesce() {
+	dm.stage.skipQu.Store(true)
 }
 
 // `dm.stage.opened` is bracketed inside `regged`

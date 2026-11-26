@@ -218,6 +218,7 @@ type (
 var (
 	_ xreg.Renewable     = (*mossFactory)(nil)
 	_ core.Xact          = (*XactMoss)(nil)
+	_ xact.Peer          = (*XactMoss)(nil)
 	_ transport.Receiver = (*XactMoss)(nil)
 )
 
@@ -598,6 +599,7 @@ func (r *XactMoss) admit(config *cmn.Config, wid string, now int64) (throttled b
 	return throttled, nil
 }
 
+// as xact.Peer
 func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 	switch opcode {
 	case xact.OpcodeStartedWI:
@@ -609,8 +611,6 @@ func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 		}
 		defer wi.unpin()
 		wi.startup.refc.Inc()
-	case xact.OpcodeAbortXact:
-		xact.RecvAbortXact(r, string(body))
 	case xact.OpcodeAbortWI:
 		debug.Assert(wid != xact.NoneWID)
 		var errCause string
@@ -626,6 +626,8 @@ func (r *XactMoss) RecvCtrl(wid, sid, opcode string, body []byte) error {
 	}
 	return nil
 }
+
+func (*XactMoss) StatusFlags() xact.StatusFlags { return 0 }
 
 // (phase 2)
 // assemble requested data (local and remote); emit resulting archive

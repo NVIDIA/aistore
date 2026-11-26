@@ -31,6 +31,7 @@ const (
 	OpcodeAbortXact = "abortXact"
 	OpcodeAbortWI   = "abortWI"
 	OpcodeStatus    = "status"
+	OpcodeDone      = "done"
 )
 
 const NoneWID = "-" // wid is optional, may not be present
@@ -53,17 +54,61 @@ func IsErrRecvAbortXact(err error) bool {
 
 func ShouldLogAbort(err error, mod int) bool { return !IsErrRecvAbortXact(err) || cmn.Rom.V(4, mod) }
 
-// query peer's run state (OpcodeStatus) and the cause when aborted
-func (xctn *Base) QueryRunState(tsi *meta.Snode) (core.RunState, string, error) {
+type (
+	// optional: kind-specific T2T control
+	// (OpcodeStatus and OpcodeAbortXact are handled for all xactions)
+	Peer interface {
+		RecvCtrl(wid, sid, opcode string, body []byte) error
+		StatusFlags() StatusFlags // optional bits following the run-state byte (OpcodeStatus)
+	}
+
+	StatusFlags uint8
+)
+
+const (
+	StatusDoneSending StatusFlags = 1 << iota // all outbound data sent and received by peers
+)
+
+func (f StatusFlags) IsSet(flag StatusFlags) bool { return f&flag == flag }
+
+// reply with the abort cause when aborted, otherwise optional status flags
+func StatusReply(xctn core.Xact) []byte {
+	rs := xctn.RunState()
+	b := rs.Bytes()
+	if rs == core.RunStateAborted {
+		if err := xctn.AbortErr(); err != nil {
+			b = append(b, err.Error()...)
+		}
+	} else if p, ok := xctn.(Peer); ok {
+		if f := p.StatusFlags(); f != 0 {
+			b = append(b, byte(f))
+		}
+	}
+	return b
+}
+
+func ParseStatusReply(b []byte) (rs core.RunState, flags StatusFlags, cause string, err error) {
+	if rs, err = core.ParseRunState(b); err != nil {
+		return 0, 0, "", err
+	}
+	if rs == core.RunStateAborted {
+		return rs, 0, string(b[1:]), nil
+	}
+	if len(b) > 1 {
+		flags = StatusFlags(b[1])
+	}
+	return rs, flags, "", nil
+}
+
+func (xctn *Base) QueryStatus(tsi *meta.Snode) (rs core.RunState, flags StatusFlags, cause string, err error) {
 	b, err := xctn.SendCtrl(tsi, "", OpcodeStatus, nil)
 	if err != nil {
-		return 0, "", err
+		return 0, 0, "", err
 	}
-	rs, err := core.ParseRunState(b)
-	if err != nil {
-		return 0, "", fmt.Errorf("%s: %s: %w", xctn.Name(), tsi.StringEx(), err)
+	if rs, flags, cause, err = ParseStatusReply(b); err != nil {
+		err = fmt.Errorf("%s: %s: %w", xctn.Name(), tsi.StringEx(), err)
 	}
-	return rs, string(b[1:]), nil
+	return rs, flags, cause, err
 }
 
 // return true if other targets get the same abort without T2T (peer or IC T2T abort, user xact-stop, or cluster-wide event)
@@ -128,6 +173,6 @@ func (xctn *Base) BcastCtrl(smap *meta.Smap, wid, opcode string, err error) {
 		}(tsi)
 	}
 	if cmn.Rom.V(4, cos.ModXs) {
-		nlog.InfoDepth(1, xctn.Name(), core.T.String(), "bcast abort [", err, "]")
+		nlog.InfoDepth(1, xctn.Name(), core.T.String(), "bcast", opcode, err)
 	}
 }

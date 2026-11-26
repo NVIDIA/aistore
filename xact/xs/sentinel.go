@@ -6,6 +6,7 @@ package xs
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/aistore/cmn"
@@ -22,26 +23,20 @@ import (
 	"github.com/NVIDIA/aistore/xact"
 )
 
-const apairDeleted int64 = -1
-
-type (
-	apair struct {
-		last atomic.Int64 // last time the peer answered
+type sentinel struct {
+	r      core.Xact
+	base   *xact.Base
+	config *cmn.Config
+	smap   *meta.Smap
+	pend   struct {
+		mu   sync.Mutex
+		last map[string]int64 // pending peer => last reply
+		p    []string         // peers to poll (quiesce goroutine)
+		i    int64            // last poll interval
 	}
-	sentinel struct {
-		r      core.Xact
-		base   *xact.Base
-		config *cmn.Config
-		smap   *meta.Smap
-		pend   struct {
-			m map[string]*apair // map [tid => apair]
-			p []string          // reusable slice [tid]
-			i atomic.Int64      // periodic log & progress
-			n atomic.Int64      // current num running (<= `nat`)
-		}
-		nat int
-	}
-)
+	nat    int
+	txDone atomic.Bool // this target: all outbound data sent and received by peers
+}
 
 func (s *sentinel) init(r core.Xact, base *xact.Base, dm *bundle.DM, config *cmn.Config, smap *meta.Smap, nat int) {
 	s.r = r
@@ -56,19 +51,20 @@ func (s *sentinel) init(r core.Xact, base *xact.Base, dm *bundle.DM, config *cmn
 		return
 	}
 	debug.Assert(config != nil)
-	s.pend.n.Store(int64(nat - 1))
-	s.pend.m = make(map[string]*apair, nat-1)
+	s.pend.last = make(map[string]int64, nat-1)
 	for tid := range smap.Tmap {
 		if tid == core.T.SID() || smap.InMaintOrDecomm(tid) {
 			continue
 		}
-		s.pend.m[tid] = &apair{}
+		s.pend.last[tid] = 0
 	}
 }
 
 func (s *sentinel) cleanup() {
-	clear(s.pend.m)
-	s.pend.p = s.pend.p[:0]
+	s.pend.mu.Lock()
+	s.pend.last = nil
+	s.pend.mu.Unlock()
+	s.pend.p = nil
 }
 
 func (s *sentinel) bcastDone(uuid string, dm *bundle.DM) {
@@ -90,10 +86,11 @@ func (s *sentinel) bcastDone(uuid string, dm *bundle.DM) {
 }
 
 func (s *sentinel) initLast(now int64) {
-	for tid := range s.pend.m {
-		apair := s.pend.m[tid]
-		apair.last.CAS(0, now)
+	s.pend.mu.Lock()
+	for tid := range s.pend.last {
+		s.pend.last[tid] = now
 	}
+	s.pend.mu.Unlock()
 }
 
 // Qival returns the quiesce check interval based on config
@@ -102,7 +99,10 @@ func (s *sentinel) qival() time.Duration {
 }
 
 func (s *sentinel) qcb(tot time.Duration) core.QuiRes {
-	if s.pend.n.Load() == 0 {
+	s.pend.mu.Lock()
+	n := len(s.pend.last)
+	s.pend.mu.Unlock()
+	if n == 0 {
 		return core.QuiDone
 	}
 	// have "pending" targets
@@ -112,10 +112,10 @@ func (s *sentinel) qcb(tot time.Duration) core.QuiRes {
 
 func (s *sentinel) _qcb(tot, ival, progressTimeout time.Duration, ecnt int) core.QuiRes {
 	i := int64(tot / ival)
-	if i <= s.pend.i.Load() {
+	if i <= s.pend.i {
 		return core.QuiActive
 	}
-	s.pend.i.Store(i)
+	s.pend.i = i
 
 	// 1. log
 	s.pending()
@@ -165,15 +165,14 @@ func (s *sentinel) poll(progressTimeout time.Duration) error {
 }
 
 func (s *sentinel) status(tid string, progressTimeout time.Duration, ecnt *atomic.Int64) error {
-	var (
-		tsi   = s.smap.GetTarget(tid)
-		apair = s.pend.m[tid]
-	)
-	rs, cause, err := s.base.QueryRunState(tsi)
+	tsi := s.smap.GetTarget(tid)
+	rs, flags, cause, err := s.base.QueryStatus(tsi)
 	if err != nil {
 		cmn.SparseWarn(cos.ModXs, ecnt.Inc(), s.r.Name(), xact.OpcodeStatus, tsi.StringEx(), err)
-		last := apair.last.Load()
-		if last == apairDeleted {
+		s.pend.mu.Lock()
+		last, pending := s.pend.last[tid]
+		s.pend.mu.Unlock()
+		if !pending {
 			return nil
 		}
 		debug.Assert(last != 0)
@@ -183,19 +182,29 @@ func (s *sentinel) status(tid string, progressTimeout time.Duration, ecnt *atomi
 		return nil
 	}
 
+	s.onStatus(tid, rs, flags, cause)
+	return nil
+}
+
+// act on a peer's status reply
+func (s *sentinel) onStatus(tid string, rs core.RunState, flags xact.StatusFlags, cause string) {
+	doneSending := flags.IsSet(xact.StatusDoneSending)
 	if cmn.Rom.V(5, cos.ModXs) {
-		nlog.Infoln(s.r.Name(), "recv 'status' from:", meta.Tname(tid), rs, "pending:", s.pend.n.Load())
+		nlog.Infoln(s.r.Name(), "recv 'status' from:", meta.Tname(tid), rs, "done sending:", doneSending)
 	}
-	switch rs {
-	case core.RunStateFinished:
-		s.done(tid, "finished") // its 'done' is late or lost
-	case core.RunStateAborted:
+	switch {
+	case rs == core.RunStateAborted:
 		nlog.Warningln(s.r.Name(), "peer", meta.Tname(tid), "aborted (status)")
 		xact.RecvAbortXact(s.r, cause) // (Quiesce returns QuiAborted)
+	case rs == core.RunStateFinished || doneSending:
+		s.done(tid, "status") // its 'done' is late or lost
 	default: // running or idle
-		apair.alive()
+		s.pend.mu.Lock()
+		if _, pending := s.pend.last[tid]; pending {
+			s.pend.last[tid] = mono.NanoTime()
+		}
+		s.pend.mu.Unlock()
 	}
-	return nil
 }
 
 func (s *sentinel) _qabort(err error) core.QuiRes {
@@ -210,42 +219,56 @@ func (s *sentinel) checkSmap(smap *meta.Smap) error {
 
 func (s *sentinel) pending() {
 	s.pend.p = s.pend.p[:0]
-	for tid := range s.pend.m {
-		apair := s.pend.m[tid]
-		if apair.last.Load() != apairDeleted {
-			s.pend.p = append(s.pend.p, tid)
-		}
+	s.pend.mu.Lock()
+	for tid := range s.pend.last {
+		s.pend.p = append(s.pend.p, tid)
 	}
+	s.pend.mu.Unlock()
 }
 
 //
 // receive
 //
 
+// in-band 'done' (TCO, archive)
 func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
+	debug.Assert(s.isPeer(hdr.SID), s.r.Name(), " unexpected 'done' from ", hdr.SID)
 	if rs := s.r.RunState(); rs == core.RunStateFinished || rs == core.RunStateAborted {
 		return
 	}
 	s.done(hdr.SID, "recv 'done'")
 }
 
-// mark peer done (idempotent)
-func (s *sentinel) done(tid, tag string) {
-	apair := s.pend.m[tid]
-	if apair == nil { // unlikely
-		debug.Assert(false, "missing apair ", tid)
-		return
+// T2T 'done' from a peer
+// (compare w/ rxDone: no run-state check - 'done' is idempotent, late push is benign)
+func (s *sentinel) recvDone(sid string) error {
+	if !s.isPeer(sid) {
+		return fmt.Errorf("%s: unexpected %s from %q", s.r.Name(), xact.OpcodeDone, sid)
 	}
-	if prev := apair.last.Swap(apairDeleted); prev != apairDeleted {
-		s.pend.n.Dec()
-	}
-	if cmn.Rom.V(4, cos.ModXs) {
-		nlog.InfoDepth(2, s.r.Name(), tag, "from:", meta.Tname(tid), s.pend.n.Load())
-	}
+	s.done(sid, "recv 'done'")
+	return nil
 }
 
-func (a *apair) alive() {
-	if last := a.last.Load(); last != apairDeleted {
-		a.last.CAS(last, mono.NanoTime())
+// same selection as init: active target in the job's Smap, other than self
+func (s *sentinel) isPeer(tid string) bool {
+	return tid != core.T.SID() && s.smap.GetTarget(tid) != nil && !s.smap.InMaintOrDecomm(tid)
+}
+
+// OpcodeStatus reply flags (see xact.Peer)
+func (s *sentinel) statusFlags() (f xact.StatusFlags) {
+	if s.txDone.Load() {
+		f |= xact.StatusDoneSending
+	}
+	return f
+}
+
+// mark peer done (idempotent)
+func (s *sentinel) done(tid, tag string) {
+	s.pend.mu.Lock()
+	delete(s.pend.last, tid)
+	n := len(s.pend.last)
+	s.pend.mu.Unlock()
+	if cmn.Rom.V(4, cos.ModXs) {
+		nlog.InfoDepth(2, s.r.Name(), tag, "from:", meta.Tname(tid), n)
 	}
 }

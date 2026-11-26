@@ -72,6 +72,14 @@ func (rate *tcrate) acquire() {
 	}
 }
 
+// in-band 'done' from a peer that predates T2T 'done' (v5.3): mixed-version jobs are not supported
+func abortInbandDone(r core.Xact, sid string) error {
+	err := fmt.Errorf("%s: in-band 'done' from %s (older version?): mixed-version jobs are not supported",
+		r.Name(), meta.Tname(sid))
+	r.Abort(err)
+	return err
+}
+
 func abortOpcode(r core.Xact, opcode int) error {
 	err := fmt.Errorf("invalid header opcode (%d)", opcode)
 	debug.AssertNoErr(err)

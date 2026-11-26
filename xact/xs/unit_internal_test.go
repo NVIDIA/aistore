@@ -7,6 +7,8 @@ package xs
 import (
 	"archive/tar"
 	"bytes"
+	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,6 +26,8 @@ import (
 	"github.com/NVIDIA/aistore/core/mock"
 	"github.com/NVIDIA/aistore/fs"
 	"github.com/NVIDIA/aistore/tools/tassert"
+	"github.com/NVIDIA/aistore/transport/bundle"
+	"github.com/NVIDIA/aistore/xact"
 )
 
 //
@@ -284,4 +288,94 @@ func TestNBICachedChunkRewind(t *testing.T) {
 	tassert.CheckFatal(t, os.WriteFile(mid.Path(), midData, cos.PermRWR))
 	tassert.CheckFatal(t, nbi.seekAfter("f-"))
 	checkNames(nbi.entries[nbi.nidx:], chunks[1])
+}
+
+// TCB peer completion: push (T2T 'done') and pull (status reply)
+
+func TestTCBPeerDone(t *testing.T) {
+	const a, b = "peerA", "peerB"
+	prev := core.T
+	mock.NewTarget(mock.NewBaseBownerMock())
+	t.Cleanup(func() { core.T = prev })
+
+	r := &XactTCB{dm: &bundle.DM{}}
+	r.Base.InitBase(context.Background(), cos.GenUUID(), apc.ActCopyBck, nil)
+	s := &r.sntl
+	smap := &meta.Smap{Tmap: meta.NodeMap{a: {DaeID: a}, b: {DaeID: b}}}
+	s.init(r, &r.Base, r.dm, cmn.GCO.Get(), smap, 3)
+	s.initLast(1)
+
+	reply := func(xctn core.Xact) (core.RunState, xact.StatusFlags) {
+		rs, flags, _, err := xact.ParseStatusReply(xact.StatusReply(xctn))
+		tassert.CheckFatal(t, err)
+		return rs, flags
+	}
+	done := func(sid string) error { return r.RecvCtrl(xact.NoneWID, sid, xact.OpcodeDone, nil) }
+
+	// reject: unknown or self sid, wrong opcode, wid, or body
+	tassert.Fatalf(t, done("unknown") != nil, "expected error (unknown sid)")
+	tassert.Fatalf(t, done(core.T.SID()) != nil, "expected error (self)")
+	tassert.Fatalf(t, r.RecvCtrl(xact.NoneWID, a, xact.OpcodeStatus, nil) != nil, "expected error (opcode)")
+	tassert.Fatalf(t, r.RecvCtrl("wid", a, xact.OpcodeDone, nil) != nil, "expected error (wid)")
+	tassert.Fatalf(t, r.RecvCtrl(xact.NoneWID, a, xact.OpcodeDone, []byte("x")) != nil, "expected error (body)")
+	tassert.Fatalf(t, len(s.pend.last) == 2, "rejected 'done' changed pending: %v", s.pend.last)
+
+	// duplicate push, followed by a 'running' reply that was in flight: 'a' must stay done
+	tassert.CheckFatal(t, done(a))
+	tassert.CheckFatal(t, done(a))
+	running := &XactTCB{}
+	running.Base.InitBase(context.Background(), cos.GenUUID(), apc.ActCopyBck, nil)
+	rs, flags := reply(running)
+	tassert.Fatalf(t, rs == core.RunStateRunning && flags == 0, "expected running, got %s, %d", rs, flags)
+	s.onStatus(a, rs, flags, "")
+	s.pending()
+	tassert.Fatalf(t, len(s.pend.p) == 1 && s.pend.p[0] == b, "pending: %v", s.pend.p)
+
+	// recover b's missed push while b is still quiescing (done sending)
+	quiescing := &XactTCB{}
+	quiescing.Base.InitBase(context.Background(), cos.GenUUID(), apc.ActCopyBck, nil)
+	quiescing.sntl.txDone.Store(true)
+	rs, flags = reply(quiescing)
+	tassert.Fatalf(t, rs == core.RunStateRunning && flags.IsSet(xact.StatusDoneSending),
+		"expected running and done sending, got %s, %d", rs, flags)
+	s.onStatus(b, rs, flags, "")
+	tassert.Fatalf(t, s.qcb(0) == core.QuiDone, "still waiting for done")
+
+	s.cleanup()
+	tassert.CheckFatal(t, done(b)) // late push after cleanup
+}
+
+func TestTCBPeerAbort(t *testing.T) {
+	const (
+		peer  = "peerA"
+		cause = "archive read failed: disk I/O error"
+	)
+	prev := core.T
+	mock.NewTarget(mock.NewBaseBownerMock())
+	t.Cleanup(func() { core.T = prev })
+
+	for _, doneSending := range []bool{false, true} {
+		t.Run(cos.Ternary(doneSending, "after-done", "before-done"), func(t *testing.T) {
+			source := &XactTCB{}
+			source.Base.InitBase(context.Background(), cos.GenUUID(), apc.ActCopyBck, nil)
+			source.sntl.txDone.Store(doneSending)
+			source.Abort(errors.New(cause))
+
+			rs, flags, got, err := xact.ParseStatusReply(xact.StatusReply(source))
+			tassert.CheckFatal(t, err)
+			tassert.Fatalf(t, rs == core.RunStateAborted && flags == 0 && got == cause,
+				"expected aborted with original cause, got %s, %d, %q", rs, flags, got)
+
+			r := &XactTCB{dm: &bundle.DM{}}
+			r.Base.InitBase(context.Background(), cos.GenUUID(), apc.ActCopyBck, nil)
+			s := &r.sntl
+			smap := &meta.Smap{Tmap: meta.NodeMap{peer: {DaeID: peer}}}
+			s.init(r, &r.Base, r.dm, cmn.GCO.Get(), smap, 2)
+			s.onStatus(peer, rs, flags, got)
+			err = r.AbortErr()
+			tassert.Fatalf(t, err != nil && err.Error() == cause, "lost original cause: %v", err)
+			tassert.Fatalf(t, xact.IsErrRecvAbortXact(err) && r.SkipAbortBcast(err), "received abort would be re-broadcast")
+			tassert.Fatalf(t, len(s.pend.last) == 1, "aborted peer was marked done")
+		})
+	}
 }

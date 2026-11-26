@@ -6,6 +6,7 @@
 package xs
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -58,6 +59,7 @@ type (
 // interface guard
 var (
 	_ core.Xact      = (*XactTCB)(nil)
+	_ xact.Peer      = (*XactTCB)(nil)
 	_ xreg.Renewable = (*tcbFactory)(nil)
 )
 
@@ -126,12 +128,7 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 		return r, nil // ---->
 	}
 
-	// TODO: Revisit `r.args.DisableDM` — consider removing it.
-	// Previously, if the ETL transformer supported direct put, we skipped initializing the data mover
-	// to avoid unnecessary setup, since transformed objects were directly delivered to targets.
-	// We used `r.args.DisableDM` (derived from the ETL’s `directPut` flag) to skip DM initialization,
-	// which also bypassed the multi-worker setup below.
-	// But now that sentinels requires the data mover to broadcast control messages, DM is always required.
+	// TODO: revisit DisableDM for ETL direct put
 	if r.args.DisableDM {
 		r.sntl.init(r, &r.Base, nil /*dm*/, r.Config, smap, nat) // T2T abort only
 		return r, nil
@@ -147,8 +144,6 @@ func newXactTCB(uuid, kind string, args *xreg.TCBArgs) (*XactTCB, error) {
 		return nil, err
 	}
 
-	// sentinels, to coordinate finishing, aborting, and progress;
-	// use DM to communicate the sentinel opcode (transport.OpcDone)
 	r.sntl.init(r, &r.Base, r.dm, r.Config, smap, nat)
 	return r, nil
 }
@@ -182,10 +177,10 @@ func (r *XactTCB) newDM(sizePDU int32, smap *meta.Smap) error {
 	}
 	// in re cmn.OwtPut: see comment inside _recv()
 	dm := bundle.NewDM(trname+r.ID(), r.recv, r.owt, extra)
+	dm.SetXact(r)
 	if err := dm.RegRecv(); err != nil {
 		return err
 	}
-	dm.SetXact(r)
 	r.dm = dm
 
 	return nil
@@ -271,7 +266,6 @@ func (r *XactTCB) run(wg *sync.WaitGroup) {
 			return
 		}
 
-		r.dm.SetXact(r)
 		r.dm.Open()
 	}
 	wg.Done()
@@ -289,13 +283,18 @@ func (r *XactTCB) run(wg *sync.WaitGroup) {
 		nlog.Warningln(r.Name(), errJog, "- benign?")
 	}
 
-	if r.dm != nil && !r.IsAborted() {
-		r.sntl.bcastDone("", r.dm)
-		r.sntl.initLast(mono.NanoTime())
-		r.Base.Quiesce(r.sntl.qival(), r.sntl.qcb) // when done: wait for others
-	}
 	if r.dm != nil {
-		r.dm.Close(r.AbortErr())
+		// drain outbound streams before notifying peers; keep receiving until all peers are done
+		if err := r.dm.Close(r.AbortErr()); err != nil {
+			r.Abort(err)
+		} else if !r.IsAborted() {
+			r.sntl.txDone.Store(true)
+			r.BcastCtrl(r.sntl.smap, "", xact.OpcodeDone, nil)
+			r.sntl.initLast(mono.NanoTime())
+			if r.Base.Quiesce(r.sntl.qival(), r.sntl.qcb) == core.QuiDone {
+				r.dm.SkipRxQuiesce()
+			}
+		}
 		r.dm.UnregRecv()
 	}
 	if r.args.Msg.Sync {
@@ -354,15 +353,11 @@ func (r *XactTCB) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) er
 		return err
 	}
 
-	// control
 	if hdr.Opcode != 0 {
-		switch hdr.Opcode {
-		case transport.OpcDone:
-			r.sntl.rxDone(hdr)
-		default:
-			return abortOpcode(r, hdr.Opcode)
+		if hdr.Opcode == transport.OpcDone {
+			return abortInbandDone(r, hdr.SID)
 		}
-		return nil
+		return abortOpcode(r, hdr.Opcode)
 	}
 
 	// data
@@ -404,6 +399,16 @@ func (r *XactTCB) _recv(hdr *transport.ObjHdr, objReader io.Reader, lom *core.LO
 
 	return nil
 }
+
+// as xact.Peer
+func (r *XactTCB) RecvCtrl(wid, sid, opcode string, body []byte) error {
+	if opcode != xact.OpcodeDone || wid != xact.NoneWID || len(body) != 0 || r.dm == nil {
+		return fmt.Errorf("%s: unexpected T2T control [%q, %q, body=%d, dm=%t]", r.Name(), wid, opcode, len(body), r.dm != nil)
+	}
+	return r.sntl.recvDone(sid)
+}
+
+func (r *XactTCB) StatusFlags() xact.StatusFlags { return r.sntl.statusFlags() }
 
 func (r *XactTCB) Args() *xreg.TCBArgs { return r.args }
 

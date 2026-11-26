@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"path"
 	"strconv"
@@ -79,20 +80,15 @@ type PutObjectsArgs struct {
 	Reader             readers.Reader // optional reader for multipart uploads - when provided, uploads sequentially
 }
 
-// TODO: need to be replaced with a global syncPool of random objects:
-// - the `cos.NowRand()` might not be thread-safe, but is currently used across goroutines in several tests
-// - performance-wise, syncPool is much faster than creating a new random object for each call
-var fileSizeRnd = cos.NowRand()
-
 func GetRandSize(objSizeRange [2]uint64, objSize uint64, fixedSize bool) (size uint64) {
 	switch {
 	case objSizeRange[0] > 0 && objSizeRange[1] > 0:
 		// randomly sample a size within [args.ObjSizeRange[0], args.ObjSizeRange[1]]
-		size = objSizeRange[0] + fileSizeRnd.Uint64N(objSizeRange[1]-objSizeRange[0]+1)
+		size = objSizeRange[0] + rand.Uint64N(objSizeRange[1]-objSizeRange[0]+1)
 	case objSize == 0:
-		size = (fileSizeRnd.Uint64N(cos.KiB) + 1) * cos.KiB
+		size = (rand.Uint64N(cos.KiB) + 1) * cos.KiB
 	case !fixedSize:
-		size = objSize + fileSizeRnd.Uint64N(cos.KiB)
+		size = objSize + rand.Uint64N(cos.KiB)
 	default:
 		size = objSize
 	}
