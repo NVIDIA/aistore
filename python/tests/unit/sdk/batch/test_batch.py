@@ -383,10 +383,13 @@ class TestBatch(unittest.TestCase):
         request_snapshot = batch.request.model_copy()
         response = self.mock_request_client.request.return_value
 
-        with patch.object(batch.extractor, "extract", return_value=iter(())) as extract:
+        entry = (Mock(spec=MossOut), b"content")
+        with patch.object(
+            batch.extractor, "extract", return_value=iter((entry,))
+        ) as extract:
             result = batch.get(tar_buffer_size=128 * 1024)
 
-            self.assertIs(result, extract.return_value)
+            self.assertEqual(list(result), [entry])
             extract.assert_called_once_with(
                 response,
                 response.raw,
