@@ -137,6 +137,9 @@ func (p *proxy) httpclupost(w http.ResponseWriter, r *http.Request, isPub bool) 
 		return
 	}
 
+	// active target, new incarnation, no restart flags
+	c.inferRestarted()
+
 	// resume interrupted rebalance
 	c.resumeReb()
 
@@ -469,6 +472,32 @@ func (c *clupost) handshake() (stop bool) {
 		}
 	}
 	return false
+}
+
+// self-join by a target that is still in the Smap but presents a new verifying key:
+// the previous instance did not exit gracefully (graceful exit removes self from the Smap)
+// - treat it as restarted, e.g., when the node-restarted marker is lost
+// - no fast rejoin (not requested): regular self-join and rebalance
+// - not during cluster startup, when all nodes rejoin with new keys
+// - not for a fresh-state replacement (no saved Smap of this cluster)
+func (c *clupost) inferRestarted() {
+	if c.apiOp != apc.SelfJoin || !c.nsi.IsTarget() || c.regReq.Flags.IsSet(cos.NodeRestarted) {
+		return
+	}
+	if !c.p.ClusterStarted() || c.p.owner.rmd.starting.Load() {
+		return
+	}
+	// previous state retained (crash) - not a fresh-state replacement with the same ID
+	if smap := c.regReq.Smap; smap == nil || smap.UUID != c.smap.UUID || smap.validate() != nil {
+		return
+	}
+	osi := c.smap.GetTarget(c.nsi.ID())
+	if osi == nil || len(osi.VerifyingKey) == 0 || len(c.nsi.VerifyingKey) == 0 ||
+		cos.CryptoEqual(osi.VerifyingKey, c.nsi.VerifyingKey) {
+		return
+	}
+	nlog.Warningln(c.p.String(), "self-join:", c.nsi.StringEx(), "new incarnation w/o restart flag - assuming restarted")
+	c.regReq.Flags = c.regReq.Flags.Set(cos.NodeRestarted)
 }
 
 // resume interrupted rebalance bookkeeping
@@ -808,7 +837,12 @@ func (c *clupost) joinKalive() (msync, added bool, err error) {
 				}
 			}
 		case c.regReq.Flags.IsSet(cos.NodeRestarted):
-			msync = true
+			// new incarnation; a retried join finds the same key in the reloaded Smap
+			if len(osi.VerifyingKey) > 0 && len(c.nsi.VerifyingKey) > 0 {
+				msync = c.rereg(osi)
+			} else {
+				msync = true // keyless: cannot tell a retry from a restart
+			}
 		default:
 			msync = c.rereg(osi)
 		}
@@ -1032,6 +1066,9 @@ func mustRebalanceJoin(ctx *smapModifier, smap *smapX, weight int64) bool {
 	case wasActive != active:
 		return smap.HasActiveTs(id)
 	case ctx.interrupted, ctx.restarted:
+		if old != nil && len(old.VerifyingKey) > 0 && old.SameIncarnation(ctx.nsi) {
+			return false // retried join: this incarnation is already in the Smap (and its rebalance allocated)
+		}
 		return active || smap.HasActiveTs(id)
 	case !active, old.PlacementWeight() == weight:
 		return false

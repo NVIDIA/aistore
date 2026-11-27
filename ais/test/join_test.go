@@ -133,6 +133,108 @@ func fastRejoinNsti(t *testing.T, bp api.BaseParams, si *meta.Snode) (nsti cos.N
 	return nsti
 }
 
+// require a new rebalance generation when restart markers are missing
+func TestRejoinMissingRestartMarker(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 2})
+	config := tools.GetClusterConfig(t)
+	bp := tools.BaseAPIParams(tools.GetPrimaryURL())
+	if !config.Rebalance.Enabled {
+		t.Skip("requires rebalance enabled")
+	}
+	// keep the old incarnation in the Smap throughout the crash/restart
+	if config.Keepalive.Proxy.Interval.D() < 30*time.Second {
+		tassert.CheckFatal(t, api.SetClusterConfig(bp, cos.StrKVs{
+			"keepalivetracker.proxy.interval": "30s", "keepalivetracker.proxy.factor": "2",
+		}, false /*transient*/))
+		t.Cleanup(func() {
+			tassert.CheckError(t, api.SetClusterConfig(bp, cos.StrKVs{
+				"keepalivetracker.proxy.interval": config.Keepalive.Proxy.Interval.String(),
+				"keepalivetracker.proxy.factor":   strconv.Itoa(int(config.Keepalive.Proxy.Factor)),
+			}, false /*transient*/))
+		})
+	}
+	m := &ioContext{t: t, num: 128, fileSize: cos.KiB, fixedSize: true, silent: true}
+	for _, kind := range []string{apc.ActRebalance, apc.ActResilver} {
+		xargs := xact.ArgsMsg{Kind: kind, OnlyRunning: true, Timeout: tools.RebalanceTimeout}
+		_, err := api.WaitForSnaps(bp, &xargs, xargs.NotRunning())
+		tassert.CheckFatal(t, err)
+	}
+	m.initAndSaveState(true /*cleanup*/)
+	tools.CreateBucket(t, m.proxyURL, m.bck, nil, true /*cleanup*/)
+	m.puts()
+
+	var tsi *meta.Snode
+	for _, si := range m.smap.Tmap {
+		if !si.InMaintOrDecomm() && (tsi == nil || si.ID() < tsi.ID()) {
+			tsi = si
+		}
+	}
+	args := xact.ArgsMsg{Kind: apc.ActRebalance}
+	xid, err := api.StartXaction(bp, &args, "")
+	tassert.CheckFatal(t, err)
+	tools.WaitForRebalanceByID(t, bp, xid)
+	smap := tools.GetClusterMap(t, bp.URL)
+	mpl, err := api.GetMountpaths(bp, tsi)
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, len(mpl.Available) > 0, "%s has no available mountpaths", tsi.StringEx())
+
+	cmd, err := tools.CrashNode(tsi)
+	tassert.CheckFatal(t, err)
+	restore := true
+	t.Cleanup(func() {
+		if restore {
+			tassert.CheckError(t, tools.RestoreNode(cmd, false, "target"))
+		}
+		if t.Failed() {
+			tassert.CheckError(t, tools.WaitNodeReady(tsi.URL(cmn.NetPublic)))
+			// supersede any replayed generation before the next test
+			cleanupID, err := api.StartXaction(bp, &args, "")
+			if err != nil {
+				tassert.CheckError(t, err)
+			} else {
+				tools.WaitForRebalanceByID(t, bp, cleanupID)
+			}
+		}
+	})
+
+	// erase only restart evidence; preserve rebalance/resilver recovery markers
+	for _, mpath := range mpl.Available {
+		for _, marker := range []string{fname.NodeRestartedMarker, fname.NodeRestartedPrev} {
+			err := os.Remove(filepath.Join(mpath, fname.MarkersDir, marker))
+			tassert.Fatalf(t, err == nil || cos.IsNotExist(err), "remove %s: %v", marker, err)
+		}
+		_, err := os.Stat(filepath.Join(mpath, fname.MarkersDir, fname.RebalanceMarker))
+		tassert.Fatalf(t, cos.IsNotExist(err), "unexpected rebalance marker on %s after %s: %v", mpath, xid, err)
+	}
+	tlog.Logfln("%s: removed restart markers after %s completed", tsi.StringEx(), xid)
+	current := tools.GetClusterMap(t, bp.URL).GetTarget(tsi.ID())
+	tassert.Fatalf(t, current != nil && current.SameIncarnation(tsi), "target left Smap before restart")
+	tassert.CheckFatal(t, tools.RestoreNode(cmd, false, "target"))
+	restore = false
+	smap, err = tools.WaitForClusterState(bp.URL, "target rejoined without restart marker", smap.Version,
+		m.originalProxyCount, m.originalTargetCount)
+	tassert.CheckFatal(t, err)
+	tassert.CheckFatal(t, tools.WaitNodeReady(tsi.URL(cmn.NetPublic)))
+	next := smap.GetTarget(tsi.ID())
+	tassert.Fatalf(t, next != nil && !next.SameIncarnation(tsi), "expected new incarnation of %s", tsi.StringEx())
+
+	primary := fastRejoinNsti(t, bp, smap.Primary)
+	gen := xact.RebID2S(primary.RMD.Version)
+	tassert.Fatalf(t, xact.CompareRebIDs(gen, xid) > 0, "expected a new generation after marker loss: %s => %s", xid, gen)
+	tools.WaitForRebalanceByID(t, bp, gen)
+	nsti := fastRejoinNsti(t, bp, next)
+	tassert.Fatalf(t, nsti.RMD.Version == primary.RMD.Version, "%s: RMD v%d, primary v%d",
+		next.StringEx(), nsti.RMD.Version, primary.RMD.Version)
+	snaps, err := api.QueryXactionSnaps(bp, &xact.ArgsMsg{ID: gen, Kind: apc.ActRebalance})
+	tassert.CheckFatal(t, err)
+	tassert.Fatalf(t, allTargetsFinished(snaps, m.originalTargetCount), "%s not finished on all targets: %s", gen, cos.MustMarshal(snaps))
+	for _, tsnaps := range snaps {
+		tassert.Fatalf(t, !tsnaps[0].AbortedX && tsnaps[0].Err == "", "%s failed: %s %s", gen, tsnaps[0].AbortErr, tsnaps[0].Err)
+	}
+	m.gets(nil, true /*withValidation*/)
+	m.ensureNoGetErrors()
+}
+
 func TestJoinBackendOnDemand(t *testing.T) {
 	tools.CheckSkip(t, &tools.SkipTestArgs{MinProxies: 2})
 	var (

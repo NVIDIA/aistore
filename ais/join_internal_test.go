@@ -5,6 +5,7 @@
 package ais
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -604,6 +605,7 @@ func TestMustRebalanceJoin(t *testing.T) {
 		flags               cos.BitFlags
 		newID, restarted    bool
 		interrupted         bool
+		oldKey, key         byte // non-zero: verifying key (incarnation)
 		oldWeight, weight   int64
 		want                bool
 	}{
@@ -620,6 +622,9 @@ func TestMustRebalanceJoin(t *testing.T) {
 		{name: "inactive interrupted without active peer", oldFlags: maint, flags: maint, peerFlags: maint, interrupted: true},
 		{name: "assigned missing weight", weight: 1, want: true},
 		{name: "assigned missing weight with no active peers", weight: 1, peerFlags: maint},
+		{name: "restarted new incarnation", restarted: true, oldKey: 1, key: 2, want: true},
+		{name: "restarted retried join", restarted: true, oldKey: 2, key: 2},
+		{name: "interrupted retried join", interrupted: true, oldKey: 2, key: 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			smap := placementTestSmap()
@@ -636,6 +641,12 @@ func TestMustRebalanceJoin(t *testing.T) {
 			ctx := &smapModifier{
 				nsi: newSnode(id, apc.Target), flags: test.flags,
 				restarted: test.restarted, interrupted: test.interrupted,
+			}
+			if test.oldKey != 0 {
+				old.VerifyingKey = bytes.Repeat([]byte{test.oldKey}, cos.NodeSigningPublicKeySize)
+			}
+			if test.key != 0 {
+				ctx.nsi.VerifyingKey = bytes.Repeat([]byte{test.key}, cos.NodeSigningPublicKeySize)
 			}
 			if got := mustRebalanceJoin(ctx, smap, test.weight); got != test.want {
 				t.Fatalf("mustRebalanceJoin = %t, want %t", got, test.want)
