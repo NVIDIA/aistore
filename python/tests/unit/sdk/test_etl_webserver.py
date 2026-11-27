@@ -124,6 +124,27 @@ class TestETLServerLogic(unittest.TestCase):
         self.assertEqual(self.etl.get_mime_type(), "text/caps")
 
 
+class TestOpenFileLimit(unittest.TestCase):
+    def setUp(self):
+        env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})
+        env.start()
+        self.addCleanup(env.stop)
+
+    @patch("aistore.sdk.etl.webserver.base_etl_server.resource")
+    def test_raises_soft_limit_to_hard_limit(self, mock_resource):
+        mock_resource.getrlimit.return_value = (1024, 4096)
+        DummyHTTPETLServer()
+        mock_resource.setrlimit.assert_called_once_with(
+            mock_resource.RLIMIT_NOFILE, (4096, 4096)
+        )
+
+    @patch("aistore.sdk.etl.webserver.base_etl_server.resource", None)
+    def test_without_resource_module(self):
+        """On platforms without `resource` (Windows) the server still initializes."""
+        etl = DummyHTTPETLServer()
+        self.assertEqual(etl.host_target, "http://localhost:8080")
+
+
 class TestRequestHandlerHelpers(unittest.TestCase):
     def setUp(self):
         env = mock.patch.dict(os.environ, {"AIS_TARGET_URL": "http://localhost:8080"})

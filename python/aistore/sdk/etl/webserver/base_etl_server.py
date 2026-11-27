@@ -5,7 +5,6 @@
 import os
 import sys
 import logging
-import resource
 from abc import ABC, abstractmethod
 from typing import BinaryIO, Iterator, Tuple, Union
 from urllib.parse import unquote
@@ -23,6 +22,11 @@ from aistore.sdk.const import (
 from aistore.sdk.errors import ETLDirectPutTransientError
 from aistore.sdk.session_manager import SessionManager
 from aistore.sdk.utils import parse_bool
+
+try:
+    import resource
+except ImportError:  # not available on Windows, where `import aistore` must still work
+    resource = None
 
 # Transient requests errors that are safe to retry (connection lost before response).
 SYNC_DIRECT_PUT_TRANSIENT_ERRORS = (
@@ -150,8 +154,9 @@ class ETLServer(ABC):  # pylint: disable=too-many-instance-attributes
         # Raise the open file descriptor soft limit to match the hard limit.
         # CRI-O defaults the soft limit to 1024 which is too low for
         # high-concurrency ETL workloads.
-        _soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+        if resource is not None:
+            _soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
         self.host_target = os.getenv("AIS_TARGET_URL")
         if not self.host_target:
