@@ -207,7 +207,7 @@ func (s *sentinel) onStatus(tid string, rs core.RunState, flags xact.StatusFlags
 	}
 }
 
-// called by the quiesce owner before Finish
+// called by the quiesce owner before Finish (see "Ownership" in xact/README.md)
 func (s *sentinel) _qabort(err error) core.QuiRes {
 	nlog.ErrorDepth(1, err)
 	s.base.AbortByOwner(err)

@@ -160,6 +160,7 @@ func (r *DemandBase) Stop() {
 // Only abort the Base part, and note:
 // for demand xactions, Stop() is a cleanup-sequence sensitive barrier: it unregisters
 // the idle HK callback and can allow same-UUID renewal to register the same HK name.
+// See also: "Completion by kind" in xact/README.md
 func (r *DemandBase) Abort(err error) (ok bool) {
 	if err == nil && !r.IsIdle() {
 		err = cmn.NewErrAborted(r.Name(), "aborting non-idle", nil)

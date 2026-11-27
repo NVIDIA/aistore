@@ -883,6 +883,8 @@ func (wi *archwi) quiesce() core.QuiRes {
 	})
 }
 
+// owner method from a work item: safe while the work item holds pending
+// (see "Ownership" in xact/README.md)
 func (wi *archwi) qabort(smap *meta.Smap) core.QuiRes {
 	r := wi.r
 	if err := r.sntl.checkSmap(smap); err != nil {

@@ -5,6 +5,27 @@ An xaction is a long-running, asynchronous, batch job supported and tracked by A
 Examples include global rebalance, resilver, LRU eviction, bucket copy, bucket transform,
 prefetch, download, EC encode, mirroring, list-objects, get-batch, and more.
 
+## Terms
+
+Used throughout this document, mostly in [Finishing and aborting](#finishing-and-aborting).
+
+- **Work item**: an independently admitted request within an xaction instance,
+  e.g. a TCO transaction, an archive request, or a GetBatch request.
+  Finishing a work item does not finish the xaction.
+- **Admission**: accepting new requests or work items. Closing admission does
+  not stop receiving peer data.
+- **Drain**: wait for queued and in-flight work. For a data mover (DM),
+  `dm.Close(nil)` drains outbound streams and waits for peers' end-of-stream
+  (FIN) acknowledgements; it does not unregister the receive endpoint.
+- **Quiesce**: `Base.Quiesce` calls a callback until it returns done, timeout,
+  or aborted. The callback defines completion; silence is not an
+  acknowledgement from a peer.
+- **Teardown**: `dm.Close` and `dm.UnregRecv` for a job-owned DM. A shared data
+  mover (SDM) stays open; each user unregisters only its own receive endpoint.
+- **Cleanup**: releasing work items, buffers, and other resources.
+- **Owner path**: the path that performs teardown and calls `Finish` (usually
+  `Run`), including the helpers and quiesce callbacks it starts and joins.
+
 ## Xaction kinds
 
 The canonical source for supported xaction kinds is
@@ -258,174 +279,117 @@ Examples of idle or demand-driven categories include:
 
 ## Finishing and aborting
 
-An accepted abort records cancellation immediately, but termination is asynchronous:
-workers may still be exiting, streams may still be closing, and cleanup may
-still be running. Neither an aborted status nor a return from `Abort` proves
-that these activities have ended.
+`Abort` is asynchronous and, lifecycle-wise, instantaneous: an accepted abort
+marks the xaction aborted and stopping, records the cause, and signals
+`ChanAbort` - all at once.
 
-A cluster-wide job consists of participating targets' local xaction instances.
-Each instance has its own lifecycle and resources. Reporting their results to
-IC is separate from establishing that their peer-to-peer work has completed.
+> `Abort` marks the xaction aborted, marks it stopping, records
+the cause, and signals `ChanAbort`. These steps are not atomic: concurrent
+observers can see intermediate state during the call.
 
-### Terms
+Every xaction must still perform its own, xaction-specific cleanup. Depending
+on the kind, that may include draining work items, closing streams,
+unregistering receive endpoints, and releasing resources. Aborted, therefore,
+does not mean exited.
 
-- **Work item**: an independently admitted operation within an xaction. TCO
-  transactions, archive requests, and GetBatch requests are examples. The
-  objects, pages, or worker tasks of one batch are not necessarily independent
-  work items.
-- **Admission**: accepting more requests or work items into this instance.
-  Closing admission does not mean that incoming peer data can be discarded.
-- **Drain**: wait for queued and in-flight work to complete. For a data mover
-  (DM), graceful `dm.Close(nil)` drains outbound streams and waits for peers'
-  end-of-stream (FIN) acknowledgements. It does not unregister the receive endpoint.
-- **Quiesce**: wait while a callback checks outstanding activity or peers.
-  `Base.Quiesce` does not close the DM; its callback defines the completion
-  condition. Silence alone is not an acknowledgement from a peer.
-- **Teardown**: end this instance's transport participation. For a job-owned
-  DM, this includes `dm.Close` and `dm.UnregRecv`. A shared data mover (SDM)
-  remains open: its users unregister their own receive endpoints. Releasing
-  work items, buffers, and other resources is referred to as cleanup below.
-- **Owner path**: the path responsible for teardown and `Finish`, including
-  helpers it starts and joins. A callback may initiate stopping and delegate
-  cleanup to `Run`; the initiator need not execute the cleanup itself.
+In a cluster-wide job, each target runs its own instance. IC notifications
+report each instance's result; they do not confirm that peer-to-peer work has
+completed.
 
-### Logical classes
+### Lifecycle
 
-The primary distinctions are whether an xaction is on-demand and whether one
-instance serves independently admitted work items or a single logical job.
+`Base` keeps the lifecycle (`eutime`) and the abort outcome (`abort.done`) separately:
 
-| Lifetime | Work served by one instance | Examples | Graceful completion condition |
-|---|---|---|---|
-| finite | one requested batch | TCB, prefetch, rechunk | finish the batch and its dependent activity |
-| on-demand | one retained request context | list-objects, with successive pages | retire the context after idle expiration or explicit termination |
-| on-demand | multiple independent work items | TCO, archive, GetBatch | finish items independently; retire the instance after admission closes and outstanding activity ends |
-
-On-demand EC, mirroring, and indexing services also accept repeated operations;
-an empty queue does not by itself retire the service. Completing a work item
-and finishing its enclosing xaction are different events. A work-item failure
-may be handled at item scope; `Abort` applies to the enclosing instance.
-
-These distinctions explain when an instance may retire. They do not determine
-who calls `Finish` or whether peers must agree on completion. Those mechanisms
-are documented separately below.
-
-### Run state and completion
-
-| State or phase | Meaning | Current `RunState()` representation |
+| Phase | `eutime` | `RunState()` unless aborted |
 |---|---|---|
-| running | executing work, or available for work | running |
-| idle | temporarily without work; an on-demand instance may still accept requests | idle |
-| stopping | admission is closed; draining, receiving, or teardown may remain | running or idle, unless aborted |
-| aborted | cancellation and its cause have been recorded; execution may not yet have exited | aborted, including after `Finish` |
-| finished | `Finish` has recorded the end time; notification and cleanup ordering depends on the implementation | finished, or aborted if the instance was aborted |
+| running or idle | 0 | running; idle (`DemandBase` only) |
+| stopping: admission closed; drain, receive, or teardown may remain | `cos.MSB64` | running or idle |
+| finishing: `Finish` in progress | `finishSentinel` | running or idle |
+| finished | end time | finished |
 
-Stopping is an internal phase, not a separate wire run-state value. Idle is
-not terminal, and aborted is not evidence that cleanup has completed.
+> Similar to `Abort`, `Finish` entails several steps - it records the end time before closing `ChanAbort` and calling `onFinished` to publish notifications (and refresh capacity where configured).
 
-`Base` tracks lifecycle and abort outcome separately. The lifecycle field
-`eutime` is zero before stopping, `cos.MSB64` while stopping,
-`finishSentinel` during the `Finish` commit, and an end time afterward.
-Finishing is an internal commit step, not another public run state.
+Aborted takes precedence in `RunState()` in all phases, including after `Finish`.
+Stopping and finishing are internal phases, not wire run-state values.
 
-Consequences for callers:
+For callers:
 
-- `IsDone()` includes stopping and finishing; it does not mean `Finish` has run.
-- `EndTime()` remains zero through stopping and finishing, then becomes set.
-- `Base.RunState()` gives the abort flag precedence over the end time.
-  `DemandBase.RunState()` additionally reports idle when applicable, including
-  during a non-aborted stopping phase. Neither reply proves admission is open.
-- `ChanAbort()` closes on both abort and normal `Finish`; check `IsAborted()`
-  or `AbortErr()` to distinguish them.
-- `BackendCtx()` is canceled upon abort and finish. It cancels backend calls;
-  it is not a lifecycle signal.
-- A non-aborted instance can still finish with errors recorded by `AddErr`.
-  Finished does not necessarily mean successful.
+- `IsDone()` is true from stopping on; it does not mean `Finish` has run.
+- `EndTime()` is zero until finished.
+- `ChanAbort()` closes on both abort and `Finish`; use `IsAborted()` or
+  `AbortErr()` to tell them apart.
+- `BackendCtx()` is canceled on abort and finish; it is for backend calls, not
+  a lifecycle signal.
+- Finished does not mean success - check `IsAborted()` or `AbortErr()` as well.
 
-### Operations and ownership
+### Operations
 
-| Operation | Entry condition | Effect |
+| Method | Accepted | Effect |
 |---|---|---|
-| `SetStopping()` | lifecycle has not reached stopping | atomically enter stopping; return true only to the caller that makes this transition |
-| `DemandBase.Stop()` | first call for this instance | mark stopping, unregister the idle housekeeper callback, close the idle channel if present; do not drain or finish |
-| `Base.Abort(err)` | lifecycle has not reached stopping; no earlier accepted abort | record abort and its cause, mark stopping, cancel backend context, signal `ChanAbort`; do not call `Finish` |
-| `Base.AbortByOwner(err)` | running or stopping; no earlier accepted abort | record the same abort state without invoking kind-specific teardown or `Finish` |
-| `Finish()` | running or stopping | claim finishing, record end time, publish notifications, and refresh capacity where configured; repeated calls have no effect |
+| `SetStopping()` | before stopping | enter stopping; return true only to the caller that made the transition |
+| `DemandBase.Stop()` | first call | mark stopping, unregister the idle hk callback, close the idle channel; do not drain or finish |
+| `Base.Abort(err)` | before stopping, if not yet aborted | record the abort and its cause, mark stopping, cancel `BackendCtx`, signal `ChanAbort`; do not call `Finish` |
+| `Base.AbortByOwner(err)` | before finishing, if not yet aborted | same as `Base.Abort`; owner path only |
+| `Finish()` | before finishing | record end time, publish notifications, refresh capacity where configured; repeated calls have no effect |
 
-The first accepted abort retains its cause. `RecvAbortByOwner` preserves the
-received-abort marker as well, so the received cause is not broadcast again.
+The first accepted abort keeps its cause. `RecvAbortByOwner` also keeps the
+received-abort marker, so the cause is not broadcast again.
 
-Where callbacks race to perform cleanup, the successful `SetStopping` is the
-ownership claim. The winner may perform cleanup or signal `Run` to do it.
-`DemandBase.Stop` does not return that claim to its caller and does not join
-workers. Its housekeeper unregistration also matters when a replacement
-instance can reuse the same UUID and housekeeper name.
+Overrides may do more. For example, `DemandBase.Abort` calls `Finish` right
+after an accepted base abort.
 
-Outside callers use the xaction's `Abort` method, including its kind-specific
-override. Once stopping is visible, `Base.Abort` rejects these calls. The owner
-may still encounter a failed close, a peer timeout, or another completion
-failure; it uses `AbortByOwner` and remains responsible for `Finish`.
-Choose the method by the caller's responsibility, not by checking the state
-and trying whichever abort is currently accepted.
+### Ownership
 
-The owner may call `AbortByOwner` through a quiesce callback or joined helpers.
-For example, sentinel polls peer status concurrently, joins those polls before
-returning, and lets the owner call `Finish` afterward. An unrelated T2T or IC
-handler is not part of that owner path merely because it reports the same error.
+- When callbacks race to clean up, the caller that wins `SetStopping` owns the
+  cleanup: it either performs it or signals `Run` to do so.
+- Outside callers use the xaction's `Abort`, including any kind-specific
+  override. Once stopping, `Base.Abort` rejects these calls.
+- After stopping, the owner may still hit a failed close, a peer timeout, or an
+  Smap change. It records the failure with `AbortByOwner` and still calls `Finish`.
+- Choose by the caller's role, not by the current state: do not try `Abort`
+  and fall back to `AbortByOwner`.
+- Example: sentinel polls peers concurrently and joins the polls before
+  returning to the owner, which then calls `Finish`. A T2T or IC handler that
+  reports the same error is not on the owner path.
+- Exception: archive work items call `AbortByOwner` from their own quiesce. A
+  work item holds `pending`, which keeps `Run` from the idle exit; after any
+  earlier abort, the call has no effect; `Run` wakes on `ChanAbort` and finishes.
 
-The table describes `Base` methods. Overrides can perform additional work:
-`DemandBase.Abort`, for example, calls `Finish` immediately after an accepted
-base abort. Thus abort is asynchronous with respect to termination, but an
-individual override may block while performing some cleanup inside the call.
+### Completion by kind
 
-### Current completion mechanisms
-
-The following describes implementation differences within the logical classes;
-it is not another classification of job lifetimes.
-
-| Instances | Graceful path | Abort path |
+| Kinds | Normal | Abort |
 |---|---|---|
-| finite jobs without a peer completion protocol, e.g. cleanup and prefetch | `Run` completes and joins dependent work, then finishes | signal cancellation; `Run` exits and finishes; the kind determines cluster-wide propagation |
-| demand loops using `DemandBase.Abort`, e.g. EC/mirroring services and download; list has its own abort override | idle signal retires the instance through its normal stopping path | the accepted abort calls `Finish` from the aborting goroutine; `Run` may continue cleaning up |
-| TCB and TCO | `Run` drains outbound streams, announces done, waits for peers, unregisters receiving, and finishes | the owner records completion failures with `AbortByOwner`; TCO's inherited outside abort can finish earlier, before `Stop` |
-| archive | `Run` stops admission, coordinates peers, closes the DM, and finishes | owner callbacks use `AbortByOwner`; inherited outside abort has the same early-finish behavior as TCO |
-| GetBatch/x-moss | idle `fini` claims stopping, unregisters from SDM, cleans up work items, and finishes | the `Abort` override performs cleanup only after its base abort succeeds; inherited `DemandBase.Abort` publishes completion before that cleanup |
-| demand shard-index | `onIdle` closes admission and signals workers; `Run` joins workers, releases queued work, stops the demand base, and finishes | the override records a base abort and signals workers; `Run` still owns cleanup and `Finish` |
+| finite, no peer protocol (e.g. cleanup, prefetch) | `Run` joins its work, then finishes | `Run` exits and finishes; propagation is kind-specific |
+| `DemandBase.Abort` users (EC, mirroring, download); list overrides `Abort` | idle timer leads to the normal stopping path | `Finish` runs in the aborting goroutine; `Run` may still be cleaning up |
+| TCB, TCO | drain outbound streams, broadcast 'done', quiesce until all peers are done, unregister, finish | sentinel callbacks use `AbortByOwner` (TCO: also a failed `dm.Close`); an outside abort of TCO before `Stop` finishes early via `DemandBase.Abort` |
+| archive | stop admission, send 'done' in-band, quiesce, close DM, finish | same as TCO |
+| GetBatch (x-moss) | idle `fini` claims stopping, unregisters from SDM, cleans up, finishes | override cleans up after the base abort succeeds; `DemandBase.Abort` finishes before that cleanup |
+| shard-index-demand | `onIdle` closes admission; `Run` joins workers, releases queued work, finishes | override records the abort and signals workers; `Run` cleans up and finishes |
 
 Rebalance and resilver have their own lifecycle and stage coordination; see
 [`reb`](../reb) and [`res`](../res).
 
-A job without a peer completion protocol may still have workers, downloads,
-or callbacks to drain. Conversely, a request-driven protocol can exchange
-pages between targets without needing a whole-job 'done' exchange.
+For TCB/TCO, sent does not mean received: each peer must confirm that it has
+finished sending. T2T 'done' control provides the confirmation; sentinel status
+polling recovers a lost 'done' and detects an aborted or unresponsive peer.
+Single-target jobs have no peers to coordinate with.
 
-For TCB/TCO, successfully sending local data does not prove that receiving is
-over. Each peer must confirm that it has finished sending. Target-to-target
-(T2T) 'done' control provides that confirmation; status polling recovers a missed
-notification or detects an aborted or unresponsive peer. The normal sender must
-drain its streams before announcing done. Single-target jobs have no peers to
-coordinate with.
+Abort propagation is kind-specific: T2T broadcast, IC abort, or a cluster
+event. Keep the original cause, and do not rebroadcast a received abort.
 
-Whole-job abort propagation is kind-specific: peer T2T broadcasts, IC aborts,
-or a cluster event may inform the other participants. Preserve the original
-cause across these paths and suppress rebroadcast of a received abort. IC
-terminal notifications report an instance's result; they do not replace the
-peer completion protocol.
+### Known gaps
 
-### Known gaps and ordering differences
-
-- The state check in `Abort` and the update of `abort.done` are separate.
-  A concurrent `Finish` can publish success before the abort is recorded
-  (compare the TODO in `reb/globrun.go`). The owner method's state check is
-  not a lock either: its callers must finish their joined helpers before
-  calling `Finish`.
-- `DemandBase.Abort` can publish completion before `Run` tears down transport.
-  x-moss's abort path also finishes before its cleanup. Archive calls `Finish`
-  before its final work-item cleanup. An end time is therefore not a universal
-  guarantee that all resources have been released.
-- After `DemandBase.Stop`, outside aborts are rejected. Sentinel status polling
-  can recover a peer abort, but does not recover a dropped user stop.
-- Archive still sends 'done' in-band and ignores the result of `dm.Close`.
-  Its current ordering differs from the TCB/TCO drain-before-done protocol.
+- `Abort` checks the state and sets `abort.done` in separate steps: a concurrent
+  `Finish` can publish success before the abort is recorded (compare the TODO
+  in `reb/globrun.go`). `AbortByOwner` has the same window, so its callers must
+  join their helpers before calling `Finish`.
+- An end time does not mean all resources are released: `DemandBase.Abort`
+  finishes before `Run` tears down; x-moss abort finishes before cleanup;
+  archive calls `Finish` before its final work-item cleanup.
+- After `DemandBase.Stop`, outside aborts are rejected. Sentinel polling
+  recovers a peer abort, but not a dropped user stop.
+- Archive sends 'done' in-band and ignores the `dm.Close` error, unlike the
+  TCB/TCO drain-before-done order.
 
 ## Rebalance and resilver coexistence
 

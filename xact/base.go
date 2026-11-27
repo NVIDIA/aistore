@@ -28,6 +28,7 @@ import (
 // - IsRunning: accepting work
 // - IsDone:    not accepting work (stopping OR finished)
 // - EndTime:   non-zero iff fully finished
+// - see "Finishing and aborting" in README.md in this package
 const finishSentinel = uint64(1)
 
 type (
@@ -146,6 +147,7 @@ func (*Base) FromTo() (*meta.Bck, *meta.Bck) { return nil, nil }
 
 //
 // aborting
+// - outside callers vs owner path: see "Ownership" in README.md in this package
 //
 
 func (xctn *Base) ChanAbort() <-chan error { return xctn.abort.ch }
