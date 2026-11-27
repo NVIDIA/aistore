@@ -6,13 +6,10 @@
 package xs
 
 import (
-	"strconv"
-
 	"github.com/NVIDIA/aistore/cmn"
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/transport"
@@ -147,30 +144,4 @@ func (r *streamingX) TxnAbort(err error) {
 	}
 	r.AddErr(err)
 	r.Base.Finish()
-}
-
-// per-transaction 'done' to the responsible target, w/ the number of objects sent (in ObjName)
-// TODO:
-// - dup sentinel.bcastDone
-// - both must transition to the T2T off-streams control path
-func (r *streamingX) sendDone(uuid string, tsi *meta.Snode, cnt int64) {
-	if r.p.dm == nil { // single target
-		return
-	}
-	o := transport.AllocSend()
-	o.Hdr.SID = core.T.SID()
-	o.Hdr.Opaque = cos.UnsafeB(uuid)
-	o.Hdr.Opcode = transport.OpcDone
-	o.Hdr.ObjName = strconv.FormatInt(cnt, 10)
-
-	err := r.p.dm.Send(o, nil, tsi)
-
-	switch {
-	case err != nil:
-		nlog.WarningDepth(1, r.String(), err)
-	default:
-		if cmn.Rom.V(4, cos.ModXs) {
-			nlog.Infoln(r.Name(), "done")
-		}
-	}
 }

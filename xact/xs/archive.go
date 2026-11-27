@@ -42,7 +42,8 @@ import (
 // - hold pending from begin to commit - otherwise, idle can stop the job in between and drop the commit
 // - begin while stopping: renew and retry (ais/tgttxn.go) rather than fail the request
 // - in-place TAR append: checksum
-// - control: in-stream 'done' => out-of-band T2T; consolidate _recv w/ tcb, tcobjs (see xact/xs/TODO.md)
+// - control: xaction-level in-stream 'done' => out-of-band T2T (work-item 'done' is T2T);
+//   consolidate _recv w/ tcb, tcobjs (see xact/xs/TODO.md)
 // - multi-worker list-range iterator (currently, xact.NwpNone)
 
 type archwiState uint8
@@ -59,7 +60,8 @@ type (
 	}
 	// archival work item; implements lrwi
 	archwi struct {
-		wfh       cos.LomWriter // -> workFQN
+		done      map[string]int64 // DT: peer => reported sends (pending.mtx)
+		wfh       cos.LomWriter    // -> workFQN
 		writer    archive.Writer
 		r         *XactArch
 		msg       *cmn.ArchiveBckMsg
@@ -112,6 +114,7 @@ type (
 // interface guard
 var (
 	_ core.Xact      = (*XactArch)(nil)
+	_ xact.Peer      = (*XactArch)(nil)
 	_ xreg.Renewable = (*archFactory)(nil)
 	_ lrwi           = (*archwi)(nil)
 )
@@ -465,29 +468,13 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if hdr.Opcode != 0 {
 		switch hdr.Opcode {
 		case transport.OpcDone:
-			// Two types of OpcDone - distinguished by whether uuid matches a txnUUID:
-			uuid := cos.UnsafeS(hdr.Opaque)
-			r.pending.mtx.Lock()
-			wi, ok := r.pending.m[uuid]
-			r.pending.mtx.Unlock()
-			if ok {
-				// (1) Per-txn OpcDone: sender finished archiving for this transaction
-				// ObjName carries the number of objects sent (see sendDone)
-				if hdr.ObjName != "" {
-					n, err := strconv.ParseInt(hdr.ObjName, 10, 64)
-					if err != nil {
-						e := fmt.Errorf("%s: invalid 'done' from %s: %w", r.Name(), meta.Tname(hdr.SID), err)
-						r.AddErr(e, 4, cos.ModXs)
-					} else {
-						wi.nrx.Add(n) // before peersLeft (see quiesce)
-					}
-				}
-				left := wi.peersLeft.Dec()
-				debug.Assert(left >= 0)
-			} else {
-				// (2) Xaction-level OpcDone: sender's whole xaction is done
-				r.sntl.rxDone(hdr)
+			if len(hdr.Opaque) > 0 {
+				// work-item 'done' is T2T control (see RecvCtrl)
+				return abortInbandDone(r, hdr.SID)
 			}
+			// xaction-level: sender's whole xaction is done
+			// TODO: T2T control, as in tcb.go and tcobjs.go
+			r.sntl.rxDone(hdr)
 		default:
 			return abortOpcode(r, hdr.Opcode)
 		}
@@ -530,6 +517,54 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	}
 	return nil
 }
+
+// T2T control: work-item 'done' from a peer, w/ the number of objects it sent
+func (r *XactArch) RecvCtrl(wid, sid, opcode string, body []byte) error {
+	if opcode != xact.OpcodeDone || wid == xact.NoneWID {
+		return fmt.Errorf("%s: unexpected T2T control [%q, %q]", r.Name(), wid, opcode)
+	}
+	if !r.sntl.isPeer(sid) {
+		return fmt.Errorf("%s: unexpected %s from %q", r.Name(), opcode, sid)
+	}
+	n, err := strconv.ParseInt(cos.UnsafeS(body), 10, 64)
+	if err != nil || n < 0 {
+		return fmt.Errorf("%s: invalid %s from %s: %q", r.Name(), opcode, meta.Tname(sid), body)
+	}
+
+	r.pending.mtx.Lock()
+	wi, ok := r.pending.m[wid]
+	if !ok {
+		r.pending.mtx.Unlock()
+		// late: finalized or abandoned
+		if cmn.Rom.V(4, cos.ModXs) {
+			nlog.Infoln(r.Name(), "late", opcode, "from", meta.Tname(sid), "wid", wid)
+		}
+		return nil
+	}
+	if wi.tsi.ID() != core.T.SID() {
+		r.pending.mtx.Unlock()
+		return fmt.Errorf("%s: not the designated target for %s", r.Name(), wid)
+	}
+	if prev, exists := wi.done[sid]; exists {
+		r.pending.mtx.Unlock()
+		if prev != n {
+			return fmt.Errorf("%s: conflicting %s from %s for %s: %d vs %d", r.Name(), opcode, meta.Tname(sid), wid, prev, n)
+		}
+		return nil
+	}
+	if wi.done == nil {
+		wi.done = make(map[string]int64, r.sntl.nat-1)
+	}
+	wi.done[sid] = n
+
+	wi.nrx.Add(n) // before peersLeft (see quiesce)
+	left := wi.peersLeft.Dec()
+	r.pending.mtx.Unlock()
+	debug.Assert(left >= 0)
+	return nil
+}
+
+func (*XactArch) StatusFlags() xact.StatusFlags { return 0 }
 
 // NOTE: in goroutine
 func (r *XactArch) finalize(wi *archwi) {
@@ -710,7 +745,7 @@ func (j *jogger) do(archtask *archtask) {
 	if core.T.SID() == wi.tsi.ID() {
 		go wi.r.finalize(wi)
 	} else {
-		wi.r.sendDone(wi.msg.TxnUUID, wi.tsi, int64(wi.cnt.Load()))
+		wi.sendDone()
 		wi.r.pending.mtx.Lock()
 		delete(wi.r.pending.m, wi.msg.TxnUUID)
 		wi.r.wiCnt.Dec()
@@ -841,7 +876,7 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 	}
 }
 
-// wait for peers' 'done' and all objects they sent ('done' may arrive first on another stream)
+// wait for peers' 'done' and all objects they sent ('done' is out-of-band and may arrive first)
 // once all peers are done, time out after send_file_time w/ no progress on this shard
 func (wi *archwi) quiesce() core.QuiRes {
 	var (
@@ -894,6 +929,20 @@ func (wi *archwi) qabort(smap *meta.Smap) core.QuiRes {
 	// the same targets but a new incarnation or new endpoints (broadcast the abort)
 	err := fmt.Errorf("%s: targets changed (incarnation or endpoints) [%s => %s]", r.Name(), r.smap.StringEx(), smap.StringEx())
 	return r.sntl._qabort(err)
+}
+
+// T2T 'done' to the designated target, w/ the number of objects sent
+// TODO: recover a lost work-item 'done' without aborting the shared job
+func (wi *archwi) sendDone() {
+	if wi.r.p.dm == nil { // single target
+		return
+	}
+	body := strconv.AppendInt(nil, int64(wi.cnt.Load()), 10)
+	if _, err := wi.r.SendCtrl(wi.tsi, wi.msg.TxnUUID, xact.OpcodeDone, body); err != nil {
+		nlog.Warningf("%s: %s wid=%q => %s: %v", wi.r.Name(), xact.OpcodeDone, wi.msg.TxnUUID, wi.tsi.StringEx(), err)
+	} else if cmn.Rom.V(4, cos.ModXs) {
+		nlog.Infoln(wi.r.Name(), xact.OpcodeDone, "=>", wi.tsi.StringEx())
+	}
 }
 
 func (wi *archwi) nameInArch(objName string) string {

@@ -7,9 +7,11 @@ package integration_test
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"net/http"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -1387,4 +1389,202 @@ func TestAppendToArch(t *testing.T) {
 			}
 		})
 	}
+}
+
+type archDoneCtx struct {
+	smap  *meta.Smap
+	dt    *meta.Snode
+	peer  *meta.Snode // no source objects
+	bck   cmn.Bck
+	query url.Values
+	body  []byte
+	names []string
+	arch  string
+	wid   string
+	xid   string
+}
+
+func TestArchWorkItemDone(t *testing.T) {
+	tools.CheckSkip(t, &tools.SkipTestArgs{RequiredDeployment: tools.ClusterTypeLocal, MinTargets: 3})
+	if tools.GetClusterConfig(t).Auth.IntraRequestAuthConfigured() {
+		t.Skip("cannot sign intra-cluster requests")
+	}
+
+	t.Run("duplicate", func(t *testing.T) {
+		a := newArchDoneCtx(t)
+		for range 2 {
+			tassert.CheckFatal(t, a.done(t, "0"))
+		}
+		flt := xact.ArgsMsg{ID: a.xid, Kind: apc.ActArchive, DaemonID: a.dt.ID()}
+		snap := archSnap(t, &flt)
+		want := fmt.Sprintf("peers-not-done:%d,", a.smap.CountActiveTs()-2)
+		tassert.Fatalf(t, strings.Contains(snap.CtlMsg, want), "duplicate completed another peer: %s", snap.CtlMsg)
+		tassert.Fatalf(t, a.done(t, "1") != nil, "accepted a conflicting count")
+
+		// commit after the injected reports; the zero-object peer reports again
+		for _, tsi := range a.smap.Tmap {
+			if !tsi.InMaintOrDecomm() {
+				a.phase(t, tsi, apc.Commit2PC)
+			}
+		}
+		flt.Timeout = 20 * time.Second
+		_, err := api.WaitForSnaps(tools.BaseAPIParams(), &flt, flt.Idle())
+		tassert.CheckFatal(t, err)
+		snap = archSnap(t, &flt)
+		tassert.Fatalf(t, !snap.AbortedX && snap.Err == "", "archive failed: %s %s", snap.AbortErr, snap.Err)
+		lst, err := api.ListObjects(tools.BaseAPIParams(), a.bck, &apc.LsoMsg{Prefix: a.arch, Flags: apc.LsInArchOnly}, api.ListArgs{})
+		tassert.CheckFatal(t, err)
+		wantNames := make([]string, len(a.names))
+		for i, name := range a.names {
+			wantNames[i] = path.Join(a.arch, name)
+		}
+		checkLsoNames(t, lst.Entries, wantNames, true)
+
+		// finalized WID: ignore a late report, including one with a different count
+		tassert.CheckFatal(t, a.done(t, "2"))
+	})
+
+	t.Run("send-error", func(t *testing.T) {
+		a := newArchDoneCtx(t)
+		// force the real sender's zero count to receive an HTTP error
+		tassert.CheckFatal(t, a.done(t, "1"))
+		a.phase(t, a.peer, apc.Commit2PC)
+
+		flt := xact.ArgsMsg{ID: a.xid, Kind: apc.ActArchive, DaemonID: a.peer.ID(), Timeout: 20 * time.Second}
+		_, err := api.WaitForSnaps(tools.BaseAPIParams(), &flt, flt.Idle())
+		flt.OnlyRunning = false
+		snap := archSnap(t, &flt)
+		tassert.Fatalf(t, !snap.AbortedX && snap.Err == "", "done send error aborted the sender: %s %s", snap.AbortErr, snap.Err)
+		tassert.CheckFatal(t, err)
+
+		// another WID must still complete in the same shared job
+		archName := "next-" + a.arch
+		msg := cmn.ArchiveBckMsg{
+			ToBck: a.bck,
+			ArchiveMsg: apc.ArchiveMsg{
+				ArchName:  archName,
+				ListRange: apc.ListRange{ObjNames: a.names},
+			},
+		}
+		xid, err := api.ArchiveMultiObj(tools.BaseAPIParams(), a.bck, &msg)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, xid == a.xid, "expected the same archive job: %s vs %s", xid, a.xid)
+		flt.DaemonID = ""
+		_, err = api.WaitForSnaps(tools.BaseAPIParams(), &flt, flt.Idle())
+		tassert.CheckFatal(t, err)
+		flt.OnlyRunning = false
+		snaps, err := api.QueryXactionSnaps(tools.BaseAPIParams(), &flt)
+		tassert.CheckFatal(t, err)
+		tassert.Fatalf(t, len(snaps) == a.smap.CountActiveTs(), "missing archive peers: %s", cos.MustMarshal(snaps))
+		for _, tsnaps := range snaps {
+			tassert.Fatalf(t, len(tsnaps) == 1 && !tsnaps[0].AbortedX && tsnaps[0].Err == "",
+				"done send error affected the shared job: %s", cos.MustMarshal(tsnaps))
+		}
+		lst, err := api.ListObjects(tools.BaseAPIParams(), a.bck, &apc.LsoMsg{Prefix: archName, Flags: apc.LsInArchOnly}, api.ListArgs{})
+		tassert.CheckFatal(t, err)
+		wantNames := make([]string, len(a.names))
+		for i, name := range a.names {
+			wantNames[i] = path.Join(archName, name)
+		}
+		checkLsoNames(t, lst.Entries, wantNames, true)
+	})
+}
+
+// begin with a known WID and defer commit so control delivery is deterministic
+func newArchDoneCtx(t *testing.T) *archDoneCtx {
+	a := &archDoneCtx{
+		smap: tools.GetClusterMap(t, tools.RandomProxyURL(t)),
+		bck:  cmn.Bck{Name: "arch-done-" + trand.String(8), Provider: apc.AIS},
+		wid:  cos.GenUUID(),
+	}
+	tools.CreateBucket(t, tools.RandomProxyURL(t), a.bck, nil, true /*cleanup*/)
+	targets := make([]*meta.Snode, 0, a.smap.CountActiveTs())
+	for _, tsi := range a.smap.Tmap {
+		if !tsi.InMaintOrDecomm() {
+			targets = append(targets, tsi)
+		}
+	}
+	a.dt, a.peer = targets[0], targets[1]
+	for i := 0; ; i++ {
+		a.arch = fmt.Sprintf("shard-%d.tar", i)
+		dt, err := a.smap.HrwObjName2T(meta.CloneBck(&a.bck), a.arch)
+		tassert.CheckFatal(t, err)
+		if dt.ID() == a.dt.ID() {
+			break
+		}
+	}
+	a.names = []string{
+		tools.GenerateObjectNameOnTarget("local-", a.bck, a.smap, a.dt),
+		tools.GenerateObjectNameOnTarget("remote-", a.bck, a.smap, targets[2]),
+	}
+	for _, name := range a.names {
+		tassert.CheckFatal(t, tools.PutObjRR(tools.BaseAPIParams(), a.bck, name, cos.KiB, cos.ChecksumNone))
+	}
+	msg := struct {
+		apc.ActMsg
+		UUID string `json:"uuid"`
+	}{
+		ActMsg: apc.ActMsg{Action: apc.ActArchive, Value: &cmn.ArchiveBckMsg{
+			ToBck: a.bck,
+			ArchiveMsg: apc.ArchiveMsg{
+				ArchName:  a.arch,
+				ListRange: apc.ListRange{ObjNames: a.names},
+			},
+		}},
+		UUID: a.wid,
+	}
+	a.body = cos.MustMarshal(msg)
+	a.query = make(url.Values)
+	a.bck.SetQuery(a.query)
+	a.bck.AddUnameToQuery(a.query, apc.QparamBckTo, "")
+	a.query.Set(apc.QparamUnixTime, strconv.FormatInt(time.Now().UnixNano(), 36))
+	a.query.Set(apc.QparamHostTimeout, strconv.FormatInt(int64(30*time.Second), 36))
+	a.query.Set(apc.QparamNetwTimeout, strconv.FormatInt(int64(30*time.Second), 36))
+	t.Cleanup(func() {
+		if a.xid != "" {
+			tassert.CheckError(t, api.AbortXaction(tools.BaseAPIParams(), &xact.ArgsMsg{ID: a.xid, Kind: apc.ActArchive}))
+		}
+		for _, tsi := range targets {
+			_, err := archDonePost(t, tsi, a.smap.Primary, apc.URLPathTxn.Join(a.bck.Name, apc.Abort2PC)+"?"+a.query.Encode(), a.body)
+			tassert.CheckError(t, err)
+		}
+	})
+	for _, tsi := range targets {
+		a.phase(t, tsi, apc.Begin2PC)
+	}
+	return a
+}
+
+func (a *archDoneCtx) phase(t *testing.T, tsi *meta.Snode, phase string) {
+	hdr, err := archDonePost(t, tsi, a.smap.Primary, apc.URLPathTxn.Join(a.bck.Name, phase)+"?"+a.query.Encode(), a.body)
+	tassert.CheckFatal(t, err)
+	xid := hdr.Get(apc.HdrXactionID)
+	if a.xid == "" {
+		a.xid = xid
+	}
+	tassert.Fatalf(t, xid != "" && xid == a.xid, "%s: inconsistent xid %q vs %q", tsi.StringEx(), xid, a.xid)
+}
+
+func (a *archDoneCtx) done(t *testing.T, count string) error {
+	_, err := archDonePost(t, a.dt, a.peer, xact.T2TCtrlPath(apc.ActArchive, a.xid, a.wid, xact.OpcodeDone), []byte(count))
+	return err
+}
+
+func archDonePost(t *testing.T, tsi, sender *meta.Snode, path string, body []byte) (http.Header, error) {
+	url := tsi.URL(cmn.NetIntraControl) + path
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set(apc.HdrSenderID, sender.ID())
+	req.Header.Set(apc.HdrSenderName, sender.StringEx())
+	req.Header.Set(cos.HdrContentType, cos.ContentJSON)
+	resp, err := tools.BaseAPIParams(url).Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return resp.Header, cmn.CheckResp(resp, req.Method, req.URL.Path)
 }

@@ -147,12 +147,13 @@ T2T control (xact/t2tctrl.go: `POST /v1/xactions/t2tctrl/{xkind}/{xid}/{wid}/{op
 
 Goal: reliable control, independent of data streams and DM. HTTP alone does not supply delivery or completion guarantees.
 
-- today, `target.xactCtrl` (ais/tgtxact.go) dispatches to x-moss (moss.go; ais/ml.go), aborts
+- today, `target.xactCtrl` (ais/tgtxact.go) dispatches kind-specific opcodes (`xact.Peer`) to x-moss, tcb, tco, and archive, aborts
   other kinds on `xact.OpcodeAbortXact` (see `xact.RecvAbortXact`), and answers `xact.OpcodeStatus`
 - abort: T2T only (`xact.Base.BcastAbort`, gated by `SkipAbortBcast`) - tcb, tco, archive, and
   x-list (designated target) start a `ChanAbort` watcher in `Run` (see `bcastOnAbort`)
 - sentinel progress: T2T `xact.OpcodeStatus` poll, only to the peers that did not send done (`sentinel.poll`)
-- still in-stream only: sentinel.go and archive.go (done)
+- done: T2T for tcb and tco (xaction-level) and archive (work-item: `archwi.sendDone`, `XactArch.RecvCtrl`);
+  still in-stream: archive xaction-level (`sentinel.bcastDone`, `sentinel.rxDone`)
 - x-list page timeout: the proxy sends one asynchronous `Abort2PC` to the designated target if its
   page call times out. peers waiting for the page can time out locally
   - best-effort, single attempt: a lost abort leaves the designated target running until `lso.idle_time`
