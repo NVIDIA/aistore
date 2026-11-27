@@ -5,6 +5,7 @@
 package cos
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,6 +25,13 @@ const (
 	MiB = 1024 * KiB
 	GiB = 1024 * MiB
 	TiB = 1024 * GiB
+	PiB = 1024 * TiB
+)
+
+// ParseSize range: [0, maxParsedSize]
+const (
+	maxParsedSize = 16 * PiB
+	maxParsedStr  = "16PiB"
 )
 
 // IS (metric) units
@@ -78,7 +86,9 @@ func ToSizeIEC(b int64, digits int) string {
 	}
 }
 
-// when `units` arg is empty conversion is defined by the suffix
+// parse human-readable size; when `units` arg is empty conversion is defined by the suffix
+// - return value in the range [0, 16PiB]
+// - errors wrap strconv.ErrSyntax (malformed input) or strconv.ErrRange (out of range)
 func ParseSize(size, units string) (int64, error) {
 	const tag = "ParseSize"
 	if size == "" {
@@ -102,13 +112,13 @@ func ParseSize(size, units string) (int64, error) {
 	if strings.IndexByte(suffix, 'I') > 0 { // IEC
 		u = UnitsIEC
 		if units != "" && units != UnitsIEC {
-			return 0, fmt.Errorf("%s %q error: %q vs %q units", tag, size, u, units)
+			return 0, fmt.Errorf("%s %q: %w (%q vs %q units)", tag, size, strconv.ErrSyntax, u, units)
 		}
 	} else if suffix != "" && suffix != "B" { // SI
 		u = UnitsSI
 		if units != "" {
 			if units == UnitsRaw {
-				return 0, fmt.Errorf("%s %q error: %q vs %q units", tag, size, u, units)
+				return 0, fmt.Errorf("%s %q: %w (%q vs %q units)", tag, size, strconv.ErrSyntax, u, units)
 			}
 			// NOTE: the case when units (arg) take precedence over the suffix
 			u = units
@@ -118,18 +128,33 @@ func ParseSize(size, units string) (int64, error) {
 	if suffix != "" {
 		s = strings.TrimSuffix(s, suffix)
 	}
+	var (
+		n   int64
+		err error
+	)
 	switch {
 	case strings.IndexByte(suffix, 'K') >= 0:
-		return _convert(s, u, KB, KiB)
+		n, err = _convert(s, u, KB, KiB)
 	case strings.IndexByte(suffix, 'M') >= 0:
-		return _convert(s, u, MB, MiB)
+		n, err = _convert(s, u, MB, MiB)
 	case strings.IndexByte(suffix, 'G') >= 0:
-		return _convert(s, u, GB, GiB)
+		n, err = _convert(s, u, GB, GiB)
 	case strings.IndexByte(suffix, 'T') >= 0:
-		return _convert(s, u, TB, TiB)
+		n, err = _convert(s, u, TB, TiB)
 	default:
-		return _convert(s, u, 1, 1)
+		n, err = _convert(s, u, 1, 1)
 	}
+	if err != nil {
+		// strip strconv.NumError (its Num is the trimmed value) and keep the sentinel
+		if ne, ok := errors.AsType[*strconv.NumError](err); ok {
+			err = ne.Err
+		}
+		if errors.Is(err, strconv.ErrRange) {
+			return 0, fmt.Errorf("%s %q: %w [0, %s]", tag, size, err, maxParsedStr)
+		}
+		return 0, fmt.Errorf("%s %q: %w", tag, size, err)
+	}
+	return n, nil
 }
 
 func _suffix(s string) string {
@@ -141,21 +166,28 @@ func _suffix(s string) string {
 	return ""
 }
 
+// convert and check the range before multiplying (no overflow)
 func _convert(s, units string, mult, multIEC int64) (int64, error) {
+	if units == UnitsIEC {
+		mult = multIEC
+	}
 	if strings.IndexByte(s, '.') >= 0 {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			return 0, err
 		}
-		if units == UnitsIEC {
-			return int64(f * float64(multIEC)), nil
+		f *= float64(mult)
+		if !(f >= 0 && f <= maxParsedSize) { // (includes NaN)
+			return 0, strconv.ErrRange
 		}
-		return int64(f * float64(mult)), nil
+		return int64(f), nil
 	}
-
 	val, err := strconv.ParseInt(s, 10, 64)
-	if units == UnitsIEC {
-		return val * multIEC, err
+	if err != nil {
+		return 0, err
 	}
-	return val * mult, err
+	if val < 0 || val > maxParsedSize/mult {
+		return 0, strconv.ErrRange
+	}
+	return val * mult, nil
 }
