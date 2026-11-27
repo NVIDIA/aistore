@@ -6,6 +6,7 @@ package cos
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -142,20 +143,28 @@ func _suffix(s string) string {
 }
 
 func _convert(s, units string, mult, multIEC int64) (int64, error) {
+	if units == UnitsIEC {
+		mult = multIEC
+	}
 	if strings.IndexByte(s, '.') >= 0 {
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
 			return 0, err
 		}
-		if units == UnitsIEC {
-			return int64(f * float64(multIEC)), nil
+		f *= float64(mult)
+		// 2^63 is exact as a float64; converting a value outside the int64 range is undefined
+		if !(f > -(1<<63) && f < 1<<63) {
+			return 0, fmt.Errorf("size %q is out of range", s)
 		}
-		return int64(f * float64(mult)), nil
+		return int64(f), nil
 	}
 
 	val, err := strconv.ParseInt(s, 10, 64)
-	if units == UnitsIEC {
-		return val * multIEC, err
+	if err != nil {
+		return 0, err
 	}
-	return val * mult, err
+	if val > math.MaxInt64/mult || val < math.MinInt64/mult {
+		return 0, fmt.Errorf("size %q is out of range", s)
+	}
+	return val * mult, nil
 }
