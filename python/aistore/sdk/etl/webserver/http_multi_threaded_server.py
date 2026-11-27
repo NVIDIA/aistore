@@ -331,8 +331,9 @@ class HTTPMultiThreadedServer(ETLServer):
                             exc_info=True,
                         )
                         etl.close_reader(reader)
-                        reader = self._get_stream_reader(fqn, raw_path, is_get)
+                        reader = None
                         time.sleep(delay)
+                        reader = self._get_stream_reader(fqn, raw_path, is_get)
             finally:
                 etl.close_reader(reader)
             raise AssertionError("unreachable: loop always returns or raises")

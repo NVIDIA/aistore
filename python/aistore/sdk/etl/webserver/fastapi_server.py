@@ -449,8 +449,9 @@ class FastAPIServer(ETLServer):
                         exc_info=True,
                     )
                     self.close_reader(reader)
-                    reader = await self._get_stream_reader(fqn, path, request, is_get)
+                    reader = None
                     await asyncio.sleep(delay)
+                    reader = await self._get_stream_reader(fqn, path, request, is_get)
         finally:
             self.close_reader(reader)
 

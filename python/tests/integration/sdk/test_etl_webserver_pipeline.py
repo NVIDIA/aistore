@@ -22,10 +22,54 @@ from aistore.sdk.etl.webserver.http_multi_threaded_server import HTTPMultiThread
 from aistore.sdk.etl.webserver.flask_server import FlaskServer
 from aistore.sdk.etl.webserver.fastapi_server import FastAPIServer
 from aistore.sdk.etl.webserver.utils import parse_etl_pipeline
-from aistore.sdk.errors import InvalidPipelineError
+from aistore.sdk.errors import ETLDirectPutTransientError, InvalidPipelineError
 from tests.const import TEST_TIMEOUT
+from tests.integration import CLUSTER_ENDPOINT
+from tests.integration.sdk.parallel_test_base import ParallelTestBase
 
 CLEANUP_DELAY = 0.1  # Minimal delay for cleanup operations
+
+
+class TestPipelineRetryBackoff(ParallelTestBase):
+    def test_streaming_retry_reopens_source_after_backoff(self):
+        """Leave the AIStore source closed while waiting to retry direct PUT."""
+
+        class StreamingFlaskServer(FlaskServer):
+            def transform_stream(self, reader, _path, _etl_args):
+                yield reader.read().upper()
+
+        obj, content = self._create_object_with_content()
+        with patch.dict(
+            os.environ, {"AIS_TARGET_URL": f"{CLUSTER_ENDPOINT}/v1/objects"}
+        ):
+            server = StreamingFlaskServer()
+        server.direct_put_retries = 1
+        self.addCleanup(server.session.close)
+        downstream = "http://downstream.invalid"
+        source_get = server.session.get
+        events = []
+
+        def get_source(*args, **kwargs):
+            events.append("open source")
+            return source_get(*args, **kwargs)
+
+        def direct_put(url, chunks, *_args):
+            self.assertEqual(b"".join(chunks), content.upper())
+            if "backoff" not in events:
+                raise ETLDirectPutTransientError(url, requests.ReadTimeout())
+            return 204, b"", len(content)
+
+        with (
+            patch.object(server.session, "get", side_effect=get_source),
+            patch.object(server, "_direct_put_stream", side_effect=direct_put),
+            patch("time.sleep", side_effect=lambda _: events.append("backoff")),
+        ):
+            response = server.app.test_client().get(
+                f"/{self.bucket.name}/{obj.name}", headers={HEADER_NODE_URL: downstream}
+            )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(events, ["open source", "backoff", "open source"])
 
 
 def wait_for_server_ready(
