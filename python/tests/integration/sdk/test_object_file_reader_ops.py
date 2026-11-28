@@ -82,3 +82,11 @@ class TestObjectFileReaderOps(ParallelTestBase):
         self.assertFalse(object_file.readable())
         with self.assertRaises(ValueError):
             object_file.read()
+
+    def test_close_discards_unread_chunk(self):
+        """Release the remainder of a partially read chunk on close."""
+        object_file = self.object_reader.as_file()
+        with object_file:
+            self.assertEqual(len(object_file.read(1)), 1)
+            self.assertTrue(object_file._remainder)  # pylint: disable=protected-access
+        self.assertIsNone(object_file._remainder)  # pylint: disable=protected-access
