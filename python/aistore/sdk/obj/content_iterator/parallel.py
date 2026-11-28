@@ -20,7 +20,7 @@ import multiprocessing as mp
 from dataclasses import dataclass, field
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
 from itertools import islice
-from typing import Dict, Generator, List, Optional, Tuple
+from typing import Dict, Generator, List, Optional
 
 from requests.exceptions import ChunkedEncodingError
 
@@ -175,15 +175,9 @@ class ParallelContentIterProvider(BaseContentIterProvider):
         """Get the number of concurrent workers."""
         return self._num_workers
 
-    def _build_chunk_ranges(self, offset: int) -> List[Tuple[int, int]]:
-        """Return a list of `(start, end)` byte ranges covering the object from `offset`."""
-        ranges = []
-        pos = offset
-        while pos < self._object_size:
-            end = min(pos + self._chunk_size, self._object_size)
-            ranges.append((pos, end))
-            pos = end
-        return ranges
+    def _chunk_end(self, start: int) -> int:
+        """Return the exclusive end of the chunk starting at `start`."""
+        return min(start + self._chunk_size, self._object_size)
 
     @staticmethod
     def _get_fork_context():
@@ -230,10 +224,10 @@ class ParallelContentIterProvider(BaseContentIterProvider):
                 typically created and owned by `read_all()`.
         """
         fork_context = self._get_fork_context()
-        chunk_ranges = self._build_chunk_ranges(0)
-        if not chunk_ranges:
+        chunk_starts = range(0, self._object_size, self._chunk_size)
+        if not chunk_starts:
             return
-        num_workers = min(self._num_workers, len(chunk_ranges))
+        num_workers = min(self._num_workers, len(chunk_starts))
 
         executor = ProcessPoolExecutor(
             max_workers=num_workers,
@@ -244,21 +238,23 @@ class ParallelContentIterProvider(BaseContentIterProvider):
         try:
             # write_offset = start (each worker owns its exact byte range in dst)
             # slot_idx = -1 (no ring-buffer events needed)
-            ranges = iter(chunk_ranges)
+            ranges = iter(chunk_starts)
             # One range per worker left workers idle during parent-side result handling.
             # Four per worker hid that gap in local tests while bounding queued work.
             prefetch = _PREFETCH_RANGES_PER_WORKER * num_workers
             pending = {
-                executor.submit(_fetch_chunk, start, end, start, -1)
-                for start, end in islice(ranges, prefetch)
+                executor.submit(_fetch_chunk, start, self._chunk_end(start), start, -1)
+                for start in islice(ranges, prefetch)
             }
             while pending:
                 done, pending = wait(pending, return_when=FIRST_COMPLETED)
                 for future in done:
                     future.result()  # re-raises worker exceptions
                 pending.update(
-                    executor.submit(_fetch_chunk, start, end, start, -1)
-                    for start, end in islice(ranges, len(done))
+                    executor.submit(
+                        _fetch_chunk, start, self._chunk_end(start), start, -1
+                    )
+                    for start in islice(ranges, len(done))
                 )
         finally:
             # The context manager waits, but does not cancel pending futures.
@@ -308,8 +304,8 @@ class ParallelContentIterProvider(BaseContentIterProvider):
         if self._object_size - offset <= 0:
             return
 
-        chunk_ranges = self._build_chunk_ranges(offset)
-        num_slots = min(self._num_workers, len(chunk_ranges))
+        chunk_starts = range(offset, self._object_size, self._chunk_size)
+        num_slots = min(self._num_workers, len(chunk_starts))
 
         futures: Dict[int, Future] = {}
         ring = None
@@ -326,15 +322,19 @@ class ParallelContentIterProvider(BaseContentIterProvider):
             try:
                 # Fill the ring with the first num_slots requests.
                 for i in range(num_slots):
-                    start, end = chunk_ranges[i]
+                    start = chunk_starts[i]
                     # i < num_slots, so slot == i; write_offset is slot-relative
                     futures[i] = executor.submit(
-                        _fetch_chunk, start, end, i * self._chunk_size, i
+                        _fetch_chunk,
+                        start,
+                        self._chunk_end(start),
+                        i * self._chunk_size,
+                        i,
                     )
                 next_submit = num_slots
 
                 # Sliding window: consume in order; on each consumed slot, submit the next chunk.
-                for next_yield in range(len(chunk_ranges)):
+                for next_yield in range(len(chunk_starts)):
                     slot = next_yield % num_slots
                     data_len = futures.pop(
                         next_yield
@@ -342,13 +342,13 @@ class ParallelContentIterProvider(BaseContentIterProvider):
                     ring.wait_slot(slot)
                     yield ring.read_slot(slot, data_len)
 
-                    if next_submit < len(chunk_ranges):
-                        start, end = chunk_ranges[next_submit]
+                    if next_submit < len(chunk_starts):
+                        start = chunk_starts[next_submit]
                         next_slot = next_submit % num_slots
                         futures[next_submit] = executor.submit(
                             _fetch_chunk,
                             start,
-                            end,
+                            self._chunk_end(start),
                             next_slot * self._chunk_size,
                             next_slot,
                         )

@@ -3,7 +3,9 @@
 #
 
 import os
+import tracemalloc
 import unittest
+from contextlib import closing
 from io import BytesIO
 
 import pytest
@@ -146,6 +148,28 @@ class TestParallelObjectReaderOps(unittest.TestCase):
             obj.get_reader(chunk_size=DEFAULT_CHUNK_SIZE // 8, num_workers=8)
         )
         self.assertEqual(content, expected_content)
+
+    def test_parallel_stream_memory_before_first_chunk(self):
+        """Keep startup memory bounded when an object has many ranges."""
+        obj, expected_content = create_and_put_object(
+            self.client, self.bucket.as_model(), random_string(), self.object_size
+        )
+        reader = obj.get_reader(chunk_size=1, num_workers=2)
+
+        was_tracing = tracemalloc.is_tracing()
+        if not was_tracing:
+            tracemalloc.start()
+        try:
+            baseline_bytes, _ = tracemalloc.get_traced_memory()
+            tracemalloc.reset_peak()
+            with closing(iter(reader)) as chunks:
+                self.assertEqual(next(chunks), expected_content[:1])
+                _, peak_bytes = tracemalloc.get_traced_memory()
+        finally:
+            if not was_tracing:
+                tracemalloc.stop()
+
+        self.assertLess(peak_bytes - baseline_bytes, 8 * MIB)
 
     def test_parallel_download_invalid_num_workers(self):
         """Test that invalid num_workers raises ValueError."""
