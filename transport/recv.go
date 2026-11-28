@@ -12,6 +12,7 @@ import (
 	"path"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/NVIDIA/aistore/api/apc"
 	"github.com/NVIDIA/aistore/cmn"
@@ -33,24 +34,35 @@ import (
 // private types
 type (
 	handler struct {
-		rxObj  RecvObj
-		trname string
+		rxObj      RecvObj
+		trname     string
+		rxDeadline bool
 	}
 	iterator struct {
-		body    io.Reader
-		handler *handler
-		pdu     *rpdu
-		hbuf    []byte
-		sid     string
-		loghdr  string
-		prev    ObjHdr // previous header on this stream; best-effort string-reuse source
-		off     int64  // current object offset, valid after reader recycle
+		body     io.Reader
+		handler  *handler
+		deadline *rxDeadlineReader
+		pdu      *rpdu
+		hbuf     []byte
+		sid      string
+		loghdr   string
+		prev     ObjHdr // previous header on this stream; best-effort string-reuse source
+		off      int64  // current object offset, valid after reader recycle
 	}
 	objReader struct {
 		body   io.Reader
 		pdu    *rpdu
 		parent *iterator
 		hdr    ObjHdr
+	}
+)
+
+type (
+	rxDeadlineReader struct {
+		body   io.Reader
+		ctrl   *http.ResponseController
+		err    error
+		active bool
 	}
 )
 
@@ -64,6 +76,7 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 	var (
 		reader    io.Reader = r.Body
 		lz4Reader *lz4.Reader
+		deadline  *rxDeadlineReader
 		trname    = path.Base(r.URL.Path)
 		mm        = memsys.PageMM()
 	)
@@ -102,19 +115,25 @@ func RxAnyStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if h.rxDeadline {
+		deadline = &rxDeadlineReader{body: r.Body, ctrl: http.NewResponseController(w)}
+		reader = deadline
+	}
+
 	// compression
 	if compressionType := r.Header.Get(apc.HdrCompress); compressionType != "" {
 		debug.Assert(compressionType == apc.LZ4Compression)
-		lz4Reader = lz4.NewReader(r.Body)
+		lz4Reader = lz4.NewReader(reader)
 		reader = lz4Reader
 	}
 
 	var (
 		config = cmn.GCO.Get()
 		it     = &iterator{
-			handler: h,
-			body:    reader,
-			sid:     r.Header.Get(apc.HdrSenderID),
+			handler:  h,
+			body:     reader,
+			deadline: deadline,
+			sid:      r.Header.Get(apc.HdrSenderID),
 		}
 	)
 	debug.Assert(config.Transport.IdleTeardown > 0, "invalid config ", config.Transport)
@@ -228,10 +247,19 @@ func (it *iterator) rxObj(hlen int) (err error) {
 			pdu     = obj.pdu
 			control = obj.hdr.IsControl() // callback may recycle obj
 		)
+		if it.deadline != nil {
+			it.deadline.active = !obj.hdr.IsHeaderOnly()
+		}
 		if errCb := h.recv(&obj.hdr, obj, err); errCb != nil {
 			err = errCb
 		} else if pdu != nil && pdu.err != nil {
 			err = pdu.err // (callback may have discarded the read error)
+		}
+		if it.deadline != nil {
+			it.deadline.active = false
+			if readErr := it.deadline.err; err == nil && readErr != nil {
+				err = it.newErr(readErr, sbrObjData, "payload read")
+			}
 		}
 		debug.DeadBeefSmall(it.hbuf[:hlen])
 
@@ -430,4 +458,33 @@ func DrainAndFreeReader(r io.Reader) {
 		cos.DrainReader(obj)
 	}
 	FreeRecv(obj)
+}
+
+//////////////////////
+// rxDeadlineReader //
+//////////////////////
+
+func (r *rxDeadlineReader) Read(p []byte) (n int, err error) {
+	if r.err != nil {
+		return 0, r.err
+	}
+	if !r.active {
+		return r.body.Read(p)
+	}
+	if err = r.ctrl.SetReadDeadline(time.Now().Add(cmn.Rom.SendFile())); err != nil {
+		r.err = err
+		return 0, err
+	}
+	n, err = r.body.Read(p)
+	if err != nil && err != io.EOF {
+		r.err = err
+		return n, err
+	}
+
+	// local processing and idle gaps do not count against the next read
+	if clearErr := r.ctrl.SetReadDeadline(time.Time{}); clearErr != nil {
+		r.err = clearErr
+		return n, clearErr
+	}
+	return n, err
 }

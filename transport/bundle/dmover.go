@@ -43,6 +43,7 @@ type (
 		Smap             *meta.Smap // TODO: xactions to pass
 		SizePDU          int32
 		MaxHdrSize       int32
+		RxDeadline       bool // bound stalled data-payload reads by cmn.Rom.SendFile
 		SkipGenericStats bool // if true, DM does not auto-increment In/OutObjs - caller does
 	}
 	// data mover is an easy-to-use stream bundle
@@ -131,7 +132,7 @@ func (dm *DM) RegRecv() error {
 	if dm.stage.regged.Load() {
 		return errors.New("duplicated reg: " + dm.String())
 	}
-	if err := transport.Handle(dm.data.trname, dm.wrapRecvData); err != nil {
+	if err := transport.Handle(dm.data.trname, dm.wrapRecvData, dm.RxDeadline); err != nil {
 		return err
 	}
 

@@ -47,8 +47,7 @@ import (
 
 // TODO:
 // 1. designated target: no time limit while a peer is alive and not 'done' (e.g., a lost work-item 'done'
-//    holds pending and wedges the job), and none for a receive in progress - a frozen sender (e.g., SIGSTOP)
-//    keeps the original of in-place TAR append in the work file until it resumes or its connection breaks
+//    holds pending and wedges the job)
 // 2. ContinueOnError: not implemented - a sender's list or send failure yields an incomplete shard
 // 3. hold pending from begin to commit - otherwise, idle can stop the job in between and drop the commit
 // 4. begin while stopping: renew and retry (ais/tgttxn.go) rather than fail the request
@@ -172,11 +171,12 @@ func (p *archFactory) Start() (err error) {
 
 	if nat > 1 {
 		dmxtra := bundle.Extra{
-			RecvAck:  nil, // no ACKs
-			Config:   r.config,
-			Smap:     r.smap,
-			XactConf: r.config.Arch.XactConf,
-			SizePDU:  0,
+			RecvAck:    nil, // no ACKs
+			Config:     r.config,
+			Smap:       r.smap,
+			XactConf:   r.config.Arch.XactConf,
+			SizePDU:    0,
+			RxDeadline: true,
 		}
 		if err := p.newDM(p.Args.UUID /*trname*/, r.recv, dmxtra, cmn.OwtPut); err != nil {
 			return err
@@ -883,7 +883,7 @@ func (wi *archwi) quiesce() core.QuiRes {
 		lastProgress      time.Duration
 	)
 	return wi.r.Quiesce(cmn.Rom.CplaneOperation(), func(total time.Duration) core.QuiRes {
-		if wi.r.IsDone() {
+		if wi.r.IsDone() || wi.werr.Load() {
 			return core.QuiAborted
 		}
 		left, n := wi.peersLeft.Load(), wi.nrx.Load() // order: see _recv

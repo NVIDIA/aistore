@@ -850,9 +850,18 @@ func TestArchAppendFrozenPeer(t *testing.T) {
 	tlog.Logfln("%s: %s", dt.StringEx(), snap.Err)
 	tassert.Fatalf(t, !snap.AbortedX, "%s: expected no abort (the frozen peer left the Smap?), have %q", cname, snap.AbortErr)
 	gaveUp := strings.Contains(snap.Err, "still being received")
-	tassert.Fatalf(t, gaveUp || strings.Contains(snap.Err, cmn.ErrQuiesceTimeout.Error()),
+	tassert.Fatalf(t, gaveUp || strings.Contains(snap.Err, "timeout"),
 		"%s: expected %s to time out, have %q", cname, dt.StringEx(), snap.Err)
 	tlog.Logfln("%s: gave up (a receive in progress) %t", dt.StringEx(), gaveUp)
+
+	// restore the original while the sender is still frozen; do not fan out a listing
+	var restored bytes.Buffer
+	err = tools.WaitForCondition(func() bool {
+		restored.Reset()
+		_, err := api.GetObject(tools.BaseAPIParams(), a.bckTo, archName, &api.GetArgs{Writer: &restored})
+		return err == nil && bytes.Equal(restored.Bytes(), orig)
+	}, tools.WaitRetryOpts{MaxRetries: 10, Interval: time.Second})
+	tassert.Fatalf(t, err == nil, "%s: original TAR not restored while the sender is frozen", cname)
 
 	tassert.CheckFatal(t, resume())
 	a.checkOrig(t, archName, orig, half)

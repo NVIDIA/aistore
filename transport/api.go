@@ -244,8 +244,12 @@ func (s *Stream) finCanceled(cause error) error {
 // receive-side API //
 //////////////////////
 
-func Handle(trname string, rxObj RecvObj) error {
+// register a receive endpoint; optionally bound each payload read by config.Timeout.SendFile
+func Handle(trname string, rxObj RecvObj, rxDeadline ...bool) error {
 	h := &handler{trname: trname, rxObj: rxObj}
+	if len(rxDeadline) > 0 {
+		h.rxDeadline = rxDeadline[0]
+	}
 	return oput(trname, h)
 }
 
