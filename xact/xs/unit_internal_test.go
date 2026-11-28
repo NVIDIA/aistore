@@ -77,15 +77,17 @@ func TestArchiveAppendFinalizeFailure(t *testing.T) {
 
 	r := &XactArch{}
 	r.Base.InitBase(t.Context(), cos.GenUUID(), apc.ActArchive, bck)
-	wi := &archwi{r: r, archlom: lom, fqn: lom.GenFQN(fs.WorkCT, fs.WorkfileCreateArch)}
-	format, err := wi.openTarForAppend()
-	tassert.CheckFatal(t, err)
-	wi.writer = archive.NewWriter(archive.ExtTar, wi.wfh, nil, &archive.Opts{TarFormat: format})
+	wi := &archwi{
+		r: r, archlom: lom, fqn: lom.GenFQN(fs.WorkCT, fs.WorkfileCreateArch),
+		msg: &cmn.ArchiveBckMsg{ArchiveMsg: apc.ArchiveMsg{Mime: archive.ExtTar, AppendIfExists: true}},
+	}
+	wi.cksum.Init(cos.ChecksumNone)
+	tassert.CheckFatal(t, wi.initWriter())
 	appended := bytes.Repeat([]byte{1}, 4*cos.KiB)
 	tassert.CheckFatal(t, wi.writer.Write("appended", &cmn.ObjAttrs{Size: int64(len(appended))}, bytes.NewReader(appended)))
 	wi.cnt.Inc()
 
-	ecode, err := r._fini(wi)
+	ecode, err := r.publish(wi)
 	tassert.Fatalf(t, ecode == http.StatusInternalServerError && err == syscall.EIO, "expected failed finalization, got %d, %v", ecode, err)
 	tassert.Fatalf(t, tt.size > int64(orig.Len()), "expected an enlarged archive at finalization, got %d", tt.size)
 	got, err := os.ReadFile(mainFQN)

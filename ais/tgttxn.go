@@ -954,16 +954,7 @@ func (t *target) createArchMultiObj(c *txnSrv) (string /*xaction uuid*/, error) 
 			return xid, err
 		}
 	case apc.Abort2PC:
-		txn, err := t.txns.find(c.uuid)
-		if err == nil {
-			txnArch := txn.(*txnArchMultiObj)
-			// if _this_ transaction initiated _that_ on-demand
-			if xarch := txnArch.xarch; xarch != nil && xarch.ID() == c.uuid {
-				xid = xarch.ID()
-				xarch.Abort(nil)
-			}
-			t.txns.term(c.uuid, apc.Abort2PC)
-		}
+		t.txns.term(c.uuid, apc.Abort2PC)
 	case apc.Commit2PC:
 		if err := c.bck.Init(t.owner.bmd); err != nil {
 			return xid, err

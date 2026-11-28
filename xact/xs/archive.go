@@ -34,17 +34,26 @@ import (
 	"github.com/NVIDIA/aistore/xact/xreg"
 )
 
+// arch work item (WI) lifecycle (DT: designated target - writes the shard, receives from peers)
+//
+// Begin2PC                  Commit2PC                      jogger
+// BeginMsg --> archBegun    DoMsg --> archCommitted        do --> archStarted
+//              (pending.m)            (+pending, workCh)          (lrit.run, lrit.wait)
+//                                                                      |
+//                                      sender <------------------------+------------------------> DT
+// - DT receives while the WI is in pending.m (rxRefs)
+// - normal DT completion: finishWI => publish
+// - after owner release, the last active receive cleans up a detached WI
+
 // TODO:
-// - designated target: no time limit while a peer is alive and not 'done', and none for a receive in progress
-//   (a frozen peer keeps the original of in-place TAR append in the work file)
-// - Abort2PC: abort the transaction, not the job - currently, TxnAbort finishes the shared job (all shards);
-//   instead, remove and abandon this transaction's work item (see ais/tgttxn.go)
-// - hold pending from begin to commit - otherwise, idle can stop the job in between and drop the commit
-// - begin while stopping: renew and retry (ais/tgttxn.go) rather than fail the request
-// - in-place TAR append: checksum
-// - control: xaction-level in-stream 'done' => out-of-band T2T (work-item 'done' is T2T);
-//   consolidate _recv w/ tcb, tcobjs (see xact/xs/TODO.md)
-// - multi-worker list-range iterator (currently, xact.NwpNone)
+// 1. designated target: no time limit while a peer is alive and not 'done' (e.g., a lost work-item 'done'
+//    holds pending and wedges the job), and none for a receive in progress - a frozen sender (e.g., SIGSTOP)
+//    keeps the original of in-place TAR append in the work file until it resumes or its connection breaks
+// 2. ContinueOnError: not implemented - a sender's list or send failure yields an incomplete shard
+// 3. hold pending from begin to commit - otherwise, idle can stop the job in between and drop the commit
+// 4. begin while stopping: renew and retry (ais/tgttxn.go) rather than fail the request
+// 5. in-place TAR append: support checksum
+// 6. multi-worker list-range iterator (currently, xact.NwpNone)
 
 type archwiState uint8
 
@@ -183,7 +192,6 @@ func (p *archFactory) Start() (err error) {
 
 func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err error) {
 	if err := archlom.InitCmnBck(&msg.ToBck); err != nil {
-		r.AddErr(err, 4, cos.ModXs)
 		return err
 	}
 	debug.AssertFunc(func() bool { return archlom.Cname() == msg.Cname() }) // relying on it
@@ -196,7 +204,6 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 	}
 	wi.tsi, err = r.smap.HrwObjHash2T(archlom.Bck(), archlom.Digest())
 	if err != nil {
-		r.AddErr(err, 4, cos.ModXs)
 		return err
 	}
 
@@ -204,43 +211,10 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 	if core.T.SID() == wi.tsi.ID() {
 		wi.fqn = archlom.GenFQN(fs.WorkCT, fs.WorkfileCreateArch)
 		wi.cksum.Init(archlom.CksumType())
-		wi.peersLeft.Store(int32(r.smap.CountActiveTs() - 1))
+		wi.peersLeft.Store(int32(r.sntl.nat - 1))
 		wi.rxRefs.Store(1)
-		var (
-			s         string
-			lmfh      cos.LomReader
-			tarFormat tar.Format
-		)
-		switch {
-		case !wi.msg.AppendIfExists:
-			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
-		case wi.archlom.Load(false, false) == nil:
-			s = " append"
-			lmfh, tarFormat, err = wi.beginAppend()
-		default:
-			wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
-		}
-		if err != nil {
+		if err = wi.initWriter(); err != nil {
 			return err
-		}
-		if cmn.Rom.V(5, cos.ModXs) {
-			nlog.Infof("%s: begin%s %s", r.Base.Name(), s, msg.Cname())
-		}
-
-		// construct format-specific writer; serialize for multi-target conc. writing
-		opts := archive.Opts{Serialize: true, TarFormat: tarFormat}
-		wi.writer = archive.NewWriter(msg.Mime, wi.wfh, &wi.cksum, &opts)
-
-		// append case (above)
-		if lmfh != nil {
-			err = wi.writer.Copy(lmfh, wi.archlom.Lsize())
-			cos.Close(lmfh)
-			wi.archlom.Unlock(false)
-			if err != nil {
-				wi.writer.Fini()
-				wi.cleanup()
-				return err
-			}
 		}
 	}
 
@@ -248,7 +222,6 @@ func (r *XactArch) BeginMsg(msg *cmn.ArchiveBckMsg, archlom *core.LOM) (err erro
 	if !r.IsRunning() {
 		r.pending.mtx.Unlock()
 		if wi.writer != nil {
-			wi.writer.Fini()
 			wi.cleanup()
 		}
 		return cmn.NewErrAborted(r.Base.Name(), "stopping", nil)
@@ -325,9 +298,12 @@ func (r *XactArch) DoMsg(msg *cmn.ArchiveBckMsg) {
 }
 
 func (r *XactArch) CtlMsg() string {
+	const (
+		maxItems = 8
+	)
 	var sb cos.SB
 	n := r.wiCnt.Load()
-	sb.Init(64 + 80*int(n))
+	sb.Init(64 + 80*min(int(n), maxItems))
 
 	sb.WriteString(r.Bck().Cname(""))
 	if r.bckTo != nil {
@@ -339,9 +315,6 @@ func (r *XactArch) CtlMsg() string {
 	}
 
 	// append work items
-	const (
-		maxItems = 8
-	)
 	var s string
 	r.pending.mtx.Lock()
 	wis := make([]*archwi, 0, min(len(r.pending.m), maxItems))
@@ -405,7 +378,7 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 func (r *XactArch) cleanup() {
 	r.joggers.wg.Wait()
 
-	// started items belong to finalize; claim only work the joggers left behind
+	// started items belong to finishWI; claim only work the joggers left behind
 	var parked []*archwi
 	r.pending.mtx.Lock()
 	for id, wi := range r.pending.m {
@@ -422,7 +395,8 @@ func (r *XactArch) cleanup() {
 		if wi.writer == nil {
 			core.FreeLOM(wi.archlom)
 		} else if wi.rxRefs.Dec() == 0 {
-			wi.abandon()
+			wi.cleanup()
+			core.FreeLOM(wi.archlom)
 		} // otherwise the last receive rolls back
 		if wi.state == archCommitted {
 			r.DecPending()
@@ -438,7 +412,7 @@ func (r *XactArch) doSend(lom *core.LOM, wi *archwi, fh cos.ReadOpenCloser) erro
 		hdr.Bck = wi.msg.ToBck
 		hdr.ObjName = lom.ObjName
 		hdr.ObjAttrs.CopyFrom(lom.ObjAttrs(), false /*skip cksum*/)
-		hdr.Opaque = []byte(wi.msg.TxnUUID)
+		hdr.Opaque = cos.UnsafeB(wi.msg.TxnUUID)
 	}
 	// o.SentCB nil on purpose (lom is freed by the iterator)
 	return r.p.dm.Send(o, fh, wi.tsi)
@@ -452,44 +426,42 @@ func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 	}
 
 	// only data counts as activity: control (e.g., a finishing peer's 'done') must not extend idle
-	if hdr.Opcode == 0 {
+	if hdr.Opcode != 0 {
+		err = r.ctrl(hdr)
+	} else {
 		r.IncPending()
 		err = r._recv(hdr, objReader)
 		r.DecPending()
-	} else {
-		err = r._recv(hdr, objReader)
 	}
 	transport.DrainAndFreeReader(objReader)
 	return err
 }
 
-func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
-	// control messages (compare w/ tcb.go, tcobjs.go)
-	if hdr.Opcode != 0 {
-		switch hdr.Opcode {
-		case transport.OpcDone:
-			if len(hdr.Opaque) > 0 {
-				// work-item 'done' is T2T control (see RecvCtrl)
-				return abortInbandDone(r, hdr.SID)
-			}
-			// xaction-level: sender's whole xaction is done
-			// TODO: T2T control, as in tcb.go and tcobjs.go
-			r.sntl.rxDone(hdr)
-		default:
-			return abortOpcode(r, hdr.Opcode)
-		}
-		return nil
+// in-band control (compare w/ tcb.go, tcobjs.go)
+func (r *XactArch) ctrl(hdr *transport.ObjHdr) error {
+	if hdr.Opcode != transport.OpcDone {
+		return abortOpcode(r, hdr.Opcode)
 	}
+	if len(hdr.Opaque) > 0 {
+		// work-item 'done' is T2T control (see RecvCtrl)
+		return abortInbandDone(r, hdr.SID)
+	}
+	// xaction-level: sender's whole xaction is done
+	// TODO: T2T control, as in tcb.go and tcobjs.go
+	r.sntl.rxDone(hdr)
+	return nil
+}
 
-	// data: archive an object
+// data: archive an object
+func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	r.pending.mtx.Lock()
 	wi, ok := r.pending.m[cos.UnsafeS(hdr.Opaque)] // txnUUID
 	if ok {
-		wi.rxRefs.Inc() // under lock (see finalize)
+		wi.rxRefs.Inc() // under lock (see finishWI)
 	}
 	r.pending.mtx.Unlock()
 	if !ok {
-		if r.IsDone() || r.IsAborted() {
+		if !r.IsRunning() {
 			return nil
 		}
 		cnt, err := r.JoinErr()
@@ -505,15 +477,13 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	if err == nil {
 		wi.cnt.Inc()
 	} else {
-		if !archive.IsErrEntryNotWritten(err) {
-			wi.werr.Store(true) // e.g. the sender crashed in the middle of the object
-		}
-		r.AddErr(err, 5, cos.ModXs)
+		wi.wrerr(err) // e.g. the sender crashed in the middle of the object
 	}
-	refs := wi.rxRefs.Dec() // before nrx (see finalize)
+	refs := wi.rxRefs.Dec() // before nrx (see finishWI)
 	wi.nrx.Dec()
 	if refs == 0 {
-		wi.abandon() // finalize or shutdown gave up
+		wi.cleanup() // completion or shutdown gave up
+		core.FreeLOM(wi.archlom)
 	}
 	return nil
 }
@@ -567,20 +537,17 @@ func (r *XactArch) RecvCtrl(wid, sid, opcode string, body []byte) error {
 func (*XactArch) StatusFlags() xact.StatusFlags { return 0 }
 
 // NOTE: in goroutine
-func (r *XactArch) finalize(wi *archwi) {
-	q := wi.quiesce()
+func (r *XactArch) finishWI(wi *archwi) {
+	defer r.DecPending()
 
-	r.pending.mtx.Lock()
-	delete(r.pending.m, wi.msg.TxnUUID)
-	r.wiCnt.Dec()
-	r.pending.mtx.Unlock()
+	q := wi.quiesce()
+	r.rmPending(wi.msg.TxnUUID)
 
 	// no new receives (wi is not pending)
 	if n := wi.rxRefs.Dec(); n > 0 {
 		// still receiving (slow or frozen peer)
 		err := fmt.Errorf("%s: %s: %d object(s) from peers still being received", r, wi.msg.Cname(), n)
 		r.AddErr(err, 4, cos.ModXs)
-		r.DecPending()
 		return
 	}
 
@@ -596,13 +563,12 @@ func (r *XactArch) finalize(wi *archwi) {
 			err = fmt.Errorf("%s: %s: failed to archive object(s)", r, wi.msg.Cname())
 		}
 		r.AddErr(err, 4, cos.ModXs)
-		wi.abandon() // do not publish
-		r.DecPending()
+		wi.cleanup() // do not publish
+		core.FreeLOM(wi.archlom)
 		return
 	}
 
-	ecode, err := r._fini(wi)
-	r.DecPending()
+	ecode, err := r.publish(wi)
 	if cmn.Rom.V(5, cos.ModXs) {
 		var s string
 		if err != nil {
@@ -616,46 +582,54 @@ func (r *XactArch) finalize(wi *archwi) {
 	r.AddErr(err, 5, cos.ModXs)
 }
 
-func (r *XactArch) _fini(wi *archwi) (ecode int, err error) {
-	defer core.FreeLOM(wi.archlom)
+func (r *XactArch) publish(wi *archwi) (int, error) {
+	defer func() {
+		wi.cleanup() // no-op once published
+		core.FreeLOM(wi.archlom)
+	}()
 
-	err = wi.writer.Fini()
-
-	if !r.IsRunning() || err != nil {
-		wi.cleanup()
+	err := wi.writer.Fini()
+	wi.writer = nil
+	if err != nil || !r.IsRunning() {
 		return 0, err
 	}
-
-	var size int64
 	if wi.cnt.Load() == 0 {
-		s := "empty"
-		if wi.appendPos > 0 {
-			s = "no new appends to"
-		}
-		if cnt, errs := r.JoinErr(); cnt > 0 {
-			err = fmt.Errorf("%s: %s %s, err: %v (cnt=%d)", r, s, wi.archlom, errs, cnt)
-		} else {
-			err = fmt.Errorf("%s: %s %s", r, s, wi.archlom)
-		}
-	} else {
-		size, err = wi.finalize()
+		return http.StatusInternalServerError, r.errEmpty(wi)
 	}
+	size, err := wi.closeWork()
 	if err != nil {
-		wi.cleanup()
 		return http.StatusInternalServerError, err
 	}
 	debug.Assert(wi.wfh == nil)
 
 	origSize := wi.archlom.Lsize(true /*may be new*/)
 	wi.archlom.SetSize(size)
-	ecode, err = core.T.FinalizeObj(wi.archlom, wi.fqn, r, cmn.OwtArchive, false /*rm work*/)
+	ecode, err := core.T.FinalizeObj(wi.archlom, wi.fqn, r, cmn.OwtArchive, false /*rm work*/)
 	if err != nil {
-		wi.archlom.SetSize(origSize)
-		wi.cleanup()
+		wi.archlom.SetSize(origSize) // (rollback truncates to the original size)
 		return ecode, err
 	}
+	wi.fqn = "" // consumed
 	r.ObjsAdd(1, size-wi.appendPos)
 	return ecode, nil
+}
+
+func (r *XactArch) errEmpty(wi *archwi) error {
+	s := "empty"
+	if wi.appendPos > 0 {
+		s = "no new appends to"
+	}
+	if cnt, errs := r.JoinErr(); cnt > 0 {
+		return fmt.Errorf("%s: %s %s, err: %v (cnt=%d)", r, s, wi.archlom, errs, cnt)
+	}
+	return fmt.Errorf("%s: %s %s", r, s, wi.archlom)
+}
+
+func (r *XactArch) rmPending(wid string) {
+	r.pending.mtx.Lock()
+	delete(r.pending.m, wid)
+	r.wiCnt.Dec()
+	r.pending.mtx.Unlock()
 }
 
 func (r *XactArch) Name() (s string) {
@@ -681,19 +655,22 @@ func (r *XactArch) FromTo() (src, dst *meta.Bck) {
 	return
 }
 
-func (r *XactArch) chanFullTotal() (n int64) {
-	r.joggers.mtx.Lock()
+// return the number of joggers and their total chan-full count
+func (r *XactArch) joggersStats() (nj int, n int64) {
+	r.joggers.mtx.RLock()
+	nj = len(r.joggers.m)
 	for _, j := range r.joggers.m {
 		n += j.chanFull.Load()
 	}
-	r.joggers.mtx.Unlock()
-	return n
+	r.joggers.mtx.RUnlock()
+	return nj, n
 }
 
 func (r *XactArch) Snap() (snap *core.Snap) {
 	snap = r.Base.NewSnap(r)
 
-	snap.Pack(len(r.joggers.m), 0 /*currently, always zero*/, r.chanFullTotal())
+	nj, n := r.joggersStats()
+	snap.Pack(nj, 0 /*currently, always zero*/, n)
 
 	if f, t := r.FromTo(); f != nil {
 		snap.SrcBck, snap.DstBck = f.Clone(), t.Clone()
@@ -710,8 +687,8 @@ func (j *jogger) run() {
 outer:
 	for {
 		select {
-		case archtask, ok := <-j.workCh:
-			if !ok || !j.r.IsRunning() {
+		case archtask := <-j.workCh:
+			if !j.r.IsRunning() {
 				break outer
 			}
 			j.do(archtask)
@@ -743,14 +720,11 @@ func (j *jogger) do(archtask *archtask) {
 	lrit.wait()
 
 	if core.T.SID() == wi.tsi.ID() {
-		go wi.r.finalize(wi)
+		go wi.r.finishWI(wi)
 	} else {
 		wi.sendDone()
-		wi.r.pending.mtx.Lock()
-		delete(wi.r.pending.m, wi.msg.TxnUUID)
-		wi.r.wiCnt.Dec()
-		wi.r.pending.mtx.Unlock()
-		wi.r.DecPending()
+		r.rmPending(wi.msg.TxnUUID)
+		r.DecPending()
 
 		core.FreeLOM(wi.archlom)
 	}
@@ -760,32 +734,59 @@ func (j *jogger) do(archtask *archtask) {
 // archwi //
 ////////////
 
-// in-place TAR append returns its format; copy-append returns a reader with archlom locked
-func (wi *archwi) beginAppend() (lmfh cos.LomReader, format tar.Format, err error) {
-	msg := wi.msg
-	if msg.Mime == archive.ExtTar && !wi.archlom.IsChunked() {
-		// (special)
-		format, err = wi.openTarForAppend()
-		if err != archive.ErrTarIsEmpty {
-			return nil, format, err
+func (wi *archwi) initWriter() (err error) {
+	defer func() {
+		if err != nil && wi.writer != nil {
+			wi.cleanup()
+		}
+	}()
+	var (
+		lmfh      cos.LomReader
+		tarFormat tar.Format
+		inPlace   bool
+		appending = wi.msg.AppendIfExists && wi.archlom.Load(false, false) == nil
+	)
+	if appending && wi.msg.Mime == archive.ExtTar && !wi.archlom.IsChunked() {
+		tarFormat, err = wi.openTarForAppend()
+		switch err {
+		case nil:
+			inPlace = true
+		case archive.ErrTarIsEmpty: // copy-append below
+		default:
+			return err
 		}
 	}
+	if !inPlace {
+		if appending {
+			// close the original reader before releasing its lock
+			wi.archlom.Lock(false)
+			defer wi.archlom.Unlock(false)
+			lmfh, err = wi.archlom.Open()
+			if err != nil {
+				return err
+			}
+			defer cos.Close(lmfh)
+		}
+		wi.wfh, err = wi.archlom.CreateWork(wi.fqn)
+		if err != nil {
+			return err
+		}
+	}
+	if cmn.Rom.V(5, cos.ModXs) {
+		s := ""
+		if appending {
+			s = " append"
+		}
+		nlog.Infof("%s: begin%s %s", wi.r.Base.Name(), s, wi.msg.Cname())
+	}
 
-	// <extra copy>
-	// prep to copy `lmfh` --> `wi.fh` with subsequent APPEND-ing
-	// msg.Mime has been already validated (see ais/* for apc.ActArchive)
-	wi.archlom.Lock(false)
-	lmfh, err = wi.archlom.Open()
-	if err != nil {
-		wi.archlom.Unlock(false)
-		return nil, format, err
+	// serialize concurrent local and peer writes
+	opts := archive.Opts{Serialize: true, TarFormat: tarFormat}
+	wi.writer = archive.NewWriter(wi.msg.Mime, wi.wfh, &wi.cksum, &opts)
+	if lmfh != nil {
+		err = wi.writer.Copy(lmfh, wi.archlom.Lsize())
 	}
-	if wi.wfh, err = wi.archlom.CreateWork(wi.fqn); err != nil {
-		wi.archlom.Unlock(false)
-		cos.Close(lmfh)
-		lmfh = nil
-	}
-	return lmfh, format, err
+	return err
 }
 
 // [NOTE]
@@ -855,25 +856,23 @@ func (wi *archwi) do(lom *core.LOM, lrit *lrit, _ []byte) {
 		lom.Unlock(false)
 		return
 	}
-	// see Begin
-	if wi.wfh == nil {
-		lom.Unlock(false)
-		// NOTE: unexpected and unlikely - aborting
-		err := cos.NewErrNotFoundFmt(nil, "%s: archive destination is not ready for %q", wi.r.Name(), lom.Cname())
-		wi.r.Abort(err)
-		return
-	}
+	debug.Assert(wi.wfh != nil)
 	err = wi.writer.Write(wi.nameInArch(lom.ObjName), lom, lh /*reader*/)
 	cos.Close(lh)
 	lom.Unlock(false)
 	if err == nil {
 		wi.cnt.Inc()
 	} else {
-		if !archive.IsErrEntryNotWritten(err) {
-			wi.werr.Store(true) // e.g., a read error in the middle of the object
-		}
-		wi.r.AddErr(err, 5, cos.ModXs)
+		wi.wrerr(err) // e.g., a read error in the middle of the object
 	}
+}
+
+// a failed entry write that may have left a partial entry is fatal for the shard
+func (wi *archwi) wrerr(err error) {
+	if !archive.IsErrEntryNotWritten(err) {
+		wi.werr.Store(true)
+	}
+	wi.r.AddErr(err, 5, cos.ModXs)
 }
 
 // wait for peers' 'done' and all objects they sent ('done' is out-of-band and may arrive first)
@@ -934,9 +933,6 @@ func (wi *archwi) qabort(smap *meta.Smap) core.QuiRes {
 // T2T 'done' to the designated target, w/ the number of objects sent
 // TODO: recover a lost work-item 'done' without aborting the shared job
 func (wi *archwi) sendDone() {
-	if wi.r.p.dm == nil { // single target
-		return
-	}
 	body := strconv.AppendInt(nil, int64(wi.cnt.Load()), 10)
 	if _, err := wi.r.SendCtrl(wi.tsi, wi.msg.TxnUUID, xact.OpcodeDone, body); err != nil {
 		nlog.Warningf("%s: %s wid=%q => %s: %v", wi.r.Name(), xact.OpcodeDone, wi.msg.TxnUUID, wi.tsi.StringEx(), err)
@@ -959,14 +955,13 @@ func (wi *archwi) nameInArch(objName string) string {
 	return cos.UnsafeS(buf)
 }
 
-// do not publish (see cleanup)
-func (wi *archwi) abandon() {
-	wi.writer.Fini()
-	wi.cleanup()
-	core.FreeLOM(wi.archlom)
-}
-
+// close the writer; remove or roll back the work file
+// the caller retains the LOM
 func (wi *archwi) cleanup() {
+	if wi.writer != nil {
+		wi.writer.Fini()
+		wi.writer = nil
+	}
 	if wi.appendPos > 0 && wi.fqn != "" {
 		wi.rollback()
 		return
@@ -976,9 +971,8 @@ func (wi *archwi) cleanup() {
 		wi.wfh = nil
 	}
 	if wi.fqn != "" {
-		if wi.archlom == nil || wi.archlom.FQN != wi.fqn {
-			cos.RemoveFile(wi.fqn)
-		}
+		debug.Assert(wi.archlom.FQN != wi.fqn) // (in-place TAR append implies appendPos > 0)
+		cos.RemoveFile(wi.fqn)
 		wi.fqn = ""
 	}
 }
@@ -1017,7 +1011,7 @@ func (wi *archwi) _rollback() error {
 	return wi.archlom.RenameToMain(wi.fqn)
 }
 
-func (wi *archwi) finalize() (int64, error) {
+func (wi *archwi) closeWork() (int64, error) {
 	err := wi.wfh.Close()
 	wi.wfh = nil
 	if err != nil {
