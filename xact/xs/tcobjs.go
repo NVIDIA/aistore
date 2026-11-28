@@ -16,7 +16,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -325,18 +324,7 @@ outer:
 	r.DemandBase.Stop() // prevent new requests from reusing this xaction
 
 	if r.p.dm != nil {
-		// drain outbound streams before notifying peers; keep receiving until all peers are done (compare w/ tcb)
-		if err := r.p.dm.Close(r.AbortErr()); err != nil {
-			r.AbortByOwner(err) // owns teardown and Finish
-		} else if !r.IsAborted() {
-			r.sntl.txDone.Store(true)
-			r.BcastCtrl(r.sntl.smap, "", xact.OpcodeDone, nil)
-			r.sntl.initLast(mono.NanoTime())
-			if r.Quiesce(r.sntl.qival(), r.sntl.qcb) == core.QuiDone {
-				r.p.dm.SkipRxQuiesce()
-			}
-		}
-		r.p.dm.UnregRecv()
+		r.sntl.closeDM(r.p.dm)
 	}
 
 	// finish the ETL session, if any

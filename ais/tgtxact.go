@@ -396,7 +396,6 @@ func (t *target) continueTCO(w http.ResponseWriter, r *http.Request) {
 }
 
 // client: target running the same xaction ID or primary
-// TODO: move archive xaction-level transport.OpcDone here
 func (t *target) xactCtrl(w http.ResponseWriter, r *http.Request, kind, xid, wid, opcode string) {
 	xctn, err := xreg.GetXact(xid)
 	if err != nil || xctn == nil {

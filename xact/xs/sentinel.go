@@ -18,7 +18,6 @@ import (
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
 	"github.com/NVIDIA/aistore/sys"
-	"github.com/NVIDIA/aistore/transport"
 	"github.com/NVIDIA/aistore/transport/bundle"
 	"github.com/NVIDIA/aistore/xact"
 )
@@ -67,22 +66,20 @@ func (s *sentinel) cleanup() {
 	s.pend.p = nil
 }
 
-func (s *sentinel) bcastDone(uuid string, dm *bundle.DM) {
-	o := transport.AllocSend()
-	o.Hdr.Opcode = transport.OpcDone
-	if uuid != "" {
-		o.Hdr.Opaque = cos.UnsafeB(uuid)
-	}
-	err := dm.Bcast(o, nil /*roc*/)
-
-	switch {
-	case err != nil:
-		nlog.WarningDepth(1, s.r.Name(), err)
-	default:
-		if cmn.Rom.V(4, cos.ModXs) {
-			nlog.Infoln(s.r.Name(), "done")
+// owner teardown (tco, archive):
+// drain outbound streams before notifying peers; keep receiving until all peers are done
+func (s *sentinel) closeDM(dm *bundle.DM) {
+	if err := dm.Close(s.base.AbortErr()); err != nil {
+		s.base.AbortByOwner(err)
+	} else if !s.base.IsAborted() {
+		s.txDone.Store(true)
+		s.base.BcastCtrl(s.smap, "", xact.OpcodeDone, nil)
+		s.initLast(mono.NanoTime())
+		if s.base.Quiesce(s.qival(), s.qcb) == core.QuiDone {
+			dm.SkipRxQuiesce()
 		}
 	}
+	dm.UnregRecv()
 }
 
 func (s *sentinel) initLast(now int64) {
@@ -231,17 +228,8 @@ func (s *sentinel) pending() {
 // receive
 //
 
-// in-band 'done' (archive)
-func (s *sentinel) rxDone(hdr *transport.ObjHdr) {
-	debug.Assert(s.isPeer(hdr.SID), s.r.Name(), " unexpected 'done' from ", hdr.SID)
-	if rs := s.r.RunState(); rs == core.RunStateFinished || rs == core.RunStateAborted {
-		return
-	}
-	s.done(hdr.SID, "recv 'done'")
-}
-
 // T2T 'done' from a peer
-// (compare w/ rxDone: no run-state check - 'done' is idempotent, late push is benign)
+// (no run-state check: 'done' is idempotent, late push is benign)
 func (s *sentinel) recvDone(sid string) error {
 	if !s.isPeer(sid) {
 		return fmt.Errorf("%s: unexpected %s from %q", s.r.Name(), xact.OpcodeDone, sid)

@@ -362,17 +362,18 @@ after an accepted base abort.
 | finite, no peer protocol (e.g. cleanup, prefetch) | `Run` joins its work, then finishes | `Run` exits and finishes; propagation is kind-specific |
 | `DemandBase.Abort` users (EC, mirroring, download); list overrides `Abort` | idle timer leads to the normal stopping path | `Finish` runs in the aborting goroutine; `Run` may still be cleaning up |
 | TCB, TCO | drain outbound streams, broadcast 'done', quiesce until all peers are done, unregister, finish | sentinel callbacks use `AbortByOwner` (TCO: also a failed `dm.Close`); an outside abort of TCO before `Stop` finishes early via `DemandBase.Abort` |
-| archive | stop admission, send 'done' in-band, quiesce, close DM, finish | same as TCO |
+| archive | stop admission, then as TCB/TCO | same as TCO |
 | GetBatch (x-moss) | idle `fini` claims stopping, unregisters from SDM, cleans up, finishes | override cleans up after the base abort succeeds; `DemandBase.Abort` finishes before that cleanup |
 | shard-index-demand | `onIdle` closes admission; `Run` joins workers, releases queued work, finishes | override records the abort and signals workers; `Run` cleans up and finishes |
 
 Rebalance and resilver have their own lifecycle and stage coordination; see
 [`reb`](../reb) and [`res`](../res).
 
-For TCB/TCO, sent does not mean received: each peer must confirm that it has
+For TCB, TCO, and archive, sent does not mean received: each peer must confirm that it has
 finished sending. T2T 'done' control provides the confirmation; sentinel status
 polling recovers a lost 'done' and detects an aborted or unresponsive peer.
-Single-target jobs have no peers to coordinate with.
+Archive work items also send a per-work-item 'done' (with the number of objects sent)
+to the designated target. Single-target jobs have no peers to coordinate with.
 
 Abort propagation is kind-specific: T2T broadcast, IC abort, or a cluster
 event. Keep the original cause, and do not rebroadcast a received abort.
@@ -388,8 +389,6 @@ event. Keep the original cause, and do not rebroadcast a received abort.
   archive calls `Finish` before its final work-item cleanup.
 - After `DemandBase.Stop`, outside aborts are rejected. Sentinel polling
   recovers a peer abort, but not a dropped user stop.
-- Archive sends 'done' in-band and ignores the `dm.Close` error, unlike the
-  TCB/TCO drain-before-done order.
 
 ## Rebalance and resilver coexistence
 

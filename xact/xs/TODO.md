@@ -142,8 +142,9 @@ and still draining any work deferred by callbacks; prefer a count-based protocol
 
 ## Out-of-band control for all xactions
 
-Replace the in-stream control opcode (`transport.OpcDone`) with
-T2T control (xact/t2tctrl.go: `POST /v1/xactions/t2tctrl/{xkind}/{xid}/{wid}/{opcode}`; `SendCtrl`, `BcastCtrl`).
+In-stream control (`transport.OpcDone`) is replaced with T2T control
+(xact/t2tctrl.go: `POST /v1/xactions/t2tctrl/{xkind}/{xid}/{wid}/{opcode}`; `SendCtrl`, `BcastCtrl`);
+an in-stream 'done' from an older peer aborts the job (`abortInbandDone`).
 
 Goal: reliable control, independent of data streams and DM. HTTP alone does not supply delivery or completion guarantees.
 
@@ -152,8 +153,8 @@ Goal: reliable control, independent of data streams and DM. HTTP alone does not 
 - abort: T2T only (`xact.Base.BcastAbort`, gated by `SkipAbortBcast`) - tcb, tco, archive, and
   x-list (designated target) start a `ChanAbort` watcher in `Run` (see `bcastOnAbort`)
 - sentinel progress: T2T `xact.OpcodeStatus` poll, only to the peers that did not send done (`sentinel.poll`)
-- done: T2T for tcb and tco (xaction-level) and archive (work-item: `archwi.sendDone`, `XactArch.RecvCtrl`);
-  still in-stream: archive xaction-level (`sentinel.bcastDone`, `sentinel.rxDone`)
+- done: T2T for tcb, tco, and archive (xaction-level: `BcastCtrl`, `sentinel.recvDone`);
+  archive work-item 'done' with the number of objects sent (`archwi.sendDone`, `XactArch.RecvCtrl`)
 - x-list page timeout: the proxy sends one asynchronous `Abort2PC` to the designated target if its
   page call times out. peers waiting for the page can time out locally
   - best-effort, single attempt: a lost abort leaves the designated target running until `lso.idle_time`

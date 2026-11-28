@@ -487,6 +487,52 @@ func TestTCOPeerControl(t *testing.T) {
 	})
 }
 
+// xaction-level T2T 'done'; reject in-band 'done' (older peer)
+func TestArchPeerDone(t *testing.T) {
+	const a, b = "peerA", "peerB"
+	prev := core.T
+	mock.NewTarget(mock.NewBaseBownerMock())
+	t.Cleanup(func() { core.T = prev })
+	newXact := func() *XactArch {
+		r := &XactArch{streamingX: streamingX{p: &streamingF{dm: &bundle.DM{}}}}
+		r.Base.InitBase(t.Context(), cos.GenUUID(), apc.ActArchive, nil)
+		smap := &meta.Smap{Tmap: meta.NodeMap{a: {DaeID: a}, b: {DaeID: b}}}
+		r.sntl.init(r, &r.Base, r.p.dm, cmn.GCO.Get(), smap, 3)
+		r.sntl.initLast(1)
+		return r
+	}
+
+	t.Run("done", func(t *testing.T) {
+		r := newXact()
+		done := func(sid string) error { return r.RecvCtrl(xact.NoneWID, sid, xact.OpcodeDone, nil) }
+		tassert.Fatalf(t, done("unknown") != nil, "accepted unknown peer")
+		tassert.Fatalf(t, done(core.T.SID()) != nil, "accepted self")
+		tassert.Fatalf(t, r.RecvCtrl(xact.NoneWID, a, xact.OpcodeStatus, nil) != nil, "accepted wrong opcode")
+		tassert.Fatalf(t, r.RecvCtrl(xact.NoneWID, a, xact.OpcodeDone, []byte("1")) != nil, "accepted body")
+		tassert.Fatalf(t, len(r.sntl.pend.last) == 2, "rejected control changed pending peers")
+		tassert.Fatalf(t, r.StatusFlags() == 0, "premature done-sending flag")
+
+		r.sntl.txDone.Store(true)
+		tassert.Fatalf(t, r.StatusFlags().IsSet(xact.StatusDoneSending), "missing done-sending flag")
+		tassert.CheckFatal(t, done(a))
+		tassert.CheckFatal(t, done(a))
+		tassert.Fatalf(t, len(r.sntl.pend.last) == 1, "duplicate done changed pending peers")
+		tassert.CheckFatal(t, done(b))
+		tassert.Fatalf(t, r.sntl.qcb(0) == core.QuiDone, "still waiting for peers")
+		r.sntl.cleanup()
+		tassert.CheckFatal(t, done(b)) // late push after cleanup
+	})
+
+	t.Run("in-band", func(t *testing.T) {
+		for _, wid := range []string{"", cos.GenUUID()} {
+			r := newXact()
+			err := r.ctrl(&transport.ObjHdr{Opcode: transport.OpcDone, SID: a, Opaque: []byte(wid)})
+			tassert.Fatalf(t, err != nil && strings.Contains(err.Error(), "mixed-version") && r.IsAborted(),
+				"accepted in-band done (wid %q): %v", wid, err)
+		}
+	})
+}
+
 func TestMossAbortAfterStopping(t *testing.T) {
 	r := &XactMoss{}
 	r.Base.InitBase(t.Context(), cos.GenUUID(), apc.ActGetBatch, nil)

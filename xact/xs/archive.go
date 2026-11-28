@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/aistore/cmn/atomic"
 	"github.com/NVIDIA/aistore/cmn/cos"
 	"github.com/NVIDIA/aistore/cmn/debug"
-	"github.com/NVIDIA/aistore/cmn/mono"
 	"github.com/NVIDIA/aistore/cmn/nlog"
 	"github.com/NVIDIA/aistore/core"
 	"github.com/NVIDIA/aistore/core/meta"
@@ -359,15 +358,8 @@ func (r *XactArch) Run(wg *sync.WaitGroup) {
 	r.DemandBase.Stop() // prevent new joggers and work items
 	r.pending.mtx.Unlock()
 
-	// quiesce and close DM (compare w/ tcb.go, tcobjs.go)
-	if r.p.dm != nil && !r.IsAborted() {
-		r.sntl.bcastDone("", r.p.dm)
-		r.sntl.initLast(mono.NanoTime())
-		r.Quiesce(r.sntl.qival(), r.sntl.qcb) // wait for others
-	}
 	if r.p.dm != nil {
-		r.p.dm.Close(r.AbortErr())
-		r.p.dm.UnregRecv()
+		r.sntl.closeDM(r.p.dm)
 	}
 	r.sntl.cleanup()
 	r.Finish()
@@ -425,7 +417,6 @@ func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 		return err
 	}
 
-	// only data counts as activity: control (e.g., a finishing peer's 'done') must not extend idle
 	if hdr.Opcode != 0 {
 		err = r.ctrl(hdr)
 	} else {
@@ -437,19 +428,12 @@ func (r *XactArch) recv(hdr *transport.ObjHdr, objReader io.Reader, err error) e
 	return err
 }
 
-// in-band control (compare w/ tcb.go, tcobjs.go)
+// in-band control: none expected - 'done' is T2T (see RecvCtrl; compare w/ tcb.go, tcobjs.go)
 func (r *XactArch) ctrl(hdr *transport.ObjHdr) error {
-	if hdr.Opcode != transport.OpcDone {
-		return abortOpcode(r, hdr.Opcode)
-	}
-	if len(hdr.Opaque) > 0 {
-		// work-item 'done' is T2T control (see RecvCtrl)
+	if hdr.Opcode == transport.OpcDone {
 		return abortInbandDone(r, hdr.SID)
 	}
-	// xaction-level: sender's whole xaction is done
-	// TODO: T2T control, as in tcb.go and tcobjs.go
-	r.sntl.rxDone(hdr)
-	return nil
+	return abortOpcode(r, hdr.Opcode)
 }
 
 // data: archive an object
@@ -488,10 +472,18 @@ func (r *XactArch) _recv(hdr *transport.ObjHdr, objReader io.Reader) error {
 	return nil
 }
 
-// T2T control: work-item 'done' from a peer, w/ the number of objects it sent
+// T2T control: 'done' from a peer
+// - xaction-level (NoneWID, no body)
+// - work-item, w/ the number of objects it sent
 func (r *XactArch) RecvCtrl(wid, sid, opcode string, body []byte) error {
-	if opcode != xact.OpcodeDone || wid == xact.NoneWID {
-		return fmt.Errorf("%s: unexpected T2T control [%q, %q]", r.Name(), wid, opcode)
+	if opcode != xact.OpcodeDone || r.p.dm == nil {
+		return fmt.Errorf("%s: unexpected T2T control [%q, %q, dm=%t]", r.Name(), wid, opcode, r.p.dm != nil)
+	}
+	if wid == xact.NoneWID {
+		if len(body) != 0 {
+			return fmt.Errorf("%s: unexpected %s body from %q (len %d)", r.Name(), opcode, sid, len(body))
+		}
+		return r.sntl.recvDone(sid)
 	}
 	if !r.sntl.isPeer(sid) {
 		return fmt.Errorf("%s: unexpected %s from %q", r.Name(), opcode, sid)
@@ -534,7 +526,7 @@ func (r *XactArch) RecvCtrl(wid, sid, opcode string, body []byte) error {
 	return nil
 }
 
-func (*XactArch) StatusFlags() xact.StatusFlags { return 0 }
+func (r *XactArch) StatusFlags() xact.StatusFlags { return r.sntl.statusFlags() }
 
 // NOTE: in goroutine
 func (r *XactArch) finishWI(wi *archwi) {
